@@ -27,12 +27,19 @@ MVP는 HTTPS + API Key를 사용한다.
 
 클라이언트가 raw path를 전달하는 endpoint는 만들지 않는다.
 
-## fileId
+## 토큰 보안
 
-- 논리 파일 identity를 가리키는 서명된 opaque token
+`fileId`와 `continuationToken`은 모두 클라이언트가 내부 내용을 신뢰하거나 수정할 수 없는 서명된 opaque token으로 취급한다.
+
+공통 token codec은 서명/검증, opaque encoding/decoding, TTL 처리를 담당하고 Log/Configuration의 업무 의미는 각 feature가 소유한다. 서명 key/secret은 코드와 분리된 안전한 설정 공급 방식을 사용한다.
+
+### fileId
+
+- 논리 파일 identity를 가리키는 token
 - 일반 조회조건 자체를 나타내는 query token이 아님
 - TTL 24시간
 - 물리 host/path는 포함하지 않음
+- 서명된 내부 `resourceKind`: `Log | ConfigurationCurrent | ConfigurationSnapshot`
 - 접근 시 현재 기준정보로 물리 위치를 다시 해석
 - 물리 서버/경로 변경 자체는 기존 fileId를 무효화하지 않음
 
@@ -42,6 +49,15 @@ MVP는 HTTPS + API Key를 사용한다.
 - TTL 경과: `FileIdExpired`
 - 기준정보 정의 삭제: 해당 `*DefinitionNotFound`
 - 기준정보는 정상이나 실제 파일 없음: `FileNotFound`
+
+### continuationToken
+
+- 목록 페이지네이션을 위한 stateless cursor
+- 서버에 이전 FTP 결과 전체를 보관하지 않음
+- 원래 결과 집합 조건과 마지막 반환 위치를 서명된 형태로 보존
+- TTL은 설정 가능하며 구체적인 값은 운영 설정에서 정함
+- 만료/변조/서명 실패/형식 오류는 모두 `InvalidRequest`(400)
+- fileId와 달리 continuation token 전용 410 오류는 두지 않음
 
 ## 감사 로그
 
@@ -59,7 +75,7 @@ MVP는 HTTPS + API Key를 사용한다.
 - 성공/실패와 오류 분류
 - elapsedMs
 
-API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는다.
+API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 payload는 기록하지 않는다.
 
 ## 기준정보 장애 운영
 
@@ -112,6 +128,7 @@ API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는
 
 - 인증 실패
 - invalid/expired fileId
+- invalid/expired continuationToken
 - 기준정보 없음/DB 장애
 - stale 기준정보 사용
 - 파일 정의 충돌(`FileDefinitionConflict`)
