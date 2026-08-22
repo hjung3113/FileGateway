@@ -60,9 +60,11 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 
 Glob 의미는 FTP 서버의 wildcard 구현에 의존하지 않는다. FileGateway가 디렉터리 목록을 받은 뒤 동일한 matcher 의미로 후보 파일명을 판정한다. MVP Windows/IIS FTP 환경의 파일명 의미에 맞춰 glob의 파일명 비교는 **case-insensitive**로 수행하고, 실제 파일명의 원래 casing은 응답에 그대로 보존한다.
 
-MVP에서는 root부터의 무제한 recursive scan을 허용하지 않는다. `pathTemplate`이 조회 범위의 Hourly/Daily 슬롯 또는 Continuous 현재 위치로 필요한 디렉터리를 직접 계산하고 해당 디렉터리만 목록 조회한다. 여러 슬롯이 같은 디렉터리를 계산하면 중복 목록 조회하지 않는다.
+MVP에서는 root부터의 무제한 recursive scan을 허용하지 않는다. `pathTemplate`이 조회 범위의 Hourly/Daily 슬롯 또는 Continuous 현재 위치로 필요한 디렉터리를 계산하고 해당 디렉터리만 목록 조회한다.
 
-계산된 논리 디렉터리가 실제 원격 저장소에 존재하지 않으면 해당 슬롯의 정상 결과 0개로 취급한다. 파일 서버 연결/인증/프로토콜 장애와 구분한다.
+**논리 생성 슬롯과 물리 디렉터리는 1:1 관계가 아니다.** 시간별 파일이 모두 한 폴더에 모이는 로그처럼 여러 Hourly/Daily 슬롯이 동일한 디렉터리를 계산할 수 있다. 반대로 날짜/시간별로 디렉터리가 나뉜 로그도 허용한다. 여러 슬롯이 같은 디렉터리를 계산하면 해당 디렉터리는 한 번만 목록 조회하고, 각 파일의 실제 논리 시간은 `MetadataRule`로 해석해 범위 필터를 적용한다.
+
+계산된 논리 디렉터리가 실제 원격 저장소에 존재하지 않으면 해당 슬롯/탐색 범위의 정상 결과 0개로 취급한다. 파일 서버 연결/인증/프로토콜 장애와 구분한다. 한 요청에서 여러 디렉터리를 조회하는 중 하나라도 실제 FTP I/O 오류가 발생하면 성공한 디렉터리의 부분 결과만 반환하지 않고 요청 전체를 실패 처리한다.
 
 `cardinality`는 전체 조회 결과 개수가 아니라 **논리 생성 슬롯당 파일 개수**를 나타내는 invariant다.
 
@@ -135,7 +137,7 @@ MVP에서 `fileName` 비교는 case-insensitive다. 이 규칙은 다음에 동�
 
 ## 토큰 의미
 
-Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 서명/검증/opaque encoding/TTL 같은 token codec은 공통 계층을 사용한다.
+Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 보호/opaque encoding/TTL 같은 token codec은 공통 계층을 사용한다.
 
 ### Log fileId
 
