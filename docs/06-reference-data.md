@@ -70,7 +70,11 @@ EquipmentConfigurationDefinition
 
 하나의 `equipmentId + configurationType` 아래 PM1/PM2/PM3/PM4처럼 여러 Current Configuration File이 존재할 수 있다. 이 파일들을 별도 `configurationType`, `subtype`, `attributes`로 세분화하지 않는다.
 
+Current Configuration File의 logical identity는 `equipmentId + configurationType + fileName`이다. `fileName`이 바뀌면 다른 논리 파일로 취급한다.
+
 History는 별도 시스템이 자정에 날짜 폴더를 만들고 Current 파일 집합을 그대로 복사한 결과다. 같은 날짜 폴더의 Snapshot File들은 동일한 `snapshotTimestamp`를 공유하며 현재 운영 계획에서는 Site local `00:00`으로 해석한다. FTP modified time은 snapshot 시각으로 사용하지 않는다.
+
+Configuration Snapshot File의 logical identity는 `equipmentId + configurationType + snapshotTimestamp + fileName`이다.
 
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
@@ -87,7 +91,7 @@ FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 - Configuration 정의가 삭제돼 재해석할 수 없으면 `ConfigurationDefinitionNotFound`
 - 기준정보는 정상이나 실제 대상 파일이 없으면 `FileNotFound`
 
-Configuration Snapshot File의 logical identity는 `equipmentId + configurationType + snapshotTimestamp + fileName`이다. Current Configuration File의 개별 logical identity 규칙은 Current API 결정과 함께 별도 확정한다.
+Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하지 않는다. 같은 `equipmentId + configurationType + fileName` 파일의 다운로드 시점 현재 내용을 가리킨다.
 
 기준정보 변경과 실제 파일 삭제를 같은 원인으로 취급하지 않는다.
 
