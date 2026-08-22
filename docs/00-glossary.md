@@ -21,12 +21,16 @@ _Avoid_: `logType`, 로그 종류
 _Avoid_: Configuration 로그, Configuration 계열 로그
 
 **Configuration Type (`configurationType`)**:
-설비 설정파일을 업무 의미에 따라 구분하는 안정적인 논리 분류다. 실제 파일명과 분리하며 파일명 규칙 변경이 외부 계약 변경으로 이어지지 않게 한다.
-_Avoid_: 파일명을 configuration type으로 직접 사용
+설비 설정파일을 업무 의미에 따라 구분하는 안정적인 논리 분류다. 하나의 `equipmentId + configurationType` 아래에 현재 파일이 여러 개 존재할 수 있다. PM1/PM2/PM3/PM4처럼 같은 Configuration Type에 속하는 개별 파일을 각각 별도 `configurationType`이나 `subtype`으로 세분화하지 않는다. 실제 파일명과도 분리한다.
+_Avoid_: 개별 파일마다 configurationType/subtype을 생성, 파일명을 configuration type으로 직접 사용
 
-**Current Configuration**:
-특정 `equipmentId + configurationType`에 대해 설비가 현재 사용하는 설정파일을 가리키는 논리 슬롯이다. 내용은 시간에 따라 바뀔 수 있으며 FileGateway가 버전을 고정하거나 히스토리를 생성하지 않는다.
-_Avoid_: 현재 파일을 불변 snapshot으로 간주하는 표현
+**Current Configuration Set**:
+특정 `equipmentId + configurationType`에 대해 현재 존재하는 Configuration File들의 집합이다. 하나의 파일로 한정하지 않으며 파일 수는 Configuration Type에 따라 달라질 수 있다. FileGateway는 이 집합의 버전을 고정하거나 히스토리를 생성하지 않는다.
+_Avoid_: `equipmentId + configurationType`이 항상 파일 하나를 식별한다고 가정
+
+**Current Configuration File**:
+`Current Configuration Set` 안의 개별 현재 파일이다. 내용은 시간에 따라 바뀔 수 있으며 FileGateway가 snapshot으로 고정하지 않는다. 개별 파일의 장기 논리 identity 규칙은 별도 설계 결정으로 확정한다.
+_Avoid_: 현재 파일을 불변 snapshot으로 간주
 
 **Configuration Snapshot**:
 별도 시스템이 파일 서버에 저장한 과거 Configuration File의 시점별 히스토리 파일이다. 생성이 완료된 snapshot은 불변이며 수정 대신 새 snapshot을 생성한다. FileGateway는 생성·보관 책임 없이 이미 저장된 snapshot을 조회·다운로드만 한다.
@@ -45,7 +49,7 @@ _Avoid_: modified time, FTP modification time을 `timestamp`와 동일시하는 
 _Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현
 
 **Logical File Identity**:
-물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot은 `equipmentId + configurationType + snapshotTimestamp + fileName`, Current Configuration은 `equipmentId + configurationType + current`를 사용한다.
+물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot은 `equipmentId + configurationType + snapshotTimestamp + fileName`을 사용한다. Current Configuration File은 하나의 Configuration Type 아래 여러 파일이 가능하므로 개별 identity 규칙을 별도 확정한다.
 _Avoid_: FTP host/path를 파일 identity로 취급
 
 **File ID (`fileId`)**:
@@ -53,8 +57,8 @@ _Avoid_: FTP host/path를 파일 identity로 취급
 _Avoid_: query token, physical path identifier
 
 **Subtype (`subtype`)**:
-하나의 `logType` 내부에서 API 사용자가 자주 조회하는 대표 하위 분류 하나다. 같은 의미의 값을 `attributes`에 중복 저장하지 않는다.
-_Avoid_: 임의의 모든 메타데이터를 subtype으로 승격
+하나의 `logType` 내부에서 API 사용자가 자주 조회하는 대표 하위 분류 하나다. 같은 의미의 값을 `attributes`에 중복 저장하지 않는다. MVP Configuration 모델에는 사용하지 않는다.
+_Avoid_: 임의의 모든 메타데이터를 subtype으로 승격, PM1/PM2 같은 Configuration 개별 파일을 subtype으로 모델링
 
 **Attributes (`attributes`)**:
 `subtype` 외에 로그 파일에서 추출하거나 기준정보로 부여하는 가변 key-value 메타데이터다. MVP Configuration 모델에는 적용하지 않는다.
