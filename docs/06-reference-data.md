@@ -28,6 +28,8 @@
 
 하나의 FileGateway 배포 범위에서 `equipmentId + logType`은 정확히 하나의 로그 정의를 식별한다. 동일 조합의 중복 정의는 기준정보 오류다.
 
+MVP에서 하나의 로그 정의는 하나의 discovery rule만 가진다. 현재 동일 `logType` 조회에서 서로 다른 디렉터리/파일명 규칙을 동시에 검색해야 하는 사례가 없으므로 다중 discovery rule 모델은 두지 않는다. 같은 생성 슬롯의 여러 파일은 `cardinality=Multiple`로 표현한다.
+
 `pathTemplate`은 탐색할 논리 디렉터리 경로를 계산하고, `filePattern`은 해당 디렉터리에서 후보 파일을 선택한다. `timestamp`/`subtype`/`attributes` 추출은 metadata rule이 담당한다.
 
 MetadataRule은 물리 FTP root를 제외한 논리 relative path와 fileName 전체를 대상으로 해석할 수 있다. 후보 파일이 `filePattern`에 일치했지만 필수 metadata를 해석하지 못하면 누락시키지 않고 `FileDefinitionConflict`로 취급한다.
@@ -47,8 +49,6 @@ MetadataRule은 물리 FTP root를 제외한 논리 relative path와 fileName �
 - `Multiple`: 같은 슬롯에 여러 파일 허용
 
 `cardinality=Single`인데 하나의 슬롯에서 실제 결과가 2개 이상이면 정상적인 다중 결과가 아니라 기준정보/파일 상태 불일치로 취급한다.
-
-동일 `equipmentId + logType`에 여러 discovery rule이 실제로 필요한지는 별도 설계 결정으로 남기며, 실제 요구가 확인되기 전까지 MVP 기준정보는 하나의 discovery rule만 둔다.
 
 ### Configuration 정의
 
