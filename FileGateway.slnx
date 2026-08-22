@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/FileGateway.Api/FileGateway.Api.csproj" />
+    <Project Path="src/FileGateway.Configurations/FileGateway.Configurations.csproj" />
+    <Project Path="src/FileGateway.Core/FileGateway.Core.csproj" />
+    <Project Path="src/FileGateway.Infrastructure/FileGateway.Infrastructure.csproj" />
+    <Project Path="src/FileGateway.Logs/FileGateway.Logs.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/FileGateway.IntegrationTests/FileGateway.IntegrationTests.csproj" />
+    <Project Path="tests/FileGateway.UnitTests/FileGateway.UnitTests.csproj" />
+  </Folder>
+</Solution>

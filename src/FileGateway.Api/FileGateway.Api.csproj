@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FileGateway.Logs\FileGateway.Logs.csproj" />
+    <ProjectReference Include="..\FileGateway.Configurations\FileGateway.Configurations.csproj" />
+    <ProjectReference Include="..\FileGateway.Infrastructure\FileGateway.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>

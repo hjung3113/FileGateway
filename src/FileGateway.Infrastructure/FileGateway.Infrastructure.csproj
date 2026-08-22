@@ -1,0 +1,16 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FileGateway.Core\FileGateway.Core.csproj" />
+    <ProjectReference Include="..\FileGateway.Logs\FileGateway.Logs.csproj" />
+    <ProjectReference Include="..\FileGateway.Configurations\FileGateway.Configurations.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+</Project>

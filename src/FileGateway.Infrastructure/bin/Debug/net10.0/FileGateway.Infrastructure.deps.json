@@ -1,0 +1,73 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "FileGateway.Infrastructure/1.0.0": {
+        "dependencies": {
+          "FileGateway.Configurations": "1.0.0",
+          "FileGateway.Core": "1.0.0",
+          "FileGateway.Logs": "1.0.0"
+        },
+        "runtime": {
+          "FileGateway.Infrastructure.dll": {}
+        }
+      },
+      "FileGateway.Configurations/1.0.0": {
+        "dependencies": {
+          "FileGateway.Core": "1.0.0"
+        },
+        "runtime": {
+          "FileGateway.Configurations.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "FileGateway.Core/1.0.0": {
+        "runtime": {
+          "FileGateway.Core.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      },
+      "FileGateway.Logs/1.0.0": {
+        "dependencies": {
+          "FileGateway.Core": "1.0.0"
+        },
+        "runtime": {
+          "FileGateway.Logs.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "FileGateway.Infrastructure/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "FileGateway.Configurations/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "FileGateway.Core/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "FileGateway.Logs/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}
