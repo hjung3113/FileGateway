@@ -22,7 +22,7 @@ GET /api/v1/logs
 
 - `equipmentId` (필수)
 - `logType` (필수)
-- `from`, `to` (선택, 없으면 최근 24시간)
+- `from`, `to` (선택)
 - `subtype` (선택)
 - `attr.<name>=<value>` (선택)
 - `limit` (선택)
@@ -31,6 +31,15 @@ GET /api/v1/logs
 `equipmentId + logType`은 정확히 하나의 로그 정의를 식별한다. 한 요청에서 한 설비의 여러 `logType`을 동시에 탐색하지 않는다.
 
 `from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준 반개구간 `[from, to)`다. `from`은 포함하고 `to`는 제외한다.
+
+시간 범위 입력 규칙:
+
+- `from`, `to` 모두 없음 → 최근 24시간
+- `from`만 있음 → `[from, from + 2일)`
+- `to`만 있음 → `InvalidRequest`
+- `from`, `to` 모두 있음 → 지정한 `[from, to)`
+
+시간 기반 로그 조회에는 설정 가능한 최대 조회 기간을 적용한다. 구체적인 기간 값은 운영 설정으로 두며 초과 요청은 `InvalidRequest`다.
 
 Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 `timestamp`는 `null`이며 현재 시각이나 FTP modified time으로 대체하지 않는다.
 
@@ -54,7 +63,11 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
 
-`continuationToken`은 발급된 원래 조회조건의 다음 페이지를 가리킨다. 토큰을 사용하면서 `equipmentId`, `logType`, `from/to`, `subtype`, attributes 등 결과 집합을 바꾸는 조회조건을 변경하면 `InvalidRequest`를 반환한다. 다른 조건으로 조회하려면 continuation token 없이 첫 페이지부터 새로 조회한다.
+`continuationToken`은 발급된 원래 조회조건의 다음 페이지를 가리킨다. 토큰을 사용하면서 `equipmentId`, `logType`, `from/to`, `subtype`, attributes 등 **결과 집합을 바꾸는 조회조건**을 변경하면 `InvalidRequest`를 반환한다. 다른 조건으로 조회하려면 continuation token 없이 첫 페이지부터 새로 조회한다.
+
+`limit`은 결과 집합 조건이 아니라 해당 응답의 페이지 크기이므로 continuation token을 유지한 채 페이지마다 변경할 수 있다.
+
+페이지네이션은 원격 파일 집합의 완전한 snapshot을 보장하지 않는다. 안정적인 정렬과 cursor를 사용하지만 페이지 사이에 파일이 추가/삭제되면 결과가 변할 수 있다.
 
 탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
 
@@ -98,8 +111,11 @@ GET /api/v1/configurations/history
 - snapshot 논리 시각 기준 `[from, to)` 조회
 - `from`/`to`가 없으면 임의 기본 기간 또는 전체 History로 대체하지 않고 `InvalidRequest`
 - 생성 완료된 snapshot은 불변으로 취급
+- 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 `fileName ASC`
 - History 목록은 `limit + opaque continuationToken`으로 페이지네이션
 - History의 continuation token도 원래 `equipmentId + configurationType + from/to` 조회조건에 종속되며 조건 변경 시 `InvalidRequest`
+- `limit`은 페이지마다 변경 가능
+- 페이지 사이에 원격 History 파일이 추가/삭제되면 결과 변화가 가능하며 완전한 snapshot은 보장하지 않음
 - Current Configuration은 결과에 포함하지 않음
 
 ### 파일 정보
@@ -115,7 +131,17 @@ GET과 HEAD 모두 다음 순서로 실제 대상 상태를 검증한다.
 2. 현재 기준정보로 논리 identity 재해석
 3. 실제 원격 파일 stat/존재 여부 확인
 
-- GET: 현재 파일의 metadata를 JSON으로 반환
+공통 `/files/{fileId}` endpoint는 feature 업무 metadata를 재구성하는 API가 아니라 공통 파일 상태 확인 용도다.
+
+GET JSON의 핵심 필드는 다음 최소 공통 정보만 둔다.
+
+- `fileId`
+- `fileName`
+- `size`
+
+`logType`, `timestamp`, `subtype`, `attributes`, `configurationType`, `snapshotTimestamp` 같은 업무 metadata는 각각 Logs/Configurations API가 소유한다.
+
+- GET: 현재 파일의 최소 공통 metadata를 JSON으로 반환
 - HEAD: GET과 같은 검증을 수행하되 body 없이 현재 `Content-Length`를 반환
 - metadata의 `size`는 해당 조회 시점의 관측값이며 이후 변경 가능한 파일의 크기를 고정하지 않음
 
