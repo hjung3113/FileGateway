@@ -13,8 +13,10 @@ X-Api-Key: <key>
 - query string으로 API Key를 전달하지 않는다.
 - header 누락과 잘못된 key는 모두 `401 InvalidApiKey`로 처리한다.
 - API Key 원문을 로그에 남기지 않는다.
-- Key 식별자/CallerId만 감사 로그에 사용한다.
-- MVP에서는 API Key별 설비 권한을 세분화하지 않는다.
+- 여러 API Key를 동시에 활성화할 수 있으며 각 key는 안정적인 `callerId`와 연결한다.
+- MVP에서는 모든 활성 API Key의 권한 범위가 동일하며 API Key별 설비 권한을 세분화하지 않는다.
+- 여러 key 동시 활성화로 호출자별 감사 추적과 신/구 key overlap 회전을 지원한다.
+- Key 식별자/`callerId`만 감사 로그에 사용한다.
 - 키 회전이 가능하도록 Secret/설정을 코드와 분리한다.
 
 ## 파일 서버 credential
@@ -46,9 +48,9 @@ X-Api-Key: <key>
 
 ## 토큰 보안
 
-`fileId`와 `continuationToken`은 모두 클라이언트가 내부 내용을 신뢰하거나 수정할 수 없는 서명된 opaque token으로 취급한다.
+`fileId`와 `continuationToken`은 모두 클라이언트가 내부 내용을 신뢰하거나 수정할 수 없고 내부 payload도 노출되지 않는 **protected opaque token**으로 취급한다.
 
-공통 token codec은 서명/검증, opaque encoding/decoding, TTL 처리를 담당하고 Log/Configuration의 업무 의미는 각 feature가 소유한다. 서명 key/secret은 코드와 분리된 안전한 설정 공급 방식을 사용한다.
+공통 token codec은 무결성 보호, payload 비노출, opaque encoding/decoding, TTL 처리를 담당하고 Log/Configuration의 업무 의미는 각 feature가 소유한다. token 보호 key/secret은 코드와 분리된 안전한 설정 공급 방식을 사용한다.
 
 ### fileId
 
@@ -56,33 +58,35 @@ X-Api-Key: <key>
 - 일반 조회조건 자체를 나타내는 query token이 아님
 - TTL 24시간
 - 물리 host/path는 포함하지 않음
-- 서명된 내부 `resourceKind`: `Log | ConfigurationCurrent | ConfigurationSnapshot`
+- 보호된 내부 `resourceKind`: `Log | ConfigurationCurrent | ConfigurationSnapshot`
 - 접근 시 현재 기준정보로 물리 위치를 다시 해석
 - 물리 서버/경로 변경 자체는 기존 fileId를 무효화하지 않음
 
 오류를 다음처럼 구분한다.
 
-- 변조/서명 실패/형식 오류: `InvalidFileId`
+- 변조/보호 검증 실패/형식 오류: `InvalidFileId`
 - TTL 경과: `FileIdExpired`
 - 기준정보 정의 삭제: 해당 `*DefinitionNotFound`
 - 기준정보는 정상이나 실제 파일 없음: `FileNotFound`
 
 Configuration Snapshot `fileId`는 실제 파일뿐 아니라 해당 Snapshot Set의 완료 marker도 재확인한다. marker가 사라졌다면 Snapshot File이 남아 있어도 `FileNotFound`로 처리한다.
 
-### token signing key rotation
+### token protection key rotation / persistence
 
-- 새 token은 현재(active) signing key로만 발급한다.
-- key 교체 후에도 이미 발급된 `fileId`가 TTL 24시간 동안 갑자기 무효화되지 않도록 이전 검증 key를 함께 유지한다.
-- 이전 key는 그 key로 발급된 `fileId`의 최대 TTL이 모두 경과한 뒤 제거할 수 있다.
-- key 식별/선택 방식은 구현 세부사항이며 외부 API에는 노출하지 않는다.
+- 새 token은 현재(active) 보호 key로만 발급한다.
+- 보호 key는 IIS 프로세스 재시작만으로 교체되거나 소실되지 않는 방식으로 공급/보관한다.
+- 정상적인 애플리케이션/IIS 재시작 후에도 발급된 24시간 `fileId`가 TTL 동안 계속 검증 가능해야 한다.
+- key 교체 후에도 이미 발급된 token이 TTL 동안 갑자기 무효화되지 않도록 이전 검증 key를 함께 유지한다.
+- 이전 key는 그 key로 발급된 token의 최대 TTL이 모두 경과한 뒤 제거할 수 있다.
+- key 식별/선택 및 구체적인 보호 알고리즘은 구현 세부사항이며 외부 API에는 노출하지 않는다.
 
 ### continuationToken
 
 - 목록 페이지네이션을 위한 stateless cursor
 - 서버에 이전 FTP 결과 전체를 보관하지 않음
-- 원래 결과 집합 조건과 마지막 반환 위치를 서명된 형태로 보존
+- 원래 결과 집합 조건과 마지막 반환 위치를 보호된 형태로 보존
 - TTL은 설정 가능하며 구체적인 값은 운영 설정에서 정함
-- 만료/변조/서명 실패/형식 오류는 모두 `InvalidRequest`(400)
+- 만료/변조/보호 검증 실패/형식 오류는 모두 `InvalidRequest`(400)
 - fileId와 달리 continuation token 전용 410 오류는 두지 않음
 
 ## 감사 로그
@@ -124,8 +128,11 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 - 기준정보 refresh나 readiness 확인을 위해 수십~수백 FTP 서버를 선제 순회하지 않는다.
 - 실제 디렉터리/파일/marker 존재 여부는 해당 파일 요청에서 확인한다.
 - 계산된 목록 조회 디렉터리가 존재하지 않으면 정상적인 결과 0개로 처리하고 파일 서버 장애율에 포함하지 않는다.
+- 한 요청이 여러 디렉터리를 조회하는 중 하나라도 실제 FTP 연결/인증/명령/프로토콜 I/O 오류가 발생하면 부분 결과를 성공 응답으로 반환하지 않고 요청 전체를 해당 파일 서버 오류로 실패 처리한다.
 - 파일 서버 연결/인증/프로토콜 오류는 정상적인 경로 없음과 구분한다.
 - case-insensitive 기준 동일 파일명이 둘 이상 발견된 경우는 임의 dedupe하지 않고 `FileDefinitionConflict`로 기록한다.
+- FTP 작업 동시성은 **FileGateway 전체 한도**와 **파일 서버별 한도**를 각각 운영 설정으로 둔다.
+- 구체적인 동시성 숫자는 실제 환경 테스트 후 정하며 무제한 병렬 접근을 허용하지 않는다.
 
 ## 다운로드/스트리밍 운영
 
@@ -150,7 +157,7 @@ Configuration History는 예외적으로 History 생산자가 생성한 **완료
 - 무제한 retry 금지
 - 클라이언트 취소를 원격 작업에 전달
 - 특정 파일 서버 장애를 전체 FileGateway 장애로 확대하지 않음
-- 동시 다운로드 수는 설정으로 제한 가능하게 설계
+- FTP 전체/서버별 동시성 제한을 운영 설정으로 적용
 
 구체적인 timeout/동시성 숫자는 실제 네트워크 테스트 후 운영 설정으로 확정한다.
 
