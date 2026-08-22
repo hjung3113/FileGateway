@@ -10,11 +10,13 @@
 
 ### 서버/설비 매핑
 
-- equipment
+- equipmentId
 - logType
 - serverId
 - host 또는 서버 연결에 필요한 비민감 식별정보
 - rootPath
+
+`equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자다.
 
 ### 로그 탐색 규칙
 
@@ -23,11 +25,15 @@
 - filePattern
 - cardinality
 
+`logType`은 업무적인 로그 종류이고 `generationType`은 파일 생성 주기/생명주기다. 두 값을 같은 분류로 취급하지 않는다.
+
 ### 메타데이터 추출 규칙
 
 - mode: Template / Regex
 - pattern
 - 추출 group/token → timestamp/subtype/attribute 매핑
+
+`timestamp`는 파일명/경로 규칙에서 추출한 로그의 논리 시각이다. FTP modified time과 구분한다.
 
 FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 
@@ -38,13 +44,15 @@ FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 - 로그 종류별 실제 탐색/파일명 규칙은 서로 다를 수 있음
 - DB/SP는 확장 가능하며 탐색/파싱 규칙을 기준정보로 관리
 
+`Configuration File`은 로그가 아니므로 로그 기준정보 모델에 암묵적으로 포함하지 않는다. Configuration 기준정보 구조는 해당 Provider/API 경계가 확정된 뒤 정의한다.
+
 ## 호출자 확장 포인트
 
 MVP API Key는 전체 설비/로그에 접근 가능하다. 향후 권한 분리가 필요해지면:
 
 ```text
 API Key -> CallerId
-CallerId + Equipment + LogType -> SP/Policy filter
+CallerId + EquipmentId + LogType -> SP/Policy filter
 ```
 
 형태로 확장할 수 있다. raw API Key를 Stored Procedure에 전달하지 않는다.
