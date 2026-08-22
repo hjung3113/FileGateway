@@ -44,6 +44,9 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - Health Check
 - JSON/streaming HTTP 응답
 - 공통 protected opaque token codec 사용/dispatch
+- 설비별 제공 파일 종류 조회에서 Logs/Configurations의 검증된 정의 요약을 조합해 외부 catalog 응답 구성
+
+설비별 제공 파일 종류 조회는 새 범용 File Provider를 만들지 않는다. `Api`가 두 feature의 공개 가능한 정의 요약(`logType + generationType`, `configurationType`)만 합치며 FTP/Core 파일 I/O는 호출하지 않는다.
 
 ### FileGateway.Logs
 
@@ -54,6 +57,7 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - Log logical identity 생성/재해석
 - Log pagination 조회조건과 cursor 의미 관리
 - 목록 조회와 직접 다운로드가 같은 Resolver를 사용하도록 보장
+- 설비별 제공 파일 종류 조회를 위한 Log 정의 요약 제공
 
 ### FileGateway.Configurations
 
@@ -64,6 +68,7 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - Current/Snapshot logical identity 생성/재해석
 - Configuration History pagination 조회조건과 cursor 의미 관리
 - 히스토리 생성/복사/보관은 수행하지 않음
+- 설비별 제공 파일 종류 조회를 위한 Configuration 정의 요약 제공
 
 ### FileGateway.Core
 
@@ -74,7 +79,7 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - 공통 I/O 오류 분류
 - `fileId`/`continuationToken`에 사용할 공통 token codec 계약(무결성 보호/payload 비노출/opaque encoding/TTL)
 
-Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec도 Log/Configuration의 logical identity나 pagination 조건을 해석하지 않는다.
+Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec도 Log/Configuration의 logical identity나 pagination 조건을 해석하지 않는다. 설비별 파일 종류 catalog를 위해 Core에 범용 file type 모델을 추가하지 않는다.
 
 ### FileGateway.Infrastructure
 
@@ -126,3 +131,4 @@ FileGateway
 8. 향후 Linux 배포를 위해 Core/feature 계층에서 Windows 전용 API에 직접 의존하지 않는다.
 9. 토큰 보호/직렬화 책임과 도메인 의미를 분리한다.
 10. 로그의 논리 생성 슬롯과 물리 디렉터리를 1:1로 가정하지 않는다.
+11. 설비별 제공 파일 종류는 DB 기준정보의 feature 정의를 투영해 제공하며, 설비사별 차이를 코드 분기로 모델링하지 않는다.
