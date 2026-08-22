@@ -30,7 +30,7 @@
 
 `logType`은 업무적인 로그 종류이고 `generationType`은 파일 생성 주기/생명주기다. 두 값을 같은 분류로 취급하지 않는다.
 
-로그 `timestamp`는 파일명/경로 규칙에서 추출한 논리 시각이다. FTP modified time과 구분하며 timezone 정보가 없으면 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. Daily 로그의 논리 `timestamp`는 해당 날짜의 Site local `00:00`이다.
+로그 `timestamp`는 파일명/경로 규칙에서 추출한 논리 시각이다. FTP modified time과 구분하며 timezone 정보가 없으면 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. Daily 로그의 논리 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 `timestamp`는 `null`이다.
 
 `subtype` 및 동적 attribute 값은 외부 조회에서 정확한 문자열 일치(case-sensitive)를 사용한다. 대소문자 비구분이 필요한 업무 값은 기준정보/파싱 단계에서 canonical value로 정규화한다.
 
@@ -89,14 +89,19 @@ raw API Key를 Stored Procedure에 전달하지 않는다.
 
 ## 캐시
 
-- 프로세스 memory cache 사용
-- TTL은 설정 가능(초기 권장 10~30분 범위)
-- 기준정보 변경 빈도가 낮다는 현재 운영 특성을 전제로 함
+- 프로세스 memory cache를 사용한다.
+- TTL은 설정 가능하며 초기 권장값은 10~30분 범위다.
+- TTL은 캐시 데이터의 강제 폐기 시점이 아니라 **기준정보 갱신을 다시 시도해야 하는 시점**으로 사용한다.
+- TTL 경과 후 실제 요청이 들어오면 lazy refresh로 Stored Procedure 갱신을 시도한다.
+- MVP에서는 별도 background refresh worker를 두지 않는다.
 
-DB 장애 시:
+DB/SP 갱신 시도 결과:
 
-- 유효 캐시 존재 → 캐시로 계속 처리
-- 캐시 없음 → `ReferenceDataUnavailable`
+- 갱신 성공 → 새 기준정보로 캐시 교체
+- 갱신 실패 + 이전 정상 캐시 존재 → 마지막 정상 캐시를 stale 상태로 계속 사용
+- 프로세스 시작 후 정상 기준정보를 한 번도 얻지 못했고 캐시도 없음 → `ReferenceDataUnavailable`
+
+stale 캐시 사용 여부와 마지막 정상 갱신 시각은 운영 로그/메트릭에서 관측 가능해야 한다.
 
 로컬 영속 fallback/분산 cache는 MVP에서 제외한다.
 
