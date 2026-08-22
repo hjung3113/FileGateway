@@ -65,6 +65,8 @@ FileGateway 프로젝트에서 작업하는 코딩 에이전트 공통 지침입
 
 ## Agent Skills
 
+### Superpowers
+
 Superpowers runtime skills는 프로젝트 내부 `.superpowers/skills`에 일반 Git 파일로 포함되어 있습니다. 별도 submodule 초기화는 필요하지 않습니다.
 
 각 에이전트는 다음 프로젝트 로컬 심볼릭 링크를 통해 동일한 skills를 사용합니다.
@@ -75,3 +77,25 @@ Superpowers runtime skills는 프로젝트 내부 `.superpowers/skills`에 일�
 - OMP: `.omp/skills/superpowers`
 
 Superpowers 출처, 기준 버전 및 프로젝트 로컬 조정 내용은 `.superpowers/UPSTREAM.md`를 참조합니다.
+
+### Matt Pocock design skills
+
+`mattpocock/skills`에서는 설계에 직접 필요한 subset만 `.mattpocock/skills`에 vendor합니다.
+
+포함 skills:
+
+- `codebase-design`
+- `domain-modeling`
+- `improve-codebase-architecture`
+- `grilling` — architecture 개선 skill의 직접 의존 설계 인터뷰 skill
+
+각 에이전트는 다음 심볼릭 링크를 통해 동일한 subset을 사용합니다.
+
+- Claude Code: `.claude/skills/mattpocock`
+- Codex: `.agents/skills/mattpocock`
+- OpenCode: `.opencode/skills/mattpocock`
+- OMP: `.omp/skills/mattpocock`
+
+**프로젝트 규칙 우선순위:** vendored skill의 기본 문서 구조보다 이 `AGENTS.md`와 `docs/INDEX.md`가 우선합니다. 특히 `domain-modeling`이 제안하는 루트 `CONTEXT.md`/`docs/adr/` 자동 생성은 FileGateway에서 기본 동작으로 채택하지 않습니다. 기존 역할별 설계 문서에 먼저 반영하고, 새 문서가 정말 필요할 때만 생성한 뒤 `docs/INDEX.md`에 등록합니다.
+
+출처, 기준 커밋, 포함/제외 범위는 `.mattpocock/UPSTREAM.md`를 참조합니다.
