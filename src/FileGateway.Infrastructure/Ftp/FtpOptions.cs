@@ -14,7 +14,10 @@ public sealed class FtpOptions
     public int ReadTimeoutSeconds { get; set; } = 60;
     public int MaxConcurrentGlobal { get; set; } = 50;
     public int MaxConcurrentPerServer { get; set; } = 5;
-    public int? HostPortOverride { get; set; } // 테스트 편의용(기본 21)
+    public int? HostPortOverride { get; set; } // 테스트 편의용
+
+    internal static int ResolveHostPort(FtpOptions o)
+        => o.HostPortOverride ?? (o.Security == FtpSecurity.ImplicitTls ? 990 : 21);
 
     public static FtpConfig ToFtpConfig(FtpOptions o) => new()
     {

@@ -31,7 +31,8 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
         {
             using var client = await ConnectAsync(server, token);
             var info = await GetObjectInfoOrNullAsync(client, server, path, token);
-            if (info is null) throw new FileAccessException(FileAccessError.FileNotFound, "file not found");
+            if (info?.Type != FtpObjectType.File)
+                throw new FileAccessException(FileAccessError.FileNotFound, "file not found");
             return info.Size;
         }), ct);
 
@@ -39,7 +40,8 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
         => limiter.RunAsync(server, token => WrapAsync(async () =>
         {
             using var client = await ConnectAsync(server, token);
-            return await GetObjectInfoOrNullAsync(client, server, path, token) is not null;
+            var info = await GetObjectInfoOrNullAsync(client, server, path, token);
+            return info?.Type == FtpObjectType.File;
         }), ct);
 
     public async Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string path, CancellationToken ct)
@@ -90,6 +92,7 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
             if (e is FtpAuthenticationException) return new(FileAccessError.AuthenticationFailed, "ftp auth failed", ex);
             if (e is SocketException) return new(FileAccessError.ConnectionFailed, "ftp connection failed", ex);
             if (e is TimeoutException) return new(FileAccessError.Timeout, "ftp timeout", ex);
+            if (e is IOException) return new(FileAccessError.IoFailure, "ftp I/O failure", ex);
         }
         return ex is FtpException
             ? new(FileAccessError.ProtocolError, "ftp protocol error", ex)
@@ -100,7 +103,7 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
     {
         // FluentFTP는 빈 UserName을 ctor에서 거부한다. 미설정 credential은 anonymous로 접속한다.
         var client = new AsyncFtpClient(server.Host, options.UserName ?? "anonymous", options.Password ?? "",
-            options.HostPortOverride ?? 21, FtpOptions.ToFtpConfig(options));
+            FtpOptions.ResolveHostPort(options), FtpOptions.ToFtpConfig(options));
         try { await client.Connect(ct); return client; }
         catch
         {
@@ -116,9 +119,7 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
 
     private static bool IsFileNotFoundReply(FtpException ex)
         => ex is FtpMissingObjectException
-           || (ex as FtpCommandException)?.CompletionCode == "550"
-           || ex.Message.Contains("550", StringComparison.Ordinal)
-           || ex.InnerException?.Message.Contains("550", StringComparison.Ordinal) == true;
+           || (ex as FtpCommandException)?.CompletionCode == "550";
 
     /// <summary>OpenRead 반환용 스트림. DisposeAsync에서 데이터 스트림, client, lease를 함께 해제한다.</summary>
     private sealed class OwnedFtpStream(Stream inner, AsyncFtpClient client, FtpConcurrencyLimiter.FtpLease lease) : Stream
@@ -133,9 +134,23 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
         }
 
         public override long Length => inner.Length;
-        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            try { return inner.Read(buffer, offset, count); }
+            catch (Exception ex) when (ex is not FileAccessException and not OperationCanceledException)
+            {
+                throw Classify(ex);
+            }
+        }
+
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct)
-            => await inner.ReadAsync(buffer, ct);
+        {
+            try { return await inner.ReadAsync(buffer, ct); }
+            catch (Exception ex) when (ex is not FileAccessException and not OperationCanceledException)
+            {
+                throw Classify(ex);
+            }
+        }
         public override async ValueTask DisposeAsync()
         {
             // 해제 실패가 permit 누수로 이어지지 않게 각 단계를 best-effort로 처리한다.

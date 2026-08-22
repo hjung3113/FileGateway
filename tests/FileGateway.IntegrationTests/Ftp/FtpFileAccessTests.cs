@@ -63,6 +63,27 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
     }
 
     [Fact]
+    public async Task StatFile_rejects_directory_as_file()
+    {
+        await Seed(ftp, "ftproot/Logs/stat-directory-child.bin", "x"u8.ToArray());
+        var (access, opt) = Create(ftp); WithPort(ftp, opt);
+
+        var ex = await Assert.ThrowsAsync<FileAccessException>(
+            () => access.StatFileAsync(Server(ftp.Port), "Logs", CancellationToken.None));
+
+        Assert.Equal(FileAccessError.FileNotFound, ex.Error);
+    }
+
+    [Fact]
+    public async Task FileExists_returns_false_for_directory()
+    {
+        await Seed(ftp, "ftproot/Logs/exists-directory-child.bin", "x"u8.ToArray());
+        var (access, opt) = Create(ftp); WithPort(ftp, opt);
+
+        Assert.False(await access.FileExistsAsync(Server(ftp.Port), "Logs", CancellationToken.None));
+    }
+
+    [Fact]
     public async Task OpenRead_returns_stream_and_length()
     {
         await Seed(ftp, "ftproot/Logs/data.bin", "0123456789"u8.ToArray());
