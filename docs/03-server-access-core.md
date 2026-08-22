@@ -22,6 +22,25 @@
 
 Infrastructure에서 단일 FTP/FTPS Adapter가 `IFileAccess`를 구현한다.
 
+MVP FTP/FTPS Adapter는 **FluentFTP를 사용**하는 방향으로 구현한다.
+
+```text
+FileGateway.Core.IFileAccess
+          ↑
+FileGateway.Infrastructure
+  FluentFTP 기반 FTP/FTPS Adapter
+          ↓
+       FluentFTP
+```
+
+FluentFTP는 구현 세부사항으로 `FileGateway.Infrastructure` 안에 격리한다.
+
+- Core/Logs/Configurations에 FluentFTP 타입을 노출하지 않는다.
+- FluentFTP 예외/응답 모델을 그대로 상위 계층에 전달하지 않고 `IFileAccess`의 공통 원격 I/O 의미로 변환한다.
+- FTP 서버 wildcard 동작, 경로 표현 등 라이브러리/프로토콜별 차이가 도메인 규칙에 새지 않게 한다.
+- 향후 다른 프로토콜 Adapter 도입 시 기존 feature 계층을 변경하지 않는 것을 목표로 한다.
+- 구체 패키지 버전은 구현 시점의 .NET 지원 범위와 유지보수 상태를 확인해 고정한다.
+
 MVP 전제:
 
 - 분산 서버들의 접근 방식 동일
@@ -43,6 +62,7 @@ Core에는 다음을 넣지 않는다.
 - subtype/attributes 필터
 - HTTP/API Key 처리
 - 파일 생산 측의 원자적 교체/쓰기 완료/내용 일관성 보장
+- FluentFTP 등 특정 프로토콜 라이브러리 타입
 
 ## 원격 조회 의미
 
