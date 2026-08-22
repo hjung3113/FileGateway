@@ -60,7 +60,7 @@ FileGateway 프로젝트에서 작업하는 코딩 에이전트 공통 지침입
 
 ## Agent Skills
 
-Superpowers는 프로젝트 내부 `.superpowers` Git submodule에 고정되어 있습니다.
+Superpowers runtime skills는 프로젝트 내부 `.superpowers/skills`에 일반 Git 파일로 포함되어 있습니다. 별도 submodule 초기화는 필요하지 않습니다.
 
 각 에이전트는 다음 프로젝트 로컬 심볼릭 링크를 통해 동일한 skills를 사용합니다.
 
@@ -69,4 +69,4 @@ Superpowers는 프로젝트 내부 `.superpowers` Git submodule에 고정되어 
 - OpenCode: `.opencode/skills/superpowers`
 - OMP: `.omp/skills/superpowers`
 
-새 clone에서는 `git submodule update --init --recursive`로 submodule을 초기화합니다.
+Superpowers 출처, 기준 버전 및 프로젝트 로컬 조정 내용은 `.superpowers/UPSTREAM.md`를 참조합니다.

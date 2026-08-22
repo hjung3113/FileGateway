@@ -1,0 +1,6 @@
+{
+  "name": "superpowers-project-vendor",
+  "version": "6.3.0",
+  "private": true,
+  "description": "Project-local vendored Superpowers runtime skills"
+}
