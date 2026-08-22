@@ -135,6 +135,18 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 - `Content-Disposition` filename의 header-safe 처리
 - 물리 host/path 비노출
 
+## 오픈소스 테스트 도구
+
+자동 통합테스트 환경 구성에는 **Testcontainers for .NET** 사용을 우선 검토한다.
+
+- MSSQL 등 외부 의존성을 테스트 실행 단위로 격리하는 데 사용한다.
+- FTP/FTPS 테스트 컨테이너를 사용할 경우에도 `IFileAccess` 계약과 FluentFTP Adapter 동작 검증에 한정한다.
+- 컨테이너 환경이 실제 Windows Server + IIS FTP/FTPS의 SSL 설정, Passive port, 방화벽/NAT 동작을 완전히 대체한다고 가정하지 않는다.
+- 최종 MVP 완료 조건에는 운영과 유사한 Windows Server/IIS + 실제 MSSQL/FTP 연동 검증이 계속 포함된다.
+- Testcontainers 패키지/이미지 버전은 구현 시점에 고정한다.
+
+Unit/API 테스트 프레임워크는 .NET 기본 테스트 생태계의 단순한 구성을 우선하며, 추가 mocking/assertion framework는 실제 필요가 확인될 때만 도입한다.
+
 ## 배포 구조
 
 ```text
