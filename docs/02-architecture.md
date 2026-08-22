@@ -50,7 +50,8 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - LogResolver
 - 템플릿/정규식 규칙 해석
 - 날짜/시간/subtype/attributes 필터
-- 로그용 `fileId`, continuation token 처리
+- Log logical identity 생성/재해석
+- Log pagination 조회조건과 cursor 의미 관리
 - 목록 조회와 직접 다운로드가 같은 Resolver를 사용하도록 보장
 
 ### FileGateway.Configurations
@@ -59,7 +60,8 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - Current Configuration 해석
 - Configuration Snapshot History 탐색
 - `configurationType` 기반 논리 분류
-- Configuration용 `fileId` 해석
+- Current/Snapshot logical identity 생성/재해석
+- Configuration History pagination 조회조건과 cursor 의미 관리
 - 히스토리 생성/복사/보관은 수행하지 않음
 
 ### FileGateway.Core
@@ -69,8 +71,9 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - `IFileAccess`
 - 원격 파일 entry/stat/stream 모델
 - 공통 I/O 오류 분류
+- `fileId`/`continuationToken`에 사용할 공통 token codec 계약(서명/검증/opaque encoding/TTL)
 
-Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다.
+Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec도 Log/Configuration의 logical identity나 pagination 조건을 해석하지 않는다.
 
 ### FileGateway.Infrastructure
 
@@ -78,7 +81,24 @@ Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다.
 - 기준정보 memory cache
 - FTP/FTPS 파일 접근
 - credential/secret 로딩
-- 외부 I/O 구현
+- token 서명 key/secret 공급 및 외부 I/O 구현
+
+## 토큰 책임 경계
+
+`fileId`와 `continuationToken`을 위해 범용 File Provider나 범용 Pagination Provider를 추가하지 않는다.
+
+- 공통 계층: token 서명/검증, opaque encoding/decoding, TTL 같은 기계적 codec 책임
+- Logs: `Log` logical identity와 Log cursor/조회조건 의미
+- Configurations: `ConfigurationCurrent`/`ConfigurationSnapshot` logical identity와 History cursor/조회조건 의미
+
+`fileId`에는 외부에서 보이지 않는 서명된 `resourceKind`를 포함해 공통 `/files/{fileId}`가 해당 feature resolver로 위임할 수 있게 한다.
+
+```text
+resourceKind
+- Log
+- ConfigurationCurrent
+- ConfigurationSnapshot
+```
 
 ## 프로젝트 구조
 
@@ -103,3 +123,4 @@ FileGateway
 6. Configuration은 로그 모델에 억지로 포함하지 않는다.
 7. FileGateway는 Configuration History를 생성하거나 보관하지 않고 이미 저장된 파일만 제공한다.
 8. 향후 Linux 배포를 위해 Core/feature 계층에서 Windows 전용 API에 직접 의존하지 않는다.
+9. 토큰의 암호학적/직렬화 책임과 도메인 의미를 분리한다.
