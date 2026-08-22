@@ -4,6 +4,14 @@
 
 MVP는 HTTPS + API Key를 사용한다.
 
+API Key는 HTTP header 하나로만 전달한다.
+
+```http
+X-Api-Key: <key>
+```
+
+- query string으로 API Key를 전달하지 않는다.
+- header 누락과 잘못된 key는 모두 `401 InvalidApiKey`로 처리한다.
 - API Key 원문을 로그에 남기지 않는다.
 - Key 식별자/CallerId만 감사 로그에 사용한다.
 - MVP에서는 API Key별 설비 권한을 세분화하지 않는다.
@@ -97,9 +105,12 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 
 - 기준정보 캐시 TTL은 강제 폐기 시간이 아니라 갱신 재시도 기준이다.
 - TTL 경과 후 요청 시 lazy refresh를 수행한다.
-- 갱신 실패 시 마지막 정상 캐시가 있으면 stale 상태로 계속 사용한다.
-- 프로세스 시작 후 정상 기준정보를 한 번도 읽지 못해 캐시가 없으면 파일 요청은 `ReferenceDataUnavailable`(503)을 반환한다.
-- stale 캐시 사용 여부와 마지막 정상 갱신 시각을 로그/메트릭으로 관측 가능하게 한다.
+- 새 기준정보는 **전체 검증이 성공한 뒤 cache 전체를 atomic 교체**한다.
+- 조회 실패 또는 검증 실패 시 일부 새 정의만 적용하지 않는다.
+- 갱신 실패/검증 실패 + 마지막 정상 cache가 있으면 last-known-good 전체를 stale 상태로 계속 사용한다.
+- 최초 로딩에서 조회 또는 검증에 실패해 정상 cache가 없으면 파일 요청은 `ReferenceDataUnavailable`(503)을 반환한다.
+- 하나의 잘못된 정의가 있으면 해당 refresh 전체를 거부한다.
+- stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation 실패 원인을 로그/메트릭으로 관측 가능하게 한다.
 - MVP에서는 별도 background refresh worker를 두지 않는다.
 
 ## 다운로드/스트리밍 운영
@@ -117,7 +128,7 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 
 FileGateway는 이미 저장소에 보이는 파일을 읽어 제공하는 시스템이다. Current Configuration 및 Hourly/Daily 로그의 생산 방식, 원자적 replace 여부, 쓰기 중 읽기 일관성은 생산 시스템 책임이며 FileGateway는 이를 위해 snapshot 복사, 파일 잠금, 버전 고정 또는 별도 생산 완료 판정을 수행하지 않는다. 외부 변경으로 읽기 길이 불일치나 I/O 실패가 발생하면 일반 streaming failure로 처리한다.
 
-Configuration History는 예외적으로 History 생산자가 제공하는 **완료 조건/marker가 확인된 Snapshot Set만 탐색 대상**으로 삼는다. 이는 snapshot 생성 책임을 FileGateway가 가진다는 뜻이 아니라, 불완전한 복사 결과를 읽지 않기 위한 조회 조건이다.
+Configuration History는 예외적으로 History 생산자가 생성한 **완료 marker 파일이 존재하는 Snapshot Set만 탐색 대상**으로 삼는다. marker의 내용은 읽거나 해석하지 않는다. 이는 snapshot 생성 책임을 FileGateway가 가진다는 뜻이 아니라, 불완전한 복사 결과를 읽지 않기 위한 조회 조건이다.
 
 ## 장애/timeout
 
@@ -137,9 +148,9 @@ Configuration History는 예외적으로 History 생산자가 제공하는 **완
 ```
 
 - `live`: 프로세스 생존 여부다. 기준정보 DB 장애만으로 실패시키지 않는다.
-- `ready`: 요청을 처리할 최소 기준정보를 확보했는지 포함해 핵심 의존성 상태를 판단한다.
-- 프로세스 시작 후 기준정보를 한 번도 확보하지 못했고 DB도 사용할 수 없으면 `live`는 정상, `ready`는 실패다.
-- 마지막 정상 기준정보 캐시가 존재하는 상태에서 DB가 일시 장애인 경우 stale 캐시로 요청 처리가 가능하므로 `ready`를 즉시 실패시키지 않는다.
+- `ready`: 요청을 처리할 최소 **검증 완료 기준정보**를 확보했는지 포함해 핵심 의존성 상태를 판단한다.
+- 프로세스 시작 후 검증 완료 기준정보를 한 번도 확보하지 못했고 DB/SP 조회 또는 검증도 실패하면 `live`는 정상, `ready`는 실패다.
+- 마지막 정상 기준정보 cache가 존재하는 상태에서 DB 장애 또는 새 기준정보 검증 실패가 발생해도 stale cache로 요청 처리가 가능하므로 `ready`를 즉시 실패시키지 않는다.
 - ready 요청마다 수십~수백 FTP 서버 전체를 순회하지 않는다.
 - 개별 파일 서버 상태는 실제 요청 시 평가한다.
 
@@ -151,6 +162,7 @@ Configuration History는 예외적으로 History 생산자가 제공하는 **완
 - invalid/expired fileId
 - invalid/expired continuationToken
 - 기준정보 없음/DB 장애
+- 기준정보 validation 실패
 - stale 기준정보 사용
 - 파일 정의 충돌(`FileDefinitionConflict`)
 - 파일 서버 연결/인증/프로토콜 오류
