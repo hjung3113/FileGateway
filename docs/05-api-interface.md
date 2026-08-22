@@ -61,7 +61,12 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 `size`는 목록/metadata 조회 시점의 관측값이다. Continuous 로그나 Current Configuration처럼 변경 가능한 파일은 이후 다운로드 시점 크기와 다를 수 있다.
 
-시간 기반 로그 목록의 기본 정렬은 `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`다. `equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
+로그 목록 정렬은 `generationType`별로 고정한다.
+
+- Hourly/Daily: `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`
+- Continuous: `fileName ASC`
+
+`equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
 
 페이지네이션 목록 응답은 다음 envelope를 사용한다.
 
@@ -84,7 +89,10 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 페이지네이션은 원격 파일 집합의 완전한 snapshot을 보장하지 않는다. 안정적인 정렬과 cursor를 사용하지만 페이지 사이에 파일이 추가/삭제되면 결과가 변할 수 있다.
 
-Log continuation token은 서버에 이전 FTP 결과 전체를 저장하지 않는 stateless cursor다. 토큰은 원래 조회조건과 마지막 반환 위치인 `timestamp + fileName`을 보존한다.
+Log continuation token은 서버에 이전 FTP 결과 전체를 저장하지 않는 stateless cursor다. 토큰은 원래 조회조건과 generationType에 맞는 마지막 반환 위치를 보존한다.
+
+- Hourly/Daily cursor: `timestamp + fileName`
+- Continuous cursor: `fileName`
 
 탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
 
