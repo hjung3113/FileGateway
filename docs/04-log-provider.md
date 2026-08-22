@@ -62,6 +62,8 @@ Glob 의미는 FTP 서버의 wildcard 구현에 의존하지 않는다. FileGate
 
 MVP에서는 root부터의 무제한 recursive scan을 허용하지 않는다. `pathTemplate`이 조회 범위의 Hourly/Daily 슬롯 또는 Continuous 현재 위치로 필요한 디렉터리를 직접 계산하고 해당 디렉터리만 목록 조회한다. 여러 슬롯이 같은 디렉터리를 계산하면 중복 목록 조회하지 않는다.
 
+계산된 논리 디렉터리가 실제 원격 저장소에 존재하지 않으면 해당 슬롯의 정상 결과 0개로 취급한다. 파일 서버 연결/인증/프로토콜 장애와 구분한다.
+
 `cardinality`는 전체 조회 결과 개수가 아니라 **논리 생성 슬롯당 파일 개수**를 나타내는 invariant다.
 
 - Hourly: 각 시간 슬롯마다 적용
@@ -128,6 +130,8 @@ MVP에서 `fileName` 비교는 case-insensitive다. 이 규칙은 다음에 동�
 - continuation cursor의 `fileName` 비교
 
 `Event.LOG`와 `event.log`는 같은 논리 파일명으로 취급한다. 응답의 `fileName`은 실제 원격 파일이 가진 casing을 그대로 반환한다. 향후 case-sensitive 저장소를 지원할 때 이 계약은 재검토한다.
+
+동일 탐색 범위에 `Event.LOG`와 `event.log`처럼 case-insensitive 기준 동일한 서로 다른 원격 파일이 함께 발견되면 임의 dedupe하거나 하나를 선택하지 않고 `FileDefinitionConflict`로 처리한다.
 
 ## 토큰 의미
 
