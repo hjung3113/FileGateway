@@ -31,10 +31,14 @@
 - Continuous 정렬 `fileName ASC`
 - Continuous cursor `fileName`
 - 정렬/cursor/logical identity의 `fileName` case-insensitive 비교
+- case-insensitive 기준 동일 파일명 2개 발견 시 `FileDefinitionConflict`
 - attribute filter의 case-sensitive 일치
 - `cardinality`의 슬롯 단위 검증
 - 후보 파일 metadata 파싱 실패 → `FileDefinitionConflict`
+- 계산된 목록 디렉터리 없음 → 해당 슬롯 결과 0개
 - `fileId` 서명/만료/논리 identity/resourceKind
+- Configuration Snapshot `fileId` 재해석 시 완료 marker 재확인
+- Snapshot 파일이 남아 있어도 marker가 사라졌으면 `FileNotFound`
 - signing key rotation 중 이전 key로 발급된 유효 `fileId` 검증
 - continuation token의 조회조건 종속성/TTL/stateless cursor
 - continuation token 유지 중 `limit` 변경 허용
@@ -49,6 +53,8 @@
 - 정규화 경로의 `rootPath` 경계 검증 및 traversal 차단
 - 기준정보 전체 validation 성공 후 cache atomic 교체
 - 기준정보 일부 validation 실패 시 전체 refresh 거부
+- 기준정보 validation은 구조/문법/invariant만 검사하고 FTP 실재 확인은 수행하지 않음
+- lazy refresh single-flight 동작
 
 `IFileAccess` fake/stub으로 Resolver를 독립 테스트한다.
 
@@ -56,18 +62,26 @@
 
 - MSSQL SP → 내부 Definition 매핑
 - cache hit/miss, lazy refresh
+- TTL 만료 동시 요청에서 Stored Procedure refresh가 single-flight로 1회 수행되는지 검증
+- last-good cache가 있는 refresh 중 다른 요청이 기존 cache로 처리되는지 검증
+- 최초 cache 없음 상태의 동시 요청이 동일 refresh 결과를 공유하는지 검증
 - 새 기준정보 전체 validation 성공 시 atomic cache 교체
 - validation 실패 + last-good cache 존재 시 새 데이터 미적용 및 stale fallback
 - 최초 기준정보 validation 실패 + cache 없음 → `ReferenceDataUnavailable`
+- 기준정보 refresh/readiness가 FTP 서버 전체를 선제 순회하지 않음
 - FTP 목록/Stat/OpenRead
 - FTP timeout/인증/경로 오류
+- 목록 대상 디렉터리 부재와 연결/인증/프로토콜 장애 구분
+- 디렉터리 부재 시 목록 결과 0개 처리
 - FTP 서버 wildcard 기능에 의존하지 않고 목록 후 case-insensitive glob 후보 판정
+- case-insensitive 중복 파일명 발견 시 `FileDefinitionConflict`
 - root 밖 경로/`..` traversal 정의의 원격 접근 차단
 - Continuous 파일의 시작 시점 크기 제한
 - Continuous 다운로드 중 growth/truncate 처리
 - Current Configuration 변경 파일 조회/다운로드
 - 완료 marker가 없는 Configuration Snapshot Set 제외
 - 완료 marker가 있는 Snapshot Set 포함 및 marker 내용 미사용
+- Snapshot `fileId` 발급 후 marker 제거 시 metadata/download가 `FileNotFound`
 
 Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적 replace 여부, 생산 중 내용 일관성은 FileGateway 테스트 책임에 포함하지 않는다. FileGateway는 이미 저장소에 보이는 파일을 읽는 동작과 외부 변경으로 발생한 I/O 실패 처리를 검증한다.
 
@@ -81,8 +95,10 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 - 로그 목록/페이지네이션
 - Log 목록 응답이 `{ items, continuationToken }` envelope인지 검증
 - 빈 Log 결과가 `items=[]`, `continuationToken=null`인지 검증
+- 계산된 디렉터리 부재가 502가 아니라 정상 빈 목록으로 반환되는지 검증
 - Hourly/Daily와 Continuous의 정렬/cursor 규칙이 각각 적용되는지 검증
 - Continuous `from`/`to` 입력 거부
+- case-insensitive 중복 파일명은 `500 FileDefinitionConflict`
 - Configuration Current/History API 분리
 - Current 응답이 단순 배열이며 case-insensitive `fileName ASC`인지 검증
 - History `from`/`to` 필수 검증
@@ -91,6 +107,7 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 - 페이지 중 조회조건 변경 거부 및 `limit` 변경 허용
 - 페이지 사이 원격 파일 집합 변경 시 완전 snapshot을 보장하지 않는 동작
 - 공통 `GET /files/{fileId}`가 `fileId`, `fileName`, `size` 최소 metadata만 반환하고 실제 원격 stat을 수행하는지 검증
+- Snapshot `fileId` 접근 시 완료 marker 재검증
 - `/files/{fileId}` HEAD endpoint가 MVP API에 존재하지 않는지 검증
 - fileId 다운로드
 - 조건 기반 직접 다운로드
@@ -128,12 +145,14 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 - IIS ASP.NET Core Hosting Bundle/권한
 - `X-Api-Key` 인증 동작 및 query string key 비허용
 - MSSQL 연결
-- 기준정보 전체 validation/atomic cache 교체/stale fallback 동작
+- 기준정보 구조 validation/atomic cache 교체/stale fallback/single-flight 동작
+- 기준정보 refresh가 FTP 실재 검사를 수행하지 않는지 확인
 - 각 파일 서버 21번 제어 연결
 - IIS FTP SSL 설정(FTP vs FTPS)
 - Passive 데이터 포트 범위/방화벽
 - 실제 파일 목록/다운로드
-- Configuration History 완료 marker 존재 조건 동작
+- 디렉터리 부재/파일 서버 장애 구분
+- Configuration History 완료 marker 존재 조건과 Snapshot `fileId` 재검증 동작
 - token signing key rotation 시 기존 fileId TTL 유지
 - rootPath 경계/traversal 차단
 - 로그/Secret에 민감정보 비노출
