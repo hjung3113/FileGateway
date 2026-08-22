@@ -71,9 +71,29 @@ Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 
 - 시간 필터와 무관하게 현재 파일 집합을 조회한다.
 - 동일 `equipmentId + configurationType` 아래 현재 파일이 여러 개 존재할 수 있다.
 - 개별 파일을 `subtype`/`attributes`로 세분화하지 않는다.
+- Current 조회 응답은 개별 Current Configuration File들의 배열이다.
+- 결과가 없으면 `200 OK`와 빈 배열을 반환한다.
+- Current 목록은 보통 작은 현재 파일 집합이므로 `limit`/`continuationToken`을 사용하지 않고 전체를 한 번에 반환한다.
+- Current item의 핵심 필드는 `fileId`, `fileName`, `equipmentId`, `configurationType`, `size`다.
+- Current Configuration File의 논리 identity는 `equipmentId + configurationType + fileName`이다.
+- `fileName`이 바뀌면 다른 논리 Current Configuration File로 취급한다.
 - 목록/정보 조회 후 각 파일 내용이 변경될 수 있다.
-- Current 파일용 `fileId`는 개별 현재 파일 하나를 가리켜야 하며, 그 장기 논리 identity 규칙은 별도 설계 결정으로 확정한다.
+- Current File의 `fileId`는 특정 바이트 버전을 고정하지 않고 동일 논리 identity의 다운로드 시점 현재 내용을 가리킨다.
 - 과거 특정 버전이 필요하면 History의 개별 Snapshot File `fileId`를 사용한다.
+
+### Current 직접 다운로드
+
+```http
+GET /api/v1/configurations/current/download?equipmentId=...&configurationType=...
+```
+
+Current 조회와 같은 Resolver 규칙을 사용한다.
+
+- 0개 일치: `FileNotFound`
+- 1개 일치: 해당 Current Configuration File 다운로드
+- 2개 이상 일치: 임의 선택하지 않고 `MultipleFilesMatched`(409)
+
+여러 Current 파일이 있는 Configuration Type은 Current 목록에서 원하는 파일의 `fileId`를 받은 뒤 공통 `/api/v1/files/{fileId}/download`를 사용한다. 직접 다운로드 endpoint에 `fileName`/`subtype` 같은 추가 선택 축을 만들지 않는다.
 
 ## Configuration Snapshot History
 
