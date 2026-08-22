@@ -14,6 +14,7 @@ FileGateway가 담당한다.
 - Configuration Snapshot History 조회/다운로드
 - `equipmentId + configurationType` 기반 논리 해석
 - 기준정보를 이용한 물리 서버/경로 탐색
+- Configuration logical identity와 pagination 의미 관리
 - 논리 `fileId` 발급/해석
 
 FileGateway가 담당하지 않는다.
@@ -110,6 +111,32 @@ Current 조회와 같은 Resolver 규칙을 사용한다.
 - History API는 Snapshot Set을 별도 중첩 객체로 만들지 않고 개별 Snapshot File을 반환하며, 같은 시점의 파일들은 동일한 `snapshotTimestamp`로 구분할 수 있다.
 - Snapshot File용 `fileId`는 `equipmentId + configurationType + snapshotTimestamp + fileName`의 논리 identity로 특정 파일 하나를 가리킨다.
 - `subtype`/`attributes`는 MVP Configuration 모델에 두지 않는다.
+
+## 토큰 의미
+
+Configurations는 Current/Snapshot `fileId`와 Configuration History pagination의 **도메인 의미**를 소유한다. 서명/검증/opaque encoding/TTL 같은 token codec은 공통 계층을 사용한다.
+
+### Current fileId
+
+- `resourceKind=ConfigurationCurrent`
+- logical identity: `equipmentId + configurationType + fileName`
+- 특정 바이트 버전이 아니라 같은 identity의 다운로드 시점 현재 내용을 가리킴
+
+### Snapshot fileId
+
+- `resourceKind=ConfigurationSnapshot`
+- logical identity: `equipmentId + configurationType + snapshotTimestamp + fileName`
+- 생성 완료된 불변 Snapshot File을 가리킴
+
+### History continuationToken
+
+서버가 History 결과 전체를 보관하는 session 방식은 사용하지 않는다. 토큰은 stateless cursor로 다음 의미를 보존한다.
+
+- 원래 결과 집합을 결정한 `equipmentId + configurationType + from/to`
+- 마지막 반환 위치: `snapshotTimestamp + fileName`
+- token TTL
+
+`limit`은 페이지 크기이므로 결과 집합 조건에 포함하지 않는다. 페이지 사이 원격 History 파일 집합 변경에 대한 완전한 snapshot은 보장하지 않는다.
 
 ## 조회 원칙
 
