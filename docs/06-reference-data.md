@@ -2,41 +2,75 @@
 
 ## DB
 
-- Microsoft SQL Server (MSSQL)
-- FileGateway는 Stored Procedure를 통해 기준정보를 조회한다.
+- Microsoft SQL Server
+- FileGateway는 Stored Procedure로 기준정보를 조회한다.
+- DB 테이블 구조는 애플리케이션/API에 노출하지 않는다.
 
-## 기준정보의 역할
+## SP가 제공해야 하는 논리 정보
 
-최소한 다음 관계를 해석할 수 있어야 한다.
+### 서버/설비 매핑
 
-- 설비명 → 대상 공정/서버
-- 설비/로그 종류 → 서버 내 저장 경로
-- 로그 종류 → 생성 주기 및 조회 정책
+- equipment
+- logType
+- serverId
+- host 또는 서버 연결에 필요한 비민감 식별정보
+- rootPath
 
-## 원칙
+### 로그 탐색 규칙
 
-- FileGateway 코드에 실제 서버/경로 매핑을 하드코딩하지 않는다.
-- Stored Procedure 결과를 애플리케이션 내부 모델로 변환하여 사용한다.
-- DB 내부 테이블 구조는 API 계층에 노출하지 않는다.
-- 실제 경로가 변경되어도 기준정보 변경만으로 대응할 수 있도록 한다.
+- generationType: Hourly / Daily / Continuous
+- pathTemplate
+- filePattern
+- cardinality
+
+### 메타데이터 추출 규칙
+
+- mode: Template / Regex
+- pattern
+- 추출 group/token → timestamp/subtype/attribute 매핑
+
+FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
+
+## MVP 전제
+
+- 분산 서버의 기본 FTP root 구조 동일
+- 동일 credential 사용
+- 로그 종류별 실제 탐색/파일명 규칙은 서로 다를 수 있음
+- DB/SP는 확장 가능하며 탐색/파싱 규칙을 기준정보로 관리
+
+## 호출자 확장 포인트
+
+MVP API Key는 전체 설비/로그에 접근 가능하다. 향후 권한 분리가 필요해지면:
+
+```text
+API Key -> CallerId
+CallerId + Equipment + LogType -> SP/Policy filter
+```
+
+형태로 확장할 수 있다. raw API Key를 Stored Procedure에 전달하지 않는다.
+
+## 캐시
+
+- 프로세스 memory cache 사용
+- TTL은 설정 가능(초기 권장 10~30분 범위)
+- 기준정보 변경 빈도가 낮다는 현재 운영 특성을 전제로 함
+
+DB 장애 시:
+
+- 유효 캐시 존재 → 캐시로 계속 처리
+- 캐시 없음 → `ReferenceDataUnavailable`
+
+로컬 영속 fallback/분산 cache는 MVP에서 제외한다.
 
 ## 필수 검증
 
-SP 결과 수신 후 다음을 검증한다.
+SP 결과 수신 시:
 
-- 설비 존재 여부
-- 서버 매핑 존재 여부
-- 로그 종류별 경로 존재 여부
-- 중복/충돌 매핑 여부
-- 허용되지 않은 경로 또는 잘못된 경로 형식
+- 설비/서버 매핑 존재 여부
+- 로그 정의 존재 여부
+- 중복/충돌 매핑
+- 잘못된 root/path template
+- 지원하지 않는 generation/metadata mode
+- 유효하지 않은 regex/template/mapping
 
-## 오류 분리
-
-다음은 서로 다른 오류로 취급한다.
-
-1. DB에 기준정보가 없음
-2. DB 기준정보는 있으나 실제 서버 접근 실패
-3. 서버 접근은 가능하지만 실제 경로가 없음
-4. 경로는 있으나 대상 파일이 없음
-
-외부 오류 코드는 후속 API 설계에서 확정한다.
+기준정보 오류와 실제 파일 서버 장애는 별도 원인으로 유지한다.

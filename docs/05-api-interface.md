@@ -1,68 +1,96 @@
 # API / 클라이언트 인터페이스
 
-## 전송 방식
+## 원칙
 
-- HTTP/HTTPS
-- 메타데이터: JSON
-- 파일 본문: Streaming Download
+- HTTPS
+- JSON metadata + streaming download
+- API Key 인증
+- 실제 서버/FTP 경로 비노출
+- 논리 `fileId` 기반 접근
+- 목록과 조건 기반 직접 접근은 동일 Resolver 사용
 
-## 클라이언트 대상
+## API v1
 
-- .NET
-- Python / FastAPI
-- Windows / Linux
+### 로그 목록
 
-## 인터페이스 방향
+```http
+GET /api/v1/logs
+```
 
-클라이언트 SDK/Wrapper는 익숙한 FTP 라이브러리의 사용 패턴을 차용한다.
+주요 query:
 
-예시 개념:
+- `equipment` (필수)
+- `logType` (선택)
+- `from`, `to` (선택, 없으면 최근 24시간)
+- `subtype` (선택)
+- `attr.<name>=<value>` (선택)
+- `limit` (선택)
+- `continuationToken` (선택)
 
-- `GetListing(...)` / `nlst(...)`
-- `FileExists(...)`
-- `GetFileSize(...)` / `size(...)`
-- `DownloadFile(...)` / `retrbinary(...)`
+응답 item의 핵심 필드:
 
-단, 실제 프로토콜은 FTP가 아니며 다음 개념은 노출하지 않는다.
+- fileId
+- fileName
+- equipment
+- logType
+- subtype
+- timestamp
+- size
+- isContinuous
+- attributes
 
-- `cwd`
-- Passive/Active mode
-- 실제 디렉터리 이동
-- 실제 서버 주소
-- 물리 파일 경로
+목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
 
-## 논리 API 기능
+### 파일 정보
 
-### 목록 조회
+```http
+GET /api/v1/files/{fileId}
+HEAD /api/v1/files/{fileId}
+```
 
-입력:
+- GET: 현재 존재 여부를 검증하고 크기/메타데이터 반환
+- HEAD: 파일 존재 여부 확인 용도
 
-- 설비명
-- 시작 일시(선택)
-- 종료 일시(선택)
-- 로그 종류(선택)
+### fileId 다운로드
 
-출력:
+```http
+GET /api/v1/files/{fileId}/download
+```
 
-- 논리 파일 ID
-- 파일명
-- 로그 종류
-- 생성/기준 시각
-- 파일 크기
-- 갱신형 여부 등 필요한 메타데이터
+- `fileId`는 서명된 opaque 토큰
+- 유효기간 24시간
+- 토큰에 물리 FTP host/path를 넣지 않음
+- 다운로드 시 현재 기준정보를 다시 조회해 실제 위치를 해석
 
-### 파일 정보 조회
+### 조건 기반 직접 다운로드
 
-- 존재 여부
-- 크기
-- 필요한 최소 메타데이터
+```http
+GET /api/v1/logs/download?equipment=...&logType=...&...
+```
 
-### 다운로드
+내부적으로 목록과 동일 Resolver를 실행한다.
 
-- 논리 파일 ID 기반 요청
-- 서버/경로를 다시 해석한 후 스트리밍
-- 물리 경로는 응답에 포함하지 않음
+- 0개 일치: `FileNotFound`
+- 1개 일치: 다운로드
+- 2개 이상 일치: `MultipleFilesMatched` (409)
 
-## API 안정성 원칙
+여러 파일을 자동 ZIP으로 묶는 기능은 MVP에서 제공하지 않는다.
 
-서버 재배치, 경로 변경, 공정 구조 변경이 클라이언트 인터페이스 변경으로 이어지지 않아야 한다.
+## 대표 오류
+
+- 400 `InvalidRequest`
+- 401 `InvalidApiKey`
+- 404 `EquipmentNotFound`
+- 404 `LogDefinitionNotFound`
+- 404 `FileNotFound`
+- 409 `MultipleFilesMatched`
+- 502 `FileServerUnavailable`
+- 502 `FileServerProtocolError`
+- 503 `ReferenceDataUnavailable`
+- 500 `InternalError`
+
+세부 error body 규격은 구현 계획에서 일관된 공통 형식으로 확정한다.
+
+## API 안정성
+
+서버 재배치, 물리 경로 변경, 향후 Site 변경이 API 계약 변경으로 이어지지 않아야 한다.

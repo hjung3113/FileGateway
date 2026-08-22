@@ -6,15 +6,18 @@ FileGateway 프로젝트에서 작업하는 코딩 에이전트 공통 지침입
 
 ## Project Context
 
-- 목적: 분산된 설비 서버의 로그 및 향후 추가 파일을 클라이언트에 제공하는 File Gateway 구축
-- 클라이언트: .NET, Python/FastAPI, Windows/Linux 혼재
-- 외부 인터페이스: HTTP/HTTPS + JSON, 파일은 streaming download
-- 기준정보: MSSQL Stored Procedure를 통해 설비-서버-로그경로 관계 조회
-- 핵심 원칙: 클라이언트는 실제 서버/공정/물리 경로 구조를 몰라야 함
-- 구조: API → Feature Provider → Server Access Core → MSSQL/File Servers
-- Log Provider는 공통 Server Access Core와 분리하고 향후 다른 파일 Provider 확장을 허용
+- 목적: 분산 파일 서버에 저장된 설비 로그 및 향후 추가 파일을 클라이언트에 제공하는 File Gateway 구축
+- 설비 로그의 직접 수집/가공은 별도 시스템 책임이며 FileGateway 범위가 아님
+- 클라이언트: .NET, Python/FastAPI, WPF, Web Backend, 다른 서버 시스템
+- 외부 인터페이스: HTTPS + JSON, 파일은 streaming download
+- MVP 서버: ASP.NET Core/.NET, Windows Server + IIS
+- 기준정보: MSSQL Stored Procedure를 통해 설비-서버-로그경로-탐색규칙 관계 조회
+- 파일 서버 접근: 공통 `IFileAccess` 뒤의 FTP/FTPS Adapter
+- 핵심 원칙: 클라이언트는 실제 서버/물리 경로 구조를 몰라야 함
+- 구조: API → Logs/Resolver → Core contracts → Infrastructure(MSSQL, FTP/FTPS)
+- 향후 Linux, 다른 Site/credential, 다른 파일 Provider 확장을 허용하되 MVP에 선구현하지 않음
 
-설계 및 요구사항은 `docs/`를 우선 참조합니다.
+**설계·요구사항을 확인하거나 변경하기 전에는 반드시 `docs/INDEX.md`부터 읽고, 인덱스가 안내하는 역할별 문서를 확인합니다.**
 
 ## Engineering Guidelines
 
@@ -51,12 +54,14 @@ FileGateway 프로젝트에서 작업하는 코딩 에이전트 공통 지침입
 ## FileGateway Design Guardrails
 
 - 실제 서버 주소와 물리 경로를 외부 API 모델에 노출하지 않는다.
-- 클라이언트 입력으로 파일 시스템 경로를 직접 조합하지 않는다.
+- 클라이언트 입력으로 파일 시스템/FTP 경로를 직접 조합하지 않는다.
 - 로그 종류별 경로/조회 규칙을 공통 파일 접근 계층에 넣지 않는다.
 - 시간 단위/일 단위/계속 갱신형 로그 정책을 구분한다.
-- 계속 갱신되는 로그는 날짜/시간 필터와 무관하게 현재 파일을 노출한다.
-- 대용량 파일은 전체 메모리 적재가 아닌 스트리밍을 기본으로 한다.
-- DB 기준정보 없음, 실제 경로 없음, 접근 권한 실패를 같은 오류로 뭉개지 않는다.
+- 계속 갱신되는 로그는 날짜/시간 필터와 무관하게 현재 파일을 노출하며 다운로드 시작 시점 크기까지만 전송한다.
+- 파일 전체 메모리 적재가 아닌 스트리밍을 기본으로 한다.
+- 목록/직접 다운로드는 동일 Resolver 규칙을 사용한다.
+- DB 기준정보 없음, 파일 서버 접근 실패, 경로 없음, 대상 파일 없음을 같은 오류로 뭉개지 않는다.
+- FTP credential/API Key 원문/물리 경로를 로그에 남기지 않는다.
 
 ## Agent Skills
 

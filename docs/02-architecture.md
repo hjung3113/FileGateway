@@ -2,87 +2,92 @@
 
 ## 목표
 
-FileGateway는 클라이언트와 실제 분산 파일 서버 사이의 추상화 계층이다.
+FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파일 제공 계층이다. 설비 직접 수집 시스템과는 책임을 분리한다.
 
 ```text
-.NET / Python(FastAPI) Client
-            |
-         HTTP(S)
-            |
-      FileGateway API
-            |
-   +-------------------+
-   | Feature Providers |
-   | - Log Provider    |
-   | - Future Provider |
-   +-------------------+
-            |
-   +-------------------+
-   | Server Access Core|
-   +-------------------+
-       |           |
-    MSSQL SP    File Servers
+[Separate Collector / Processor]
+          |
+          v
+Distributed File Servers
+          ^
+          | FTP/FTPS
+     FileGateway
+          ^
+          | HTTPS
+Clients / WPF / Web Backend / Other Servers
 ```
 
-## 역할 분리
+## 애플리케이션 계층
 
-### FileGateway API
+```text
+FileGateway.Api
+      |
+FileGateway.Logs
+      |
++-----------------------+
+| FileGateway.Core      |
+| contracts/models      |
++-----------------------+
+      ^             ^
+      |             |
+MSSQL Adapter   FTP/FTPS Adapter
+      \             /
+    FileGateway.Infrastructure
+```
 
-- 외부 HTTP/HTTPS 인터페이스 제공
+### FileGateway.Api
+
+- HTTPS endpoint
+- API Key 인증
 - 요청 검증
-- 인증/인가 적용 지점
-- Provider 호출
-- JSON 메타데이터 및 파일 스트림 응답
+- 감사 로그
+- Health Check
+- JSON/streaming HTTP 응답
 
-### Feature Provider
+### FileGateway.Logs
 
-업무 의미를 처리한다.
+- 로그 조회 정책
+- LogResolver
+- 템플릿/정규식 규칙 해석
+- 날짜/시간/subtype/attributes 필터
+- `fileId`, continuation token 처리
+- 목록 조회와 직접 다운로드가 같은 Resolver를 사용하도록 보장
 
-초기에는 `Log Provider`를 제공하며 향후 다른 파일 Provider를 추가한다.
+### FileGateway.Core
 
-Provider는 다음을 결정한다.
+도메인/프로토콜에 종속되지 않는 공통 계약과 파일 모델을 둔다.
 
-- 어떤 기준정보를 조회할지
-- 어떤 파일을 사용자에게 노출할지
-- 날짜/시간 필터를 어떻게 적용할지
-- 논리적 파일 정보를 어떻게 구성할지
+- `IFileAccess`
+- 원격 파일 entry/stat/stream 모델
+- 공통 I/O 오류 분류
 
-### Server Access Core
+Core는 `Log`, FTP, MSSQL, IIS를 알지 않는다.
 
-공통 파일 접근 기능만 담당한다.
-
-- 서버 대상 해석
-- 기준정보 조회 추상화
-- 파일 목록 읽기
-- 파일 존재/크기 확인
-- 파일 스트리밍
-- 공통 접근 오류 처리
-
-`Server Access Core`에는 로그 전용 규칙을 넣지 않는다.
-
-### Infrastructure
+### FileGateway.Infrastructure
 
 - MSSQL Stored Procedure 호출
-- Windows 파일 서버 접근
-- 네트워크/파일 시스템 I/O
+- 기준정보 memory cache
+- FTP/FTPS 파일 접근
+- credential/secret 로딩
+- 외부 I/O 구현
 
-## 핵심 설계 원칙
-
-1. 클라이언트는 실제 서버 구조를 모른다.
-2. 물리 파일 경로를 외부 API에 노출하지 않는다.
-3. 파일 경로 규칙을 코드에 하드코딩하지 않는다.
-4. 로그 도메인 로직과 파일 접근 기능을 분리한다.
-5. 파일 다운로드는 대용량을 고려하여 스트리밍한다.
-6. 서버 재배치나 경로 변경이 클라이언트 인터페이스 변경으로 이어지지 않게 한다.
-
-## 권장 솔루션 논리 구조
+## 프로젝트 구조
 
 ```text
 FileGateway
 ├─ FileGateway.Api
 ├─ FileGateway.Core
-├─ FileGateway.Infrastructure
-└─ FileGateway.LogProvider
+├─ FileGateway.Logs
+└─ FileGateway.Infrastructure
 ```
 
-실제 서버 구현 기술 스택이 확정될 때 프로젝트 구조를 최종 확정한다.
+별도 Application 프로젝트는 MVP 규모에서 추가하지 않는다.
+
+## 핵심 의존성 원칙
+
+1. API는 물리 서버/경로를 외부에 노출하지 않는다.
+2. Logs는 FTP 구현을 직접 알지 않는다.
+3. Core에는 로그별 탐색/시간 규칙을 넣지 않는다.
+4. Infrastructure는 Core/Logs의 계약을 구현한다.
+5. 새 로그 종류는 가능한 한 DB 기준정보 변경으로 수용하고 코드 분기를 늘리지 않는다.
+6. 향후 Linux 배포를 위해 Core/Logs에서 Windows 전용 API에 직접 의존하지 않는다.
