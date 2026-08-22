@@ -70,6 +70,18 @@ API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는
 - stale 캐시 사용 여부와 마지막 정상 갱신 시각을 로그/메트릭으로 관측 가능하게 한다.
 - MVP에서는 별도 background refresh worker를 두지 않는다.
 
+## 다운로드/스트리밍 운영
+
+- metadata/HEAD의 파일 크기는 조회 시점 관측값이다.
+- 다운로드는 스트림 시작 직전에 확인한 파일 크기를 `Content-Length`로 사용한다.
+- Continuous 로그와 Current Configuration처럼 변경 가능한 파일도 시작 시점 크기를 해당 응답의 전송 기준으로 사용한다.
+- Continuous 파일이 다운로드 중 커지는 것은 오류가 아니며 시작 시점 크기까지만 전송한다.
+- Continuous 로그 다운로드 중 truncate/rotation으로 시작 시점 크기까지 읽지 못하면 streaming I/O 실패로 기록한다.
+- 스트리밍 시작 전 FTP 오류는 일반 HTTP 오류 응답으로 반환할 수 있다.
+- 스트리밍 시작 후 FTP/I/O 오류는 이미 시작된 응답을 성공 처리하거나 JSON 오류로 바꾸지 않고 스트림/연결을 중단한다.
+- 클라이언트 연결 종료/요청 취소는 `ClientCancelled`로 분류하고 파일 서버 장애나 streaming I/O failure와 구분한다.
+- 다운로드 기본 Content-Type은 `application/octet-stream`이며 논리 `fileName`을 attachment 파일명으로 사용한다.
+
 ## 장애/timeout
 
 - FTP 연결/명령/stream timeout은 설정 가능
@@ -77,8 +89,6 @@ API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는
 - 클라이언트 취소를 원격 작업에 전달
 - 특정 파일 서버 장애를 전체 FileGateway 장애로 확대하지 않음
 - 동시 다운로드 수는 설정으로 제한 가능하게 설계
-- Continuous 로그 다운로드 중 truncate/rotation으로 시작 시점 크기까지 읽지 못하면 streaming I/O 실패로 기록한다.
-- Continuous 파일이 다운로드 중 커지는 것은 오류가 아니며 시작 시점 크기까지만 전송한다.
 
 구체적인 timeout/동시성 숫자는 실제 네트워크 테스트 후 운영 설정으로 확정한다.
 
@@ -109,5 +119,8 @@ API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는
 - 경로 없음
 - 파일 없음
 - multiple match
-- timeout/cancel
+- timeout
+- `ClientCancelled`
 - streaming I/O 실패
+
+클라이언트 취소는 서버 장애율/파일 서버 실패율에 포함하지 않는다.
