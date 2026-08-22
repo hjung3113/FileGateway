@@ -83,6 +83,8 @@ MVP Windows/IIS FTP 환경에서는 Configuration `fileName` 비교를 case-inse
 
 대소문자만 다른 파일명은 같은 논리 파일명으로 취급한다. 향후 case-sensitive 저장소를 지원할 때 재검토한다.
 
+동일 탐색 결과에 `PM1.cfg`와 `pm1.cfg`처럼 case-insensitive 기준 동일한 서로 다른 원격 파일이 함께 발견되면 임의 dedupe하지 않고 `FileDefinitionConflict`로 처리한다.
+
 ## Current Configuration
 
 - 시간 필터와 무관하게 현재 파일 집합을 조회한다.
@@ -99,6 +101,8 @@ MVP Windows/IIS FTP 환경에서는 Configuration `fileName` 비교를 case-inse
 - Current File의 `fileId`는 특정 바이트 버전을 고정하지 않고 동일 논리 identity의 다운로드 시점 현재 내용을 가리킨다.
 - FileGateway는 Current 파일이 생산 중 어떤 방식으로 쓰이거나 교체되는지 판정·보정하지 않는다.
 - 과거 특정 버전이 필요하면 History의 개별 Snapshot File `fileId`를 사용한다.
+
+Current용으로 계산된 디렉터리가 실제로 존재하지 않으면 정상적인 현재 파일 0개로 취급한다. 파일 서버 연결/인증/프로토콜 장애와 구분한다.
 
 ### Current 직접 다운로드
 
@@ -136,6 +140,8 @@ Current 조회와 같은 Resolver 규칙을 사용한다.
 - Snapshot File용 `fileId`는 `equipmentId + configurationType + snapshotTimestamp + fileName`의 논리 identity로 특정 파일 하나를 가리키며 `fileName`은 case-insensitive 비교한다.
 - `subtype`/`attributes`는 MVP Configuration 모델에 두지 않는다.
 
+History 조회에서 계산된 날짜 디렉터리가 실제로 존재하지 않으면 해당 날짜의 정상 결과 0개로 취급한다. marker가 없거나 Snapshot File이 없는 상태도 파일 서버 장애와 구분한다.
+
 ## 토큰 의미
 
 Configurations는 Current/Snapshot `fileId`와 Configuration History pagination의 **도메인 의미**를 소유한다. 서명/검증/opaque encoding/TTL 같은 token codec은 공통 계층을 사용한다.
@@ -153,6 +159,8 @@ Configurations는 Current/Snapshot `fileId`와 Configuration History pagination�
 - logical identity: `equipmentId + configurationType + snapshotTimestamp + fileName`
 - `fileName` 비교는 case-insensitive
 - 생성 완료된 불변 Snapshot File을 가리킴
+- 재해석 시 해당 Snapshot Set의 완료 marker 존재 여부를 다시 확인
+- marker가 사라졌으면 실제 Snapshot File이 남아 있어도 `FileNotFound`
 
 ### History continuationToken
 
@@ -170,6 +178,7 @@ cursor의 `fileName` 비교는 case-insensitive다. `limit`은 페이지 크기�
 - Current를 History 결과에 암묵적으로 포함하지 않는다.
 - Current는 `equipmentId + configurationType`으로 현재 파일 집합을 결정하고 case-insensitive `fileName ASC`로 정렬한다.
 - History는 `equipmentId + configurationType + [from, to)`로 **완료 marker가 존재하는** Snapshot File 집합을 조회한다.
+- 계산된 원격 디렉터리가 없으면 해당 범위의 정상 결과 0개로 취급한다.
 - History 결과 item은 `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`를 가진다.
 - History 목록은 pagination envelope의 `items`로 결과를 반환하며 결과가 없으면 `items=[]`, `continuationToken=null`이다.
 - History 목록은 `limit + continuationToken` 페이지네이션을 사용한다.
