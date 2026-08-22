@@ -58,7 +58,7 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 
 `filePattern`은 MVP에서 정규식이 아니라 glob 문법만 사용한다. 예: `*.zip`, `Event_*.log`, `PM?.cfg`. 복잡한 metadata 추출은 `MetadataRule.Regex`가 담당하므로 discovery matcher와 parsing regex의 역할을 섞지 않는다.
 
-Glob 의미는 FTP 서버의 wildcard 구현에 의존하지 않는다. FileGateway가 디렉터리 목록을 받은 뒤 동일한 matcher 의미로 후보 파일명을 판정한다.
+Glob 의미는 FTP 서버의 wildcard 구현에 의존하지 않는다. FileGateway가 디렉터리 목록을 받은 뒤 동일한 matcher 의미로 후보 파일명을 판정한다. MVP Windows/IIS FTP 환경의 파일명 의미에 맞춰 glob의 파일명 비교는 **case-insensitive**로 수행하고, 실제 파일명의 원래 casing은 응답에 그대로 보존한다.
 
 MVP에서는 root부터의 무제한 recursive scan을 허용하지 않는다. `pathTemplate`이 조회 범위의 Hourly/Daily 슬롯 또는 Continuous 현재 위치로 필요한 디렉터리를 직접 계산하고 해당 디렉터리만 목록 조회한다. 여러 슬롯이 같은 디렉터리를 계산하면 중복 목록 조회하지 않는다.
 
@@ -110,13 +110,24 @@ Continuous 로그에 파일명/경로로부터 명확한 논리 시각을 추출
 - isContinuous
 - attributes: `Dictionary<string,string>`
 
-`subtype`은 하나의 `logType` 내부에서 자주 조회하는 대표 하위 분류 하나다. 나머지 가변 메타데이터는 `attributes`에 두며 같은 의미의 값을 양쪽에 중복 저장하지 않는다.
+`subtype`은 하나의 `logType` 내부에서 API 사용자가 자주 조회하는 대표 하위 분류 하나다. 나머지 가변 메타데이터는 `attributes`에 두며 같은 의미의 값을 양쪽에 중복 저장하지 않는다.
 
 `subtype`과 `attributes` 필터는 정확한 문자열 일치(case-sensitive)를 사용한다. 대소문자 비구분이 필요한 값은 파싱/기준정보 단계에서 canonical value로 정규화한다.
 
 `fileId`는 특정 논리 파일 하나를 가리키는 임시 opaque 참조다. 일반 조회조건 자체를 나타내지 않는다.
 
 물리 host/path/credential은 포함하지 않는다.
+
+## 파일명 비교 규칙
+
+MVP에서 `fileName` 비교는 case-insensitive다. 이 규칙은 다음에 동일하게 적용한다.
+
+- `filePattern` glob matching
+- Log logical identity의 `fileName` 구성요소 비교
+- 동일 timestamp 내 `fileName ASC` 정렬
+- continuation cursor의 `fileName` 비교
+
+`Event.LOG`와 `event.log`는 같은 논리 파일명으로 취급한다. 응답의 `fileName`은 실제 원격 파일이 가진 casing을 그대로 반환한다. 향후 case-sensitive 저장소를 지원할 때 이 계약은 재검토한다.
 
 ## 토큰 의미
 
@@ -126,6 +137,7 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 
 - `resourceKind=Log`
 - logical identity: `equipmentId + logType + timestamp + fileName`
+- `fileName` 구성요소는 case-insensitive 비교
 - 현재 기준정보로 물리 위치를 재해석
 
 ### Log continuationToken
@@ -137,7 +149,7 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 - Continuous 로그 마지막 반환 위치: `fileName`
 - token TTL
 
-`limit`은 페이지 크기이므로 원래 조회조건에 포함하지 않는다. 페이지 사이 원격 파일 집합 변경에 대한 완전한 snapshot은 보장하지 않는다.
+cursor의 `fileName` 비교도 case-insensitive다. `limit`은 페이지 크기이므로 원래 조회조건에 포함하지 않는다. 페이지 사이 원격 파일 집합 변경에 대한 완전한 snapshot은 보장하지 않는다.
 
 ## 로그 생성 정책 (`generationType`)
 
@@ -151,9 +163,11 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 
 ### Continuous
 
-- 시간 필터와 무관하게 현재 존재 파일을 포함한다.
+- 시간 범위 개념을 사용하지 않고 현재 존재 파일을 조회한다.
+- `from` 또는 `to`가 요청에 포함되면 `InvalidRequest`로 처리한다.
+- Hourly/Daily의 최근 24시간 기본값을 적용하지 않는다.
 - 명확한 논리 시각이 없으면 `timestamp=null`이다.
-- 목록 정렬은 `fileName ASC`를 사용하고 pagination cursor는 `fileName`이다.
+- 목록 정렬은 case-insensitive `fileName ASC`를 사용하고 pagination cursor는 `fileName`이다.
 - 다운로드 시작 직전 파일 크기를 확정하고 그 크기까지만 전송한다.
 - 다운로드 중 파일이 커져도 시작 시점 이후 추가된 내용은 전송하지 않는다.
 - 다운로드 중 파일이 줄어 시작 크기까지 읽지 못하면 정상 완료가 아니라 streaming I/O 실패다.
@@ -171,9 +185,9 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 
 `equipmentId`와 `logType`은 로그 조회 시 모두 필수다.
 
-`from`/`to`는 `timestamp` 기준 반개구간 `[from, to)`로 해석한다. `from`은 포함하고 `to`는 제외한다.
+Hourly/Daily에서 `from`/`to`는 `timestamp` 기준 반개구간 `[from, to)`로 해석한다. `from`은 포함하고 `to`는 제외한다.
 
-시간 범위 입력은 다음과 같이 해석한다.
+Hourly/Daily 시간 범위 입력은 다음과 같이 해석한다.
 
 - `from`, `to` 모두 없음: 최근 24시간
 - `from`만 있음: `[from, from + 2일)`
@@ -182,15 +196,15 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 
 시간 기반 로그 조회에는 설정 가능한 `Logs.MaxQueryRange`를 적용한다. 요청 범위가 이를 초과하면 `InvalidRequest`로 처리한다. `from` 단독 요청이 항상 2일 범위를 의미하므로 `Logs.MaxQueryRange` 설정은 **최소 2일 이상**이어야 하며 애플리케이션 시작 시 설정값을 검증한다.
 
-Continuous 로그는 시간 범위와 별도로 현재 파일을 포함한다.
+Continuous는 `from`/`to`를 허용하지 않는다.
 
 ## 정렬
 
 시간 기반 로그의 목록 기본 정렬은 다음 순서다.
 
 1. `timestamp DESC`
-2. 동일 `timestamp`에서는 `fileName ASC`
+2. 동일 `timestamp`에서는 case-insensitive `fileName ASC`
 
-Continuous 로그 목록은 `fileName ASC`로 정렬한다.
+Continuous 로그 목록은 case-insensitive `fileName ASC`로 정렬한다.
 
 `equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
