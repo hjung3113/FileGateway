@@ -67,6 +67,8 @@ X-Api-Key: <key>
 - 기준정보 정의 삭제: 해당 `*DefinitionNotFound`
 - 기준정보는 정상이나 실제 파일 없음: `FileNotFound`
 
+Configuration Snapshot `fileId`는 실제 파일뿐 아니라 해당 Snapshot Set의 완료 marker도 재확인한다. marker가 사라졌다면 Snapshot File이 남아 있어도 `FileNotFound`로 처리한다.
+
 ### token signing key rotation
 
 - 새 token은 현재(active) signing key로만 발급한다.
@@ -105,13 +107,25 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 
 - 기준정보 캐시 TTL은 강제 폐기 시간이 아니라 갱신 재시도 기준이다.
 - TTL 경과 후 요청 시 lazy refresh를 수행한다.
+- refresh는 프로세스당 하나만 실행하는 **single-flight** 방식으로 동기화한다.
+- last-known-good cache가 있으면 refresh 중인 다른 요청은 기존 cache로 계속 처리한다.
+- 최초 로딩이라 usable cache가 없으면 동시 요청들은 동일한 최초 refresh 결과를 공유한다.
 - 새 기준정보는 **전체 검증이 성공한 뒤 cache 전체를 atomic 교체**한다.
+- 기준정보 검증은 정의의 구조·문법·invariant만 대상으로 하며 refresh 과정에서 FTP 서버의 디렉터리/파일/marker 존재를 확인하지 않는다.
 - 조회 실패 또는 검증 실패 시 일부 새 정의만 적용하지 않는다.
 - 갱신 실패/검증 실패 + 마지막 정상 cache가 있으면 last-known-good 전체를 stale 상태로 계속 사용한다.
 - 최초 로딩에서 조회 또는 검증에 실패해 정상 cache가 없으면 파일 요청은 `ReferenceDataUnavailable`(503)을 반환한다.
 - 하나의 잘못된 정의가 있으면 해당 refresh 전체를 거부한다.
 - stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation 실패 원인을 로그/메트릭으로 관측 가능하게 한다.
 - MVP에서는 별도 background refresh worker를 두지 않는다.
+
+## 원격 조회 운영
+
+- 기준정보 refresh나 readiness 확인을 위해 수십~수백 FTP 서버를 선제 순회하지 않는다.
+- 실제 디렉터리/파일/marker 존재 여부는 해당 파일 요청에서 확인한다.
+- 계산된 목록 조회 디렉터리가 존재하지 않으면 정상적인 결과 0개로 처리하고 파일 서버 장애율에 포함하지 않는다.
+- 파일 서버 연결/인증/프로토콜 오류는 정상적인 경로 없음과 구분한다.
+- case-insensitive 기준 동일 파일명이 둘 이상 발견된 경우는 임의 dedupe하지 않고 `FileDefinitionConflict`로 기록한다.
 
 ## 다운로드/스트리밍 운영
 
@@ -173,4 +187,4 @@ Configuration History는 예외적으로 History 생산자가 생성한 **완료
 - `ClientCancelled`
 - streaming I/O 실패
 
-클라이언트 취소는 서버 장애율/파일 서버 실패율에 포함하지 않는다.
+클라이언트 취소와 정상적인 목록 디렉터리 부재는 서버 장애율/파일 서버 실패율에 포함하지 않는다.
