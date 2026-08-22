@@ -89,6 +89,27 @@ Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec
 - credential/secret 로딩
 - token 보호 key/secret 공급 및 외부 I/O 구현
 
+## 오픈소스 / 외부 라이브러리 원칙
+
+오픈소스는 프로토콜 구현이나 테스트 인프라처럼 직접 구현 가치가 낮고 검증 비용이 큰 영역에 선택적으로 사용한다. 도메인 모델이나 Resolver 경계를 라이브러리 구조에 맞추지 않는다.
+
+### MVP 채택 방향
+
+- **FluentFTP**: FTP/FTPS Adapter 구현에 사용한다. `FileGateway.Infrastructure` 내부에 격리하고 Core/Logs/Configurations에는 FluentFTP 타입을 노출하지 않는다.
+- **Microsoft.Data.SqlClient**: MSSQL Stored Procedure 접근의 기본 provider로 사용한다.
+- **Testcontainers for .NET**: 자동 통합테스트에서 MSSQL 및 테스트용 외부 서비스 환경을 구성할 때 사용한다. 실제 Windows Server + IIS + 운영 유사 FTP/FTPS 검증을 대체하지 않는다.
+
+### 필요 시 도입
+
+- **Dapper**: Stored Procedure 결과 매핑 코드가 반복·복잡해질 때만 도입한다. 단순 매핑 수준이면 `Microsoft.Data.SqlClient`만 사용한다.
+- **Polly**: 실제 transient retry/circuit-breaker 요구가 확인될 때만 도입한다. MVP timeout/cancel/concurrency 제어를 이유로 선제 도입하지 않는다.
+
+### 기본적으로 추가하지 않음
+
+현재 요구사항만으로 MediatR, AutoMapper, 별도 validation framework, 별도 logging abstraction 등 추가 프레임워크를 도입하지 않는다. ASP.NET Core/.NET 기본 기능으로 충분한 영역은 기본 기능을 우선한다.
+
+라이브러리 버전은 설계 문서에 고정하지 않고 구현 시점에 지원 대상 .NET 버전, 라이선스, 유지보수 상태를 확인해 고정한다.
+
 ## 토큰 책임 경계
 
 `fileId`와 `continuationToken`을 위해 범용 File Provider나 범용 Pagination Provider를 추가하지 않는다.
@@ -132,3 +153,4 @@ FileGateway
 9. 토큰 보호/직렬화 책임과 도메인 의미를 분리한다.
 10. 로그의 논리 생성 슬롯과 물리 디렉터리를 1:1로 가정하지 않는다.
 11. 설비별 제공 파일 종류는 DB 기준정보의 feature 정의를 투영해 제공하며, 설비사별 차이를 코드 분기로 모델링하지 않는다.
+12. 외부 라이브러리는 Infrastructure/Test 경계에 우선 격리하고, 라이브러리 타입이 도메인 계약을 지배하지 않게 한다.
