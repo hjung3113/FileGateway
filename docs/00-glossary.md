@@ -44,8 +44,12 @@ _Avoid_: modified time, FTP modification time을 `timestamp`와 동일시하는 
 시간 기반 조회에 적용하는 반개구간 `[from, to)`이다. `from`은 포함하고 `to`는 제외한다.
 _Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현
 
+**Logical File Identity**:
+물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot은 `equipmentId + configurationType + snapshotTimestamp + fileName`, Current Configuration은 `equipmentId + configurationType + current`를 사용한다.
+_Avoid_: FTP host/path를 파일 identity로 취급
+
 **File ID (`fileId`)**:
-하나의 논리 파일 참조를 가리키는 유효기간이 있는 opaque 참조다. 로그와 Configuration Snapshot에서는 특정 파일을 가리키고, Current Configuration에서는 특정 `equipmentId + configurationType`의 현재 파일 슬롯을 가리킨다. 일반 조회조건 자체를 나타내는 토큰이 아니며 물리 서버/경로를 직접 식별하지 않는다.
+`Logical File Identity`를 가리키는 유효기간이 있는 opaque 참조다. 일반 조회조건 자체를 나타내는 토큰이 아니며 물리 서버/경로를 직접 식별하지 않는다.
 _Avoid_: query token, physical path identifier
 
 **Subtype (`subtype`)**:
