@@ -106,6 +106,26 @@ Continuous 로그에 파일명/경로로부터 명확한 논리 시각을 추출
 
 물리 host/path/credential은 포함하지 않는다.
 
+## 토큰 의미
+
+Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 서명/검증/opaque encoding/TTL 같은 token codec은 공통 계층을 사용한다.
+
+### Log fileId
+
+- `resourceKind=Log`
+- logical identity: `equipmentId + logType + timestamp + fileName`
+- 현재 기준정보로 물리 위치를 재해석
+
+### Log continuationToken
+
+서버가 FTP 목록 전체를 저장하는 session 방식은 사용하지 않는다. 토큰은 stateless cursor로 다음 의미를 보존한다.
+
+- 원래 결과 집합을 결정한 조회조건
+- 마지막 반환 위치: `timestamp + fileName`
+- token TTL
+
+`limit`은 페이지 크기이므로 원래 조회조건에 포함하지 않는다. 페이지 사이 원격 파일 집합 변경에 대한 완전한 snapshot은 보장하지 않는다.
+
 ## 로그 생성 정책 (`generationType`)
 
 ### Hourly
