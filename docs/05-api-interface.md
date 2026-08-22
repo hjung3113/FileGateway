@@ -52,6 +52,8 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
 
+`continuationToken`은 발급된 원래 조회조건의 다음 페이지를 가리킨다. 토큰을 사용하면서 `equipmentId`, `logType`, `from/to`, `subtype`, attributes 등 결과 집합을 바꾸는 조회조건을 변경하면 `InvalidRequest`를 반환한다. 다른 조건으로 조회하려면 continuation token 없이 첫 페이지부터 새로 조회한다.
+
 ### Current Configuration 조회
 
 ```http
@@ -93,6 +95,7 @@ GET /api/v1/configurations/history
 - `from`/`to`가 없으면 임의 기본 기간 또는 전체 History로 대체하지 않고 `InvalidRequest`
 - 생성 완료된 snapshot은 불변으로 취급
 - History 목록은 `limit + opaque continuationToken`으로 페이지네이션
+- History의 continuation token도 원래 `equipmentId + configurationType + from/to` 조회조건에 종속되며 조건 변경 시 `InvalidRequest`
 - Current Configuration은 결과에 포함하지 않음
 
 ### 파일 정보
