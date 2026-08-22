@@ -32,9 +32,15 @@
 
 MVP에서 하나의 로그 정의는 하나의 discovery rule만 가진다. 현재 동일 `logType` 조회에서 서로 다른 디렉터리/파일명 규칙을 동시에 검색해야 하는 사례가 없으므로 다중 discovery rule 모델은 두지 않는다. 같은 생성 슬롯의 여러 파일은 `cardinality=Multiple`로 표현한다.
 
-`pathTemplate`은 탐색할 논리 디렉터리 경로를 계산하고, `filePattern`은 해당 디렉터리에서 후보 파일을 선택한다. `timestamp`/`subtype`/`attributes` 추출은 metadata rule이 담당한다.
+`pathTemplate`은 조회조건과 논리 생성 슬롯으로 탐색할 논리 디렉터리를 계산한다. `filePattern`은 해당 디렉터리에서 후보 **파일명**을 선택하는 glob matcher다. 예: `*.zip`, `Event_*.log`, `PM?.cfg`. `timestamp`/`subtype`/`attributes` 추출은 metadata rule이 담당한다.
 
-MetadataRule은 물리 FTP root를 제외한 논리 relative path와 fileName 전체를 대상으로 해석할 수 있다. 후보 파일이 `filePattern`에 일치했지만 필수 metadata를 해석하지 못하면 누락시키지 않고 `FileDefinitionConflict`로 취급한다.
+`filePattern`은 정규식으로 사용하지 않는다. FTP 서버 자체 wildcard 구현에도 의존하지 않고 FileGateway가 받은 디렉터리 목록에 동일한 glob 의미를 적용한다.
+
+MVP에서는 root부터 하위 전체를 훑는 무제한 recursive scan을 허용하지 않는다. `pathTemplate`이 Hourly/Daily 조회 범위 또는 Continuous 현재 슬롯에서 필요한 디렉터리를 직접 계산해야 한다. 여러 슬롯이 같은 디렉터리를 계산하면 중복 목록 조회하지 않는다.
+
+MetadataRule은 물리 FTP root를 제외한 **정규화된 논리 relative path + fileName**을 입력으로 사용한다. 경로 구분자는 플랫폼/FTP 표현과 무관하게 `/`로 통일한다. 단순한 결정적 레이아웃은 `Template`, 복잡한 예외는 `Regex` named group을 사용한다.
+
+후보 파일이 `filePattern`에 일치했지만 필수 metadata를 해석하지 못하면 누락시키지 않고 `FileDefinitionConflict`로 취급한다.
 
 `logType`은 업무적인 로그 종류이고 `generationType`은 파일 생성 주기/생명주기다. 두 값을 같은 분류로 취급하지 않는다.
 
@@ -93,6 +99,7 @@ FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 - 최종 정규화 경로는 해당 `ServerDefinition.rootPath` 아래에 있어야 한다.
 - `..`, 절대 경로, rooted path 등으로 `rootPath` 밖으로 탈출할 수 없어야 한다.
 - Log `pathTemplate`, Configuration `currentRule`/`historyRule`, History 완료 marker 경로 모두 같은 경계를 적용한다.
+- MetadataRule 입력용 relative path는 root 제외 후 `/` 구분자로 정규화한다.
 - 클라이언트 요청값을 raw 물리 경로 세그먼트로 사용하지 않는다.
 - 경계 위반 정의는 실제 원격 접근에 사용하지 않고 기준정보 오류로 취급한다.
 
@@ -152,6 +159,9 @@ SP 결과 수신 시:
 - 중복/충돌 매핑
 - 잘못된 root/path template
 - 정규화 후 `rootPath` 밖으로 탈출하는 경로 여부
+- `filePattern`이 지원되는 glob 문법인지
+- 무제한 recursive scan을 요구하는 정의가 아닌지
+- MetadataRule 입력 정규화와 지원 mode가 유효한지
 - Current rule이 유효한 현재 Configuration File 집합을 해석할 수 있는지
 - History rule이 유효한 날짜별 Snapshot File 집합, 논리 시각, 완료 조건을 해석할 수 있는지
 - 지원하지 않는 generation/metadata mode
