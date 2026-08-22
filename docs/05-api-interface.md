@@ -7,7 +7,8 @@
 - API Key 인증
 - 실제 서버/FTP 경로 비노출
 - 논리 `fileId` 기반 접근
-- 목록과 조건 기반 직접 접근은 동일 Resolver 사용
+- 로그와 Configuration은 별도 feature API로 구분
+- 각 feature의 목록과 조건 기반 직접 접근은 동일 Resolver 규칙을 사용
 
 ## API v1
 
@@ -47,6 +48,19 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
 
+### Configuration API 경계
+
+Configuration File은 MVP 제공 대상이지만 로그가 아니므로 `/api/v1/logs`에 포함하지 않는다.
+
+- Configuration 전용 API namespace를 사용한다.
+- `equipmentId + configurationType`으로 Configuration을 식별한다.
+- Current와 History를 API에서 명시적으로 구분한다.
+- Current는 시간 필터와 무관하게 현재 파일을 조회한다.
+- History는 snapshot 논리 시각 기준의 기간 조회를 제공한다.
+- Current를 History 기간 조회 결과에 암묵적으로 섞지 않는다.
+
+구체적인 endpoint path와 History 기본 조회 범위는 설계 인터뷰에서 확정한다.
+
 ### 파일 정보
 
 ```http
@@ -63,14 +77,16 @@ HEAD /api/v1/files/{fileId}
 GET /api/v1/files/{fileId}/download
 ```
 
-- `fileId`는 **특정 논리 파일 하나**를 가리키는 서명된 opaque 토큰
+- `fileId`는 서명된 opaque 토큰
 - 일반 조회조건을 저장한 query token이 아님
 - 유효기간 24시간
 - 토큰에 물리 FTP host/path를 넣지 않음
-- 다운로드 시 현재 기준정보를 다시 조회해 같은 논리 파일의 실제 위치를 해석
-- 대상 논리 파일이 더 이상 존재하지 않으면 `FileNotFound`
+- 로그/Configuration Snapshot `fileId`는 특정 논리 파일 하나를 가리킴
+- Current Configuration `fileId`는 특정 `equipmentId + configurationType`의 현재 파일 슬롯을 가리킴
+- Current Configuration은 토큰 발급 후 내용이 바뀌어도 다운로드 시점의 현재 내용을 제공
+- 대상 논리 파일 또는 Current 슬롯이 더 이상 존재하지 않으면 `FileNotFound`
 
-### 조건 기반 직접 다운로드
+### 로그 조건 기반 직접 다운로드
 
 ```http
 GET /api/v1/logs/download?equipmentId=...&logType=...&...
@@ -90,6 +106,7 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 - 401 `InvalidApiKey`
 - 404 `EquipmentNotFound`
 - 404 `LogDefinitionNotFound`
+- 404 `ConfigurationDefinitionNotFound`
 - 404 `FileNotFound`
 - 409 `MultipleFilesMatched`
 - 502 `FileServerUnavailable`
@@ -102,5 +119,3 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 ## API 안정성
 
 서버 재배치, 물리 경로 변경, 향후 Site 변경이 API 계약 변경으로 이어지지 않아야 한다.
-
-`Configuration File`은 MVP 제공 대상이지만 로그가 아니므로 `/api/v1/logs`에 포함하지 않는다. Configuration 전용 API 경계는 설계 인터뷰에서 확정한다.
