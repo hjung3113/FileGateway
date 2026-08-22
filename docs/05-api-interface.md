@@ -21,18 +21,20 @@ GET /api/v1/logs
 주요 query:
 
 - `equipmentId` (필수)
-- `logType` (선택)
+- `logType` (필수)
 - `from`, `to` (선택, 없으면 최근 24시간)
 - `subtype` (선택)
 - `attr.<name>=<value>` (선택)
 - `limit` (선택)
 - `continuationToken` (선택)
 
-`equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자이며 하나의 FileGateway 배포 범위 안에서 유일하다.
+`equipmentId + logType`은 정확히 하나의 로그 정의를 식별한다. 한 요청에서 한 설비의 여러 `logType`을 동시에 탐색하지 않는다.
 
 `from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준 반개구간 `[from, to)`다. `from`은 포함하고 `to`는 제외한다.
 
-Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다.
+Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다.
+
+`subtype` 및 `attr.<name>` 값은 정확한 문자열 일치(case-sensitive)로 비교한다.
 
 응답 item의 핵심 필드:
 
@@ -45,6 +47,8 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 - size
 - isContinuous
 - attributes
+
+시간 기반 로그 목록의 기본 정렬은 `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`다.
 
 목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
 
@@ -126,7 +130,8 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 
 - 0개 일치: `FileNotFound`
 - 1개 일치: 다운로드
-- 2개 이상 일치: `MultipleFilesMatched` (409)
+- 2개 이상 정상 파일이 사용자 조건에 일치: `MultipleFilesMatched` (409)
+- 기준정보의 `cardinality=Single`인데 실제 탐색 결과가 2개 이상인 경우는 `MultipleFilesMatched`가 아니라 시스템 정의/파일 상태 불일치로 취급
 
 여러 파일을 자동 ZIP으로 묶는 기능은 MVP에서 제공하지 않는다.
 
@@ -143,6 +148,8 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 - 502 `FileServerProtocolError`
 - 503 `ReferenceDataUnavailable`
 - 500 `InternalError`
+
+`cardinality=Single` invariant 위반에 사용할 외부 오류 코드는 오류 semantics 라운드에서 별도 확정한다.
 
 세부 error body 규격은 구현 계획에서 일관된 공통 형식으로 확정한다.
 
