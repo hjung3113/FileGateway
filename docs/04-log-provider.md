@@ -52,9 +52,15 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 
 역할은 다음처럼 분리한다.
 
-- `pathTemplate`: 탐색할 논리 디렉터리 경로 계산
-- `filePattern`: 해당 디렉터리 안에서 후보 파일 선택
+- `pathTemplate`: 조회조건/논리 생성 슬롯으로 탐색할 논리 디렉터리 경로를 계산
+- `filePattern`: 계산된 디렉터리 안에서 후보 **파일명**을 선택하는 glob matcher
 - 파일의 `timestamp`/`subtype`/`attributes` 추출은 `MetadataRule` 책임
+
+`filePattern`은 MVP에서 정규식이 아니라 glob 문법만 사용한다. 예: `*.zip`, `Event_*.log`, `PM?.cfg`. 복잡한 metadata 추출은 `MetadataRule.Regex`가 담당하므로 discovery matcher와 parsing regex의 역할을 섞지 않는다.
+
+Glob 의미는 FTP 서버의 wildcard 구현에 의존하지 않는다. FileGateway가 디렉터리 목록을 받은 뒤 동일한 matcher 의미로 후보 파일명을 판정한다.
+
+MVP에서는 root부터의 무제한 recursive scan을 허용하지 않는다. `pathTemplate`이 조회 범위의 Hourly/Daily 슬롯 또는 Continuous 현재 위치로 필요한 디렉터리를 직접 계산하고 해당 디렉터리만 목록 조회한다. 여러 슬롯이 같은 디렉터리를 계산하면 중복 목록 조회하지 않는다.
 
 `cardinality`는 전체 조회 결과 개수가 아니라 **논리 생성 슬롯당 파일 개수**를 나타내는 invariant다.
 
@@ -72,7 +78,15 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 - pattern
 - mappings: 추출 값 → `timestamp`, `subtype`, `attribute.<key>`
 
-MetadataRule은 물리 FTP root를 제외한 **논리 relative path + fileName 전체**를 대상으로 해석할 수 있다. metadata가 디렉터리명에 포함된 경우에도 파일명에만 한정하지 않는다.
+MetadataRule의 입력은 물리 FTP root를 제외한 **정규화된 논리 relative path + fileName**이다. 경로 구분자는 플랫폼/FTP 표현과 무관하게 `/`로 통일한다.
+
+예:
+
+```text
+2026/08/22/18/Event_A.zip
+```
+
+일반적이고 결정적인 레이아웃은 `Template`을 우선하고, Template으로 표현하기 어려운 복잡한 경우만 `Regex` named group을 사용한다. metadata가 디렉터리명에 포함된 경우에도 파일명에만 한정하지 않는다.
 
 `filePattern`에 후보로 일치한 파일이 필수 metadata를 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`로 처리한다. 정의가 예상한 파일을 해석하지 못한 상태를 정상 결과로 숨기지 않는다.
 
@@ -83,8 +97,6 @@ Timezone 정보가 없는 논리 시각은 현재 Site의 운영 시간대 `Asia
 Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`으로 표현한다.
 
 Continuous 로그에 파일명/경로로부터 명확한 논리 시각을 추출할 수 없다면 `timestamp`는 `null`이다. 현재 시각이나 FTP modified time을 대신 넣지 않는다.
-
-일반 패턴은 Template을 우선하고 복잡한 예외만 Regex named group을 사용한다.
 
 ### FileDescriptor
 
@@ -121,7 +133,8 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 서버가 FTP 목록 전체를 저장하는 session 방식은 사용하지 않는다. 토큰은 stateless cursor로 다음 의미를 보존한다.
 
 - 원래 결과 집합을 결정한 조회조건
-- 마지막 반환 위치: `timestamp + fileName`
+- 시간 기반 로그 마지막 반환 위치: `timestamp + fileName`
+- Continuous 로그 마지막 반환 위치: `fileName`
 - token TTL
 
 `limit`은 페이지 크기이므로 원래 조회조건에 포함하지 않는다. 페이지 사이 원격 파일 집합 변경에 대한 완전한 snapshot은 보장하지 않는다.
@@ -140,6 +153,7 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 
 - 시간 필터와 무관하게 현재 존재 파일을 포함한다.
 - 명확한 논리 시각이 없으면 `timestamp=null`이다.
+- 목록 정렬은 `fileName ASC`를 사용하고 pagination cursor는 `fileName`이다.
 - 다운로드 시작 직전 파일 크기를 확정하고 그 크기까지만 전송한다.
 - 다운로드 중 파일이 커져도 시작 시점 이후 추가된 내용은 전송하지 않는다.
 - 다운로드 중 파일이 줄어 시작 크기까지 읽지 못하면 정상 완료가 아니라 streaming I/O 실패다.
@@ -177,4 +191,6 @@ Continuous 로그는 시간 범위와 별도로 현재 파일을 포함한다.
 1. `timestamp DESC`
 2. 동일 `timestamp`에서는 `fileName ASC`
 
-최신 논리 시각의 파일부터 반환하고 `fileName`을 동일 시각 내 안정적인 tie-breaker로 사용한다. `equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
+Continuous 로그 목록은 `fileName ASC`로 정렬한다.
+
+`equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
