@@ -4,6 +4,8 @@
 
 FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파일 제공 계층이다. 설비 직접 수집/가공 및 Configuration History 생성 시스템과는 책임을 분리한다.
 
+MVP 대상 프레임워크는 `.NET 10 (net10.0, LTS)`으로 고정한다. SDK 버전은 `global.json`으로 고정한다.
+
 ```text
 [Separate Collector / Processor / History Producer]
                     |
@@ -97,18 +99,18 @@ Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec
 
 - **FluentFTP**: FTP/FTPS Adapter 구현에 사용한다. `FileGateway.Infrastructure` 내부에 격리하고 Core/Logs/Configurations에는 FluentFTP 타입을 노출하지 않는다.
 - **Microsoft.Data.SqlClient**: MSSQL Stored Procedure 접근의 기본 provider로 사용한다.
-- **Testcontainers for .NET**: 자동 통합테스트에서 MSSQL 및 테스트용 외부 서비스 환경을 구성할 때 사용한다. 실제 Windows Server + IIS + 운영 유사 FTP/FTPS 검증을 대체하지 않는다.
+- **Testcontainers.MsSql**: 자동 통합테스트에서 MSSQL 환경을 구성하는 테스트 전용 패키지로 사용한다. 실제 Windows Server + IIS + 운영 유사 FTP/FTPS 검증을 대체하지 않는다.
+- **FubarDev.FtpServer**: FTP 테스트 서버를 구성하는 테스트 전용 패키지로 사용한다.
 
-### 필요 시 도입
+### 추가 도입 금지
 
-- **Dapper**: Stored Procedure 결과 매핑 코드가 반복·복잡해질 때만 도입한다. 단순 매핑 수준이면 `Microsoft.Data.SqlClient`만 사용한다.
-- **Polly**: 실제 transient retry/circuit-breaker 요구가 확인될 때만 도입한다. MVP timeout/cancel/concurrency 제어를 이유로 선제 도입하지 않는다.
+MVP에서는 `MediatR`, `AutoMapper`, `Polly`, `Dapper`, 별도 validation abstraction, 별도 logging abstraction을 도입하지 않는다. 위에서 확정한 패키지 외 신규 패키지도 추가하지 않는다.
 
 ### 기본적으로 추가하지 않음
 
-현재 요구사항만으로 MediatR, AutoMapper, 별도 validation framework, 별도 logging abstraction 등 추가 프레임워크를 도입하지 않는다. ASP.NET Core/.NET 기본 기능으로 충분한 영역은 기본 기능을 우선한다.
+ASP.NET Core/.NET 기본 기능으로 충분한 영역은 기본 기능을 우선한다.
 
-라이브러리 버전은 설계 문서에 고정하지 않고 구현 시점에 지원 대상 .NET 버전, 라이선스, 유지보수 상태를 확인해 고정한다.
+허용된 패키지의 버전은 구현 시점에 지원 대상 .NET 버전, 라이선스, 유지보수 상태를 확인한 뒤 각 `csproj`에 고정한다.
 
 ## 토큰 책임 경계
 
@@ -131,12 +133,17 @@ resourceKind
 
 ```text
 FileGateway
+├─ db/
+│  ├─ mvp-schema.sql
+│  └─ mvp-stored-procedure.sql
 ├─ FileGateway.Api
 ├─ FileGateway.Core
 ├─ FileGateway.Logs
 ├─ FileGateway.Configurations
 └─ FileGateway.Infrastructure
 ```
+
+`db/`의 SP/스키마 스크립트는 테스트·개발용 계약 구현이며 운영 DB 내부 구조는 이 계약만 지키면 자유롭다.
 
 별도 Application 프로젝트는 MVP 규모에서 추가하지 않는다.
 

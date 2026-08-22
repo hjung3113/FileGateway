@@ -56,7 +56,9 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 - `filePattern`: 계산된 디렉터리 안에서 후보 **파일명**을 선택하는 glob matcher
 - 파일의 `timestamp`/`subtype`/`attributes` 추출은 `MetadataRule` 책임
 
-`filePattern`은 MVP에서 정규식이 아니라 glob 문법만 사용한다. 예: `*.zip`, `Event_*.log`, `PM?.cfg`. 복잡한 metadata 추출은 `MetadataRule.Regex`가 담당하므로 discovery matcher와 parsing regex의 역할을 섞지 않는다.
+`pathTemplate`은 `/`로 구분하는 상대 경로이며 리터럴과 `{yyyy}` `{MM}` `{dd}` `{HH}` 토큰을 사용한다. 토큰은 논리 슬롯의 Site local(`Asia/Seoul`) 구성요소로 치환한다. 토큰 없는 고정 경로도 허용한다(Continuous/flat 디렉터리). `..`, rooted 경로, `:`는 금지한다.
+
+`filePattern`은 파일명 전용 glob 문법만 사용한다. `*`는 `/`가 없는 임의 run, `?`는 임의의 1문자이며 문자 클래스는 지원하지 않고 패턴에 `/`를 포함할 수 없다. 예: `*.zip`, `Event_*.log`, `PM?.cfg`. 복잡한 metadata 추출은 `MetadataRule.Regex`가 담당하므로 discovery matcher와 parsing regex의 역할을 섞지 않는다.
 
 Glob 의미는 FTP 서버의 wildcard 구현에 의존하지 않는다. FileGateway가 디렉터리 목록을 받은 뒤 동일한 matcher 의미로 후보 파일명을 판정한다. MVP Windows/IIS FTP 환경의 파일명 의미에 맞춰 glob의 파일명 비교는 **case-insensitive**로 수행하고, 실제 파일명의 원래 casing은 응답에 그대로 보존한다.
 
@@ -80,23 +82,29 @@ MVP에서는 root부터의 무제한 recursive scan을 허용하지 않는다. `
 
 - mode: `Template | Regex`
 - pattern
-- mappings: 추출 값 → `timestamp`, `subtype`, `attribute.<key>`
+- mappings: `Regex`의 group → `timestamp(format)`, `subtype`, `attribute.<key>`
 
 MetadataRule의 입력은 물리 FTP root를 제외한 **정규화된 논리 relative path + fileName**이다. 경로 구분자는 플랫폼/FTP 표현과 무관하게 `/`로 통일한다.
 
 예:
 
 ```text
-2026/08/22/18/Event_A.zip
+Logs/2026/08/22/18/Event_A.zip
 ```
 
-일반적이고 결정적인 레이아웃은 `Template`을 우선하고, Template으로 표현하기 어려운 복잡한 경우만 `Regex` named group을 사용한다. metadata가 디렉터리명에 포함된 경우에도 파일명에만 한정하지 않는다.
+`Template` mode는 전체 relative path에 대한 패턴을 사용하며 리터럴과 `{yyyy}` `{MM}` `{dd}` `{HH}` `{mm}` `{subtype}` `{attribute.<key>}` 토큰을 지원한다. 날짜 토큰은 고정폭 숫자이고 `{subtype}`/`{attribute.<key>}`는 `/`가 아닌 run이다. 토큰명이 곧 mapping이므로 별도 mappings는 필요하지 않다.
+
+`Regex` mode는 전체 relative path에 anchored한 regex named group을 사용한다. `mappings`는 group → target을 지정하며 target은 `timestamp(format)`(`format` 필수, .NET DateTime 형식 문자열), `subtype`, `attribute.<key>` 중 하나다. 일반적이고 결정적인 레이아웃은 `Template`을 우선하고, Template으로 표현하기 어려운 복잡한 경우만 `Regex` named group을 사용한다. metadata가 디렉터리명에 포함된 경우에도 파일명에만 한정하지 않는다.
+
+mapping target `attribute.<key>`와 API query prefix `attr.<name>`는 서로 다른 이름공간이며 서로 치환하지 않는다.
 
 `filePattern`에 후보로 일치한 파일이 필수 metadata를 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`로 처리한다. 정의가 예상한 파일을 해석하지 못한 상태를 정상 결과로 숨기지 않는다.
 
 `timestamp`는 파일명/경로 규칙에서 추출한 **로그의 논리 시각**이다. FTP modified time이나 파일시스템 수정 시각과 동일한 개념으로 사용하지 않는다.
 
 Timezone 정보가 없는 논리 시각은 현재 Site의 운영 시간대 `Asia/Seoul`로 해석한다. API 경계에서는 UTC offset을 포함한 ISO-8601로 표현한다.
+
+생성 정책별 metadata 요건은 고정한다. Hourly는 timestamp가 년/월/일/시를 모두 가져야 하고, Daily는 날짜 토큰만 허용하며 시/분 토큰과 `format`을 금지하고 timestamp를 Site local `00:00`으로 표현한다. Continuous는 timestamp가 선택 사항이며 없으면 `null`이다.
 
 Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`으로 표현한다.
 
@@ -133,7 +141,7 @@ MVP에서 `fileName` 비교는 case-insensitive다. 이 규칙은 다음에 동�
 
 `Event.LOG`와 `event.log`는 같은 논리 파일명으로 취급한다. 응답의 `fileName`은 실제 원격 파일이 가진 casing을 그대로 반환한다. 향후 case-sensitive 저장소를 지원할 때 이 계약은 재검토한다.
 
-동일 탐색 범위에 `Event.LOG`와 `event.log`처럼 case-insensitive 기준 동일한 서로 다른 원격 파일이 함께 발견되면 임의 dedupe하거나 하나를 선택하지 않고 `FileDefinitionConflict`로 처리한다.
+동일 탐색 결과(디렉터리) 범위에 `Event.LOG`와 `event.log`처럼 case-insensitive 기준 동일한 서로 다른 원격 파일이 함께 발견되면 임의 dedupe하거나 하나를 선택하지 않고 `FileDefinitionConflict`로 처리한다.
 
 ## 토큰 의미
 

@@ -50,7 +50,7 @@ X-Api-Key: <key>
 
 `fileId`와 `continuationToken`은 모두 클라이언트가 내부 내용을 신뢰하거나 수정할 수 없고 내부 payload도 노출되지 않는 **protected opaque token**으로 취급한다.
 
-공통 token codec은 무결성 보호, payload 비노출, opaque encoding/decoding, TTL 처리를 담당하고 Log/Configuration의 업무 의미는 각 feature가 소유한다. token 보호 key/secret은 코드와 분리된 안전한 설정 공급 방식을 사용한다.
+공통 token codec은 ASP.NET Core DataProtection 기반으로 무결성 보호, payload 비노출, opaque encoding/decoding, TTL 처리를 담당하고 Log/Configuration의 업무 의미는 각 feature가 소유한다. token 보호 key/secret은 코드와 분리된 안전한 설정 공급 방식을 사용한다.
 
 ### fileId
 
@@ -73,6 +73,8 @@ Configuration Snapshot `fileId`는 실제 파일뿐 아니라 해당 Snapshot Se
 
 ### token protection key rotation / persistence
 
+- DataProtection가 key ring을 관리하며 자동 rotation을 수행한다. 기본 key 수명은 90일로 `fileId` TTL 24시간 이상이다.
+- IIS 배포에서는 DataProtection key ring을 파일 시스템에 persist해 프로세스 재시작 후에도 기존 token을 검증할 수 있게 한다.
 - 새 token은 현재(active) 보호 key로만 발급한다.
 - 보호 key는 IIS 프로세스 재시작만으로 교체되거나 소실되지 않는 방식으로 공급/보관한다.
 - 정상적인 애플리케이션/IIS 재시작 후에도 발급된 24시간 `fileId`가 TTL 동안 계속 검증 가능해야 한다.
@@ -90,6 +92,8 @@ Configuration Snapshot `fileId`는 실제 파일뿐 아니라 해당 Snapshot Se
 - fileId와 달리 continuation token 전용 410 오류는 두지 않음
 
 ## 감사 로그
+
+감사 파이프라인 순서는 `Audit → ErrorMapping → ApiKey → endpoints`이며 `Audit`이 최외곽이다. ErrorMapping은 `FileGatewayException` 처리 시 `HttpContext.Items["Audit.ErrorCode"]`에 code를 남기고, 최종 HTTP status는 `Response.StatusCode`에서 확정한다. 따라서 Audit은 성공·실패 요청 모두 완결된 status와 errorCode를 기록한다.
 
 최소 필드:
 
@@ -168,10 +172,12 @@ Configuration History는 예외적으로 History 생산자가 생성한 **완료
 /health/ready
 ```
 
+- Health endpoint는 인증 없이 접근하며 `/api/*`에만 `X-Api-Key`를 적용한다.
 - `live`: 프로세스 생존 여부다. 기준정보 DB 장애만으로 실패시키지 않는다.
 - `ready`: 요청을 처리할 최소 **검증 완료 기준정보**를 확보했는지 포함해 핵심 의존성 상태를 판단한다.
+- `ready`는 `GetSnapshotAsync(ct)`를 호출해 최초 기준정보 로딩(single-flight)을 실제로 유발하고 DB/SP 조회·검증 결과를 반영한다. usable cache가 없으면 이 호출이 DB/SP 로딩을 유발한다.
 - 프로세스 시작 후 검증 완료 기준정보를 한 번도 확보하지 못했고 DB/SP 조회 또는 검증도 실패하면 `live`는 정상, `ready`는 실패다.
-- 마지막 정상 기준정보 cache가 존재하는 상태에서 DB 장애 또는 새 기준정보 검증 실패가 발생해도 stale cache로 요청 처리가 가능하므로 `ready`를 즉시 실패시키지 않는다.
+- 마지막 정상 기준정보 cache가 존재하는 상태에서 DB 장애 또는 새 기준정보 검증 실패가 발생해도 stale cache로 요청 처리가 가능하므로 `ready`는 200을 유지한다.
 - ready 요청마다 수십~수백 FTP 서버 전체를 순회하지 않는다.
 - 개별 파일 서버 상태는 실제 요청 시 평가한다.
 
