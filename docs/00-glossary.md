@@ -29,8 +29,8 @@ _Avoid_: 개별 파일마다 configurationType/subtype을 생성, 파일명을 c
 _Avoid_: `equipmentId + configurationType`이 항상 파일 하나를 식별한다고 가정
 
 **Current Configuration File**:
-`Current Configuration Set` 안의 개별 현재 파일이다. 내용은 시간에 따라 바뀔 수 있으며 FileGateway가 snapshot으로 고정하지 않는다. 개별 파일의 장기 논리 identity 규칙은 별도 설계 결정으로 확정한다.
-_Avoid_: 현재 파일을 불변 snapshot으로 간주
+`Current Configuration Set` 안의 개별 현재 파일이다. 논리 identity는 `equipmentId + configurationType + fileName`이며 파일 내용은 시간에 따라 바뀔 수 있다. 같은 identity의 `fileId`는 특정 바이트 버전을 고정하지 않고 다운로드 시점의 현재 내용을 가리킨다. `fileName`이 바뀌면 다른 논리 파일로 취급한다.
+_Avoid_: 현재 파일을 불변 snapshot으로 간주, PM1/PM2를 별도 subtype으로 모델링
 
 **Configuration Snapshot Set**:
 별도 시스템이 특정 시점에 `Current Configuration Set`의 파일들을 그대로 복사해 보관한 히스토리 파일 집합이다. 현재 운영 계획에서는 자정에 날짜 폴더를 만들고 Current 파일 집합을 복사하며 Current 원본은 그대로 유지한다. 같은 Snapshot Set의 파일들은 동일한 `snapshotTimestamp`를 공유한다.
@@ -53,11 +53,11 @@ _Avoid_: modified time, FTP modification time을 `timestamp`와 동일시하는 
 _Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현
 
 **Logical File Identity**:
-물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot File은 `equipmentId + configurationType + snapshotTimestamp + fileName`을 사용한다. Current Configuration File은 하나의 Configuration Type 아래 여러 파일이 가능하므로 개별 identity 규칙을 별도 확정한다.
+물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot File은 `equipmentId + configurationType + snapshotTimestamp + fileName`, Current Configuration File은 `equipmentId + configurationType + fileName`을 사용한다.
 _Avoid_: FTP host/path를 파일 identity로 취급
 
 **File ID (`fileId`)**:
-`Logical File Identity`를 가리키는 유효기간이 있는 opaque 참조다. 일반 조회조건 자체를 나타내는 토큰이 아니며 물리 서버/경로를 직접 식별하지 않는다.
+`Logical File Identity`를 가리키는 유효기간이 있는 opaque 참조다. 일반 조회조건 자체를 나타내는 토큰이 아니며 물리 서버/경로를 직접 식별하지 않는다. Current Configuration File의 경우 같은 논리 identity의 현재 내용을 가리키며 특정 바이트 버전을 고정하지 않는다.
 _Avoid_: query token, physical path identifier
 
 **Subtype (`subtype`)**:
