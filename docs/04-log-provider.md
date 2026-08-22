@@ -56,6 +56,8 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 
 `timestamp`는 파일명/경로 규칙에서 추출한 **로그의 논리 시각**이다. FTP modified time이나 파일시스템 수정 시각과 동일한 개념으로 사용하지 않는다.
 
+Timezone 정보가 없는 논리 시각은 현재 Site의 운영 시간대 `Asia/Seoul`로 해석한다. API 경계에서는 UTC offset을 포함한 ISO-8601로 표현한다.
+
 일반 패턴은 Template을 우선하고 복잡한 예외만 Regex named group을 사용한다.
 
 ### FileDescriptor
@@ -98,6 +100,6 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 - subtype
 - 동적 attributes
 
-`from`/`to`는 `timestamp` 기준으로 해석한다.
+`from`/`to`는 `timestamp` 기준 반개구간 `[from, to)`로 해석한다. `from`은 포함하고 `to`는 제외한다.
 
 시간 조건이 없으면 최근 24시간을 사용한다.
