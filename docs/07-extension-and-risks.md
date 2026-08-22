@@ -5,8 +5,9 @@
 현재 필요한 경계만 추상화하고 후속 기능을 미리 구현하지 않는다.
 
 - `IFileAccess`는 유지하되 MVP Adapter는 FTP/FTPS 하나
-- 로그 외 파일은 별도 Feature Provider로 추가 가능
-- Core/Logs는 Windows 전용 API에 직접 종속되지 않게 유지
+- MVP의 로그와 Configuration은 각각 별도 Feature Provider로 유지
+- 향후 다른 파일 종류가 실제로 필요해질 때 동일한 Core 파일 접근 기반 위에 별도 Feature Provider 추가 여부를 판단
+- Core/Logs/Configurations는 Windows 전용 API에 직접 종속되지 않게 유지
 
 ## 확정된 MVP 밖 확장
 
@@ -24,7 +25,7 @@ MVP는 Windows Server + IIS다. Linux 실제 배포/검증은 후속이다.
 
 ### 권한 세분화
 
-MVP API Key는 전체 설비/로그 접근이다. 향후 CallerId를 기준으로 Site/설비/로그 범위를 제한할 수 있다.
+MVP API Key는 전체 설비/제공 파일 접근이다. 향후 CallerId를 기준으로 Site/설비/파일 종류 범위를 제한할 수 있다.
 
 ### Range/Resume
 
@@ -33,6 +34,10 @@ MVP API Key는 전체 설비/로그 접근이다. 향후 CallerId를 기준으�
 ### 다중 파일 다운로드
 
 여러 결과를 자동 ZIP하는 기능은 제외한다. 필요 시 별도 요구사항으로 설계한다.
+
+### 다중 discovery rule
+
+현재 동일 `equipmentId + logType` 조회에서 서로 다른 디렉터리/파일명 규칙을 동시에 검색해야 하는 사례가 없다. MVP는 로그 정의당 하나의 `discoveryRule`만 사용하며 실제 요구가 생기기 전 `discoveryRules[]` 구조를 만들지 않는다.
 
 ## 현재 리스크
 
@@ -58,9 +63,11 @@ DB에는 정의가 있지만 실제 경로/파일이 없을 수 있다. 운영 �
 
 ### 목록 변경 중 페이지네이션
 
-FTP 파일 목록은 조회 중 변할 수 있다. continuation token과 안정된 정렬 기준을 사용하되, 완전한 스냅샷 의미가 필요해지면 별도 설계가 필요하다.
+FTP 파일 목록은 조회 중 변할 수 있다. continuation token과 안정된 정렬 기준을 사용하지만 완전한 snapshot을 보장하지 않는다.
 
-Continuation token은 발급 당시 조회조건에 종속한다. 페이지 이동 중 결과 집합을 바꾸는 조건 변경은 허용하지 않고 새 조회로 시작한다. 이 규칙은 조건 혼합에 따른 중복/누락을 막지만, 조회 중 원격 파일 목록 자체가 변하는 문제까지 스냅샷으로 보장하지는 않는다.
+Continuation token은 발급 당시 결과 집합을 결정한 조회조건에 종속한다. 페이지 이동 중 `equipmentId`, 타입, 시간 범위, subtype/attributes 등 결과 집합 조건 변경은 허용하지 않는다. `limit`은 페이지 크기이므로 변경할 수 있다.
+
+조회 중 원격 파일이 추가/삭제되면 후속 페이지 결과가 달라질 수 있다. 완전한 snapshot 보장이 실제로 필요해질 때 별도 설계를 검토한다.
 
 ## 명시적 범위 제외
 
