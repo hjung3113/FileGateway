@@ -22,8 +22,8 @@
 4. **`filePattern` glob 문법**: 파일명 전용. `*` = `/` 없는 임의 run, `?` = 임의 1문자. 문자 클래스 없음. 패턴에 `/` 금지. 대소문자 무시(case-insensitive) 매칭.
 5. **`MetadataRule` 문법**:
    - 입력: FTP root 제외, `/` 정규화 relative path + fileName (예: `Logs/2026/08/22/18/Event_A.zip`).
-   - `Template` mode: 전체 relative path에 대한 패턴. 리터럴 + 토큰 `{yyyy}` `{MM}` `{dd}` `{HH}` `{mm}` `{subtype}` `{attr.<key>}`. 날짜 토큰은 고정폭 숫자, `{subtype}`/`{attr.k}`는 `/` 아닌 run. 토큰명이 곧 mapping이다(별도 mappings 불필요).
-   - `Regex` mode: 전체 relative path에 anchored한 regex named group. `mappings`가 group→target을 지정: target ∈ `timestamp`(`format` 필수, .NET DateTime 형식 문자열), `subtype`, `attr.<key>`.
+   - `Template` mode: 전체 relative path에 대한 패턴. 리터럴 + 토큰 `{yyyy}` `{MM}` `{dd}` `{HH}` `{mm}` `{subtype}` `{attribute.<key>}`. 날짜 토큰은 고정폭 숫자, `{subtype}`/`{attribute.k}`는 `/` 아닌 run. 토큰명이 곧 mapping이다(별도 mappings 불필요).
+   - `Regex` mode: 전체 relative path에 anchored한 regex named group. `mappings`가 group→target을 지정: target ∈ `timestamp`(`format` 필수, .NET DateTime 형식 문자열), `subtype`, `attribute.<key>` — 역할별 문서(04a)의 표기 그대로. 주의: API query parameter 접두어 `attr.<name>`(05 문서 고정)와 mapping target `attribute.<key>`(04a 문서 고정)는 **서로 다른 이름공간**이며 서로 치환하지 않는다.
    - 토큰/그룹 요건: Hourly는 timestamp 완전성(년월일시) 필요, Daily는 날짜 토큰만(시/분 토큰·format 금지, timestamp는 Site local `00:00`), Continuous는 timestamp 선택(없으면 `null`).
    - 해석 실패 후보는 제외하지 않고 `FileDefinitionConflict`.
 6. **token codec**: ASP.NET Core DataProtection 기반. payload JSON을 purpose protector로 보호 후 Base64Url. payload에 `exp`(IssuedAt+Ttl) 포함, decode 시 만료/변조/형식 오류를 구분(`Expired` vs `Invalid`). purpose는 각 token 종류마다 독립 문자열. key ring은 DataProtection가 관리(자동 rotation, 기본 수명 90일 ≥ fileId TTL 24시간) — IIS 배포 시 파일 시스템 persist로 재시작 내구성 확보.
@@ -33,6 +33,12 @@
 10. **기준정보 접근 인터페이스**: Infrastructure의 `ReferenceDataCache`가 `IReferenceDataView.GetSnapshotAsync(ct)` 하나로 노출하고, Api/Logs/Configurations는 `ReferenceDataSnapshot`의 조회 메서드만 사용한다(정의 provider 인터페이스 다발을 만들지 않는다).
 11. **Health endpoint는 인증 없음**, `/api/*`만 X-Api-Key 대상.
 12. **파일명 비교 구현**: `StringComparer.OrdinalIgnoreCase`로 단일화(정렬·identity·cursor·glob 공용).
+13. **FTP/FTPS 전송 보안**: `FtpOptions.Security` = `Plain | ExplicitTls | ImplicitTls`(기본 `Plain`), `FtpOptions.AcceptUntrustedCertificates`(기본 `false`)를 두고 `FtpConfig`에 반영한다(EncryptionMode/인증서 검증). FTP/FTPS Adapter 계약(03 문서)을 코드로 만족하며, 실제 FTPS 연동·인증서 검증은 Task 21 수동 게이트에서 확인한다.
+14. **`/health/ready`의 최초 로딩 유도**: ready는 `GetSnapshotAsync`를 호출해 최초 기준정보 로딩(single-flight)을 실제로 유발하고 DB/SP 조회·검증 결과를 반영한다(09 문서). usable cache가 있으면 stale여도 200. FTP 서버 순회는 하지 않는다. — lazy-load만으로는 readiness만 받는 신규 프로세스가 영구 503이 되는 것을 방지한다.
+15. **감사 파이프라인 순서**: `Audit → ErrorMapping → ApiKey → endpoints`. ErrorMapping이 `FileGatewayException` 처리 시 `HttpContext.Items["Audit.ErrorCode"]`에 code를 남기고 최종 HTTP status는 `Response.StatusCode`에서 확정되므로, Audit(최외곽)은 성공·실패 요청 모두 완결된 status/errorCode를 기록한다.
+16. **설계문서 동기화 선행**: 이 계획이 새로 확정한 계약(3~15)은 Task 0에서 역할별 설계문서에 반영한다. `docs/INDEX.md`의 "역할별 문서가 현재 구현 기준" 규칙을 유지하기 위해 구현 Task는 Task 0 완료 후 시작한다.
+17. **테스트 인프라 버전 고정**: Testcontainers MSSQL 이미지는 `latest` 금지, 실행 시점의 구체 CU 태그로 고정한다(예: `mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04`). Testcontainers/FubarDev/FluentFTP 패키지 버전도 csproj에 고정된 값으로 기록한다.
+18. **MVP 완료 게이트 이중화**: Task 1~20의 자동화 게이트(`dotnet build && dotnet test`)는 구현 완료 조건일 뿐 MVP 완료가 아니다. MVP 완료는 Task 21의 수동 배포 검증 체크리스트(10 문서 "배포 전 필수 확인" + "MVP 완료 기준")까지 통과해야 한다.
 
 ## Global Constraints
 
@@ -48,6 +54,8 @@
 - 오류 코드 표(변경 금지): 400 `InvalidRequest`, 400 `InvalidFileId`, 401 `InvalidApiKey`, 404 `EquipmentNotFound`, 404 `LogDefinitionNotFound`, 404 `ConfigurationDefinitionNotFound`, 404 `FileNotFound`, 409 `MultipleFilesMatched`, 410 `FileIdExpired`, 500 `FileDefinitionConflict`, 500 `InternalError`, 502 `FileServerUnavailable`, 502 `FileServerProtocolError`, 503 `ReferenceDataUnavailable`. body는 Problem Details 계열 + `code` + `traceId`.
 - root 아래 경계: 모든 계산 경로는 `rootPath` 아래, `..`/절대/rooted 탈출 금지, 클라이언트 입력으로 물리 경로 조합 금지, 물리 host/path/credential/token payload/기준정보 내부 값은 응답·로그에 비노출.
 - 무제한 recursive scan 금지. 계산된 디렉터리 부재는 정상 0개, 파일 서버 연결/인증/프로토콜 오류와 구분. 한 요청에서 일부 디렉터리만 FTP I/O 실패하면 부분 결과 반환 금지(전체 실패).
+- 감사 로그는 성공/실패 요청 모두 최종 HTTP status와 안정적 오류 분류(errorCode)를 포함한다(순서/경로는 확정 결정 15).
+- `/health/ready`는 최초 기준정보 로딩을 유발하고 DB/SP 결과를 반영하며(확정 결정 14), 어떤 health endpoint도 FTP 서버를 순회하지 않는다.
 - cardinality는 슬롯당 invariant. `Single` 슬롯 2개 이상, metadata 해석 실패, case-insensitive 동일 파일명 복수 → `FileDefinitionConflict`.
 - 다운로드: 시작 직전 크기 = `Content-Length` = 전송 상한. 시작 후 I/O 오류는 응답 중단(JSON 전환 금지). 클라이언트 취소는 `ClientCancelled`로 운영 분류. `Content-Type: application/octet-stream`, header-safe `Content-Disposition: attachment`.
 - 기준정보: 전체 검증 성공 후 atomic 교체, 실패 시 last-known-good stale 사용, 최초 usable 없음 → `ReferenceDataUnavailable`. refresh는 single-flight, FTP 실재 확인 금지, background worker 없음.
@@ -140,6 +148,40 @@ tests/
 ```
 
 코드 블록은 핵심 구현 전체를 담는다. `using` 지시문과 `namespace` 선언은 각 파일 관례에 따라 추가하고, record는 필요시 `sealed`.
+
+---
+
+### Task 0: 설계문서 동기화 (모든 구현 Task의 선행 조건)
+
+**Files:**
+- Modify: `docs/00-glossary.md`, `docs/02-architecture.md`, `docs/03-server-access-core.md`, `docs/04a-log-provider.md`, `docs/04b-configuration-provider.md`, `docs/06-reference-data.md`, `docs/09-security-and-operations.md`, `docs/10-testing-and-deployment.md`
+
+**Interfaces:**
+- Consumes: 이 계획의 "확정 결정 사항" 1~18
+- Produces: 역할별 설계문서가 계획에서 확정한 계약과 동일해진다. `docs/INDEX.md`의 "역할별 문서가 현재 구현 기준" 규칙이 유지되어, 구현 agent가 문서와 계획 사이에서 갈리지 않는다. 신규 문서를 만들지 않고 기존 문서의 해당 절만 수정한다(INDEX 등록 불필요).
+
+- [ ] **Step 1: 문서별 반영**
+
+| 문서 | 반영 내용 |
+|---|---|
+| `00-glossary.md` | Token Codec 항목에 DataProtection 기반 구현·purpose 문자열·key ring 관리 방식 명시. File Name Comparison에 `StringComparer.OrdinalIgnoreCase` 구현 고정 |
+| `02-architecture.md` | .NET 10(net10.0) 고정, 패키지 집합 확정(FluentFTP/Microsoft.Data.SqlClient/Testcontainers.MsSql/FubarDev.FtpServer — 테스트 전용) 및 버전 고정 원칙, 프로젝트 구조에 `db/` 계약 스크립트 언급 |
+| `03-server-access-core.md` | `IFileAccess` 구체 시그니처 확정(계획 Task 3), `FtpOptions.Security`(Plain/ExplicitTls/ImplicitTls)·인증서 정책·동시성 lease 계약(스트림이 permit 소유), 연결 후 명령 오류도 동일 매핑 |
+| `04a-log-provider.md` | pathTemplate 토큰 문법(`{yyyy}{MM}{dd}{HH}`), Template 메타데이터 토큰(`{subtype}`,`{attribute.<key>}`,날짜 토큰), Regex mapping target 문법(group→`timestamp(format)`/`subtype`/`attribute.<key>`), Daily/Hourly/Continuous별 필수 토큰 규칙, 중복 판정의 "동일 탐색 결과(디렉터리) 범위" 명시 |
+| `04b-configuration-provider.md` | History 하한 경계([from,to) 정확 적용 — from이 자정이 아니면 그날 자정 Set 제외), currentRule/historyRule pathTemplate 토큰 문법 |
+| `06-reference-data.md` | SP 4-result-set 계약(컬럼 목록·순서·MetadataMappings JSON 형식), `db/` 스크립트의 테스트/개발용 계약 구현 지위 |
+| `09-security-and-operations.md` | `/health/ready` 최초 로딩 유도 계약(usable cache 없으면 ready가 DB/SP 로딩을 유발, stale면 200), 감사 파이프라인 순서와 `Audit.ErrorCode` 경로, token 보호 key의 DataProtection 파일 persist·rotation 정책 |
+| `10-testing-and-deployment.md` | 테스트 이미지/패키지 버전 고정(latest 금지), MVP 완료 = 자동화 게이트 + 수동 배포 검증(Task 21 절차) 이중 게이트 명시 |
+
+각 문서는 해당 절의 기존 서술 방식을 유지하고, "구현 계획에서 확정" 상태였던 부분을 확정 계약으로 교체한다. 문서 간 표기 충돌(query `attr.<name>` vs mapping `attribute.<key>` 이름공간 구분 등)도 함께 정리한다.
+
+- [ ] **Step 2: 검증 및 커밋**
+
+Run: `docs/INDEX.md`의 각 행이 안내하는 문서를 spot-check — 계획의 확정 결정 1~18과 역할별 문서가 모순되는 문장이 없는지 확인.
+
+```bash
+git add docs && git commit -m "docs: align role documents with locked implementation contracts"
+```
 
 ---
 
@@ -731,9 +773,10 @@ git add -A && git commit -m "feat(tokens): protected opaque token codec with dat
 **Interfaces:**
 - Consumes: Task 3 `IFileAccess`, `FileAccessException`, Task 1 `RemotePath`
 - Produces:
-  - `class FtpOptions { string? UserName; string? Password; int ConnectTimeoutSeconds = 15; int ReadTimeoutSeconds = 60; int MaxConcurrentGlobal = 50; int MaxConcurrentPerServer = 5; }`
-  - `class FtpConcurrencyLimiter(FtpOptions options)` — `Task<T> RunAsync<T>(FileServerConnection server, Func<CancellationToken, Task<T>> op, CancellationToken ct)`
-  - `class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limiter) : IFileAccess`
+  - `enum FtpSecurity { Plain, ExplicitTls, ImplicitTls }`
+  - `class FtpOptions { string? UserName; string? Password; FtpSecurity Security = FtpSecurity.Plain; bool AcceptUntrustedCertificates = false; int ConnectTimeoutSeconds = 15; int ReadTimeoutSeconds = 60; int MaxConcurrentGlobal = 50; int MaxConcurrentPerServer = 5; int? HostPortOverride; static FtpConfig ToFtpConfig(FtpOptions o); }` — `ToFtpConfig`는 timeout/EncryptionMode/인증서 검증을 `FtpConfig`에 반영하는 순수 매핑(단위테스트 대상)
+  - `sealed class FtpLease : IAsyncDisposable` + `class FtpConcurrencyLimiter(FtpOptions options)` — `Task<FtpLease> AcquireAsync(FileServerConnection server, CancellationToken ct)`(전체+서버별 permit 확보, Dispose로 해제)와 `Task<T> RunAsync<T>(FileServerConnection server, Func<CancellationToken, Task<T>> op, CancellationToken ct)`(단기 명령용: lease를 잡고 op 완료 후 해제)
+  - `class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limiter) : IFileAccess` — `OpenReadAsync`의 반환 스트림은 **client와 lease를 소유**하고 `DisposeAsync`에서 함께 해제한다(다운로드가 진행되는 동안 동시성 한도가 유지된다). 연결 이후 FTP 명령 오류도 `ConnectAsync`와 동일한 매핑으로 변환한다.
 
 - [ ] **Step 1: FTP 테스트 서버 fixture**
 
@@ -881,6 +924,43 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
         // 127.0.0.1:21 거부 → ConnectionFailed. 옵션의 포트 오버라이드 없이 기본 21 사용.
         Assert.Equal(FileAccessError.ConnectionFailed, ex.Error);
     }
+
+    [Fact]
+    public void FtpConfig_maps_security_and_certificate_policy()
+    {
+        var plain = FtpOptions.ToFtpConfig(new FtpOptions());
+        Assert.Equal(FtpEncryptionMode.None, plain.EncryptionMode);
+        Assert.False(plain.ValidateAnyCertificate);
+
+        var ftps = FtpOptions.ToFtpConfig(new FtpOptions
+            { Security = FtpSecurity.ExplicitTls, AcceptUntrustedCertificates = true });
+        Assert.Equal(FtpEncryptionMode.Explicit, ftps.EncryptionMode);
+        Assert.True(ftps.ValidateAnyCertificate);
+
+        var implicitFtps = FtpOptions.ToFtpConfig(new FtpOptions { Security = FtpSecurity.ImplicitTls });
+        Assert.Equal(FtpEncryptionMode.Implicit, implicitFtps.EncryptionMode);
+    }
+
+    [Fact]
+    public async Task Open_stream_holds_concurrency_lease_until_disposed()
+    {
+        await Seed(ftp, "ftproot/Logs/a.bin", "12345"u8.ToArray());
+        await Seed(ftp, "ftproot/Logs/b.bin", "67890"u8.ToArray());
+        var opt = new FtpOptions { UserName = FtpAdapterFixture.UserName, Password = FtpAdapterFixture.Password,
+                                   MaxConcurrentPerServer = 1 };
+        WithPort(ftp, opt);
+        var access = new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt));
+
+        var first = await access.OpenReadAsync(Server(ftp.Port), "Logs/a.bin", CancellationToken.None);
+        // 첫 스트림이 살아있는 동안 같은 서버의 두 번째 open은 permit 대기로 timeout/fail해야 한다
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => access.OpenReadAsync(Server(ftp.Port), "Logs/b.bin", cts.Token));
+
+        await first.Stream.DisposeAsync(); // lease 해제
+        var second = await access.OpenReadAsync(Server(ftp.Port), "Logs/b.bin", CancellationToken.None);
+        await second.Stream.DisposeAsync();
+    }
 }
 ```
 
@@ -891,25 +971,75 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
 - [ ] **Step 4: 구현**
 
 ```csharp
+// src/FileGateway.Infrastructure/Ftp/FtpOptions.cs
+using FluentFTP;
+
+namespace FileGateway.Infrastructure.Ftp;
+
+public enum FtpSecurity { Plain, ExplicitTls, ImplicitTls }
+
+public sealed class FtpOptions
+{
+    public string? UserName { get; set; }
+    public string? Password { get; set; }
+    public FtpSecurity Security { get; set; } = FtpSecurity.Plain;
+    public bool AcceptUntrustedCertificates { get; set; }
+    public int ConnectTimeoutSeconds { get; set; } = 15;
+    public int ReadTimeoutSeconds { get; set; } = 60;
+    public int MaxConcurrentGlobal { get; set; } = 50;
+    public int MaxConcurrentPerServer { get; set; } = 5;
+    public int? HostPortOverride { get; set; } // 테스트 편의용(기본 21)
+
+    public static FtpConfig ToFtpConfig(FtpOptions o) => new()
+    {
+        ConnectTimeout = o.ConnectTimeoutSeconds * 1000,
+        ReadTimeout = o.ReadTimeoutSeconds * 1000,
+        DataConnectionConnectTimeout = o.ConnectTimeoutSeconds * 1000,
+        DataConnectionReadTimeout = o.ReadTimeoutSeconds * 1000,
+        EncryptionMode = o.Security switch
+        {
+            FtpSecurity.ExplicitTls => FtpEncryptionMode.Explicit,
+            FtpSecurity.ImplicitTls => FtpEncryptionMode.Implicit,
+            _ => FtpEncryptionMode.None,
+        },
+        ValidateAnyCertificate = o.AcceptUntrustedCertificates, // self-signed 내부 서버 허용 여부(운영 설정)
+    };
+}
+
 // src/FileGateway.Infrastructure/Ftp/FtpConcurrencyLimiter.cs
 namespace FileGateway.Infrastructure.Ftp;
 
+/// <summary>전체/서버별 FTP 동시성 permit. 단기 명령은 RunAsync, 스트리밍은 lease를 스트림에 소유시킨다.</summary>
 public sealed class FtpConcurrencyLimiter(FtpOptions options)
 {
     private readonly SemaphoreSlim _global = new(options.MaxConcurrentGlobal, options.MaxConcurrentGlobal);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _perServer = new(StringComparer.OrdinalIgnoreCase);
 
+    public sealed class FtpLease(SemaphoreSlim global, SemaphoreSlim perServer) : IAsyncDisposable
+    {
+        private int _released;
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _released, 1) == 1) return;
+            perServer.Release(); global.Release();
+            await ValueTask.CompletedTask;
+        }
+    }
+
+    public async Task<FtpLease> AcquireAsync(FileServerConnection server, CancellationToken ct)
+    {
+        var perServer = _perServer.GetOrAdd(server.Host,
+            _ => new SemaphoreSlim(options.MaxConcurrentPerServer, options.MaxConcurrentPerServer));
+        await _global.WaitAsync(ct);
+        try { await perServer.WaitAsync(ct); }
+        catch { _global.Release(); throw; }
+        return new FtpLease(_global, perServer);
+    }
+
     public async Task<T> RunAsync<T>(FileServerConnection server, Func<CancellationToken, Task<T>> op, CancellationToken ct)
     {
-        var perServer = _perServer.GetOrAdd(server.Host, _ => new SemaphoreSlim(options.MaxConcurrentPerServer, options.MaxConcurrentPerServer));
-        await _global.WaitAsync(ct);
-        try
-        {
-            await perServer.WaitAsync(ct);
-            try { return await op(ct); }
-            finally { perServer.Release(); }
-        }
-        finally { _global.Release(); }
+        await using var lease = await AcquireAsync(server, ct);
+        return await op(ct);
     }
 }
 
@@ -923,94 +1053,105 @@ namespace FileGateway.Infrastructure.Ftp;
 public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limiter) : IFileAccess
 {
     public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
-        => limiter.RunAsync(server, async token =>
+        => limiter.RunAsync(server, token => WrapAsync(async () =>
         {
             using var client = await ConnectAsync(server, token);
-            var path = RemotePath.Combine(server.RootPath, dir);
-            try
-            {
-                var items = await client.GetListing(path, FtpListOption.Modify | FtpListOption.Size, token);
-                var files = items.Where(i => i.Type == FtpFileSystemObjectType.File)
-                                 .Select(i => new RemoteFileEntry(i.Name, i.Size))
-                                 .ToList();
-                return new RemoteDirectoryListing(true, files);
-            }
-            catch (FtpException ex) when (IsNoSuchPath(ex))
-            {
-                return RemoteDirectoryListing.Missing;
-            }
-        }, ct);
+            var items = await client.GetListing(
+                RemotePath.Combine(server.RootPath, dir), FtpListOption.Modify | FtpListOption.Size, token);
+            return new RemoteDirectoryListing(true,
+                items.Where(i => i.Type == FtpFileSystemObjectType.File)
+                     .Select(i => new RemoteFileEntry(i.Name, i.Size)).ToList());
+        }), ct);
 
     public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
-        => limiter.RunAsync(server, async token =>
+        => limiter.RunAsync(server, token => WrapAsync(async () =>
         {
             using var client = await ConnectAsync(server, token);
-            var info = await client.GetObjectInfo(RemotePath.Combine(server.RootPath, path), token);
+            var info = await GetObjectInfoOrNullAsync(client, server, path, token);
             if (info is null) throw new FileAccessException(FileAccessError.FileNotFound, "file not found");
             return info.Size;
-        }, ct);
+        }), ct);
 
     public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
-        => limiter.RunAsync(server, async token =>
+        => limiter.RunAsync(server, token => WrapAsync(async () =>
         {
             using var client = await ConnectAsync(server, token);
-            var info = await client.GetObjectInfo(RemotePath.Combine(server.RootPath, path), token);
-            return info is not null;
-        }, ct);
+            return await GetObjectInfoOrNullAsync(client, server, path, token) is not null;
+        }), ct);
 
-    public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string path, CancellationToken ct)
-        => limiter.RunAsync(server, async token =>
+    public async Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string path, CancellationToken ct)
+    {
+        // lease와 client를 반환 스트림이 소유: 다운로드가 끝나야 permit이 해제된다.
+        var lease = await limiter.AcquireAsync(server, ct);
+        AsyncFtpClient? client = null;
+        try
         {
-            using var client = await ConnectAsync(server, token);
+            client = await ConnectAsync(server, ct);
             var full = RemotePath.Combine(server.RootPath, path);
-            var size = await client.GetFileSize(full, token); // 시작 직전 크기 관측
-            if (size < 0) throw new FileAccessException(FileAccessError.FileNotFound, "file not found");
-            var ownedClient = client; // stream 소유권 유지용 래퍼
-            var stream = await ownedClient.OpenRead(full, 0, token);
-            return new RemoteOpenRead(new OwnedFtpStream(stream, ownedClient), size);
-        }, ct);
+            var info = await GetObjectInfoOrNullAsync(client, server, path, ct); // 시작 직전 크기 관측
+            if (info is null) throw new FileAccessException(FileAccessError.FileNotFound, "file not found");
+            var stream = await client.OpenRead(full, 0, ct);
+            return new RemoteOpenRead(new OwnedFtpStream(stream, client, lease), info.Size);
+        }
+        catch (Exception ex)
+        {
+            if (client is not null) await client.DisposeAsync();
+            await lease.DisposeAsync();
+            if (ex is FileAccessException) throw;
+            throw Classify(ex); // 연결/명령 구분 없이 동일 매핑
+        }
+    }
+
+    private static async Task<FtpListItem?> GetObjectInfoOrNullAsync(
+        AsyncFtpClient client, FileServerConnection server, string path, CancellationToken ct)
+    {
+        try { return await client.GetObjectInfo(RemotePath.Combine(server.RootPath, path), ct); }
+        catch (FtpException ex) when (IsFileNotFoundReply(ex)) { return null; } // MLST 550 → 부재
+    }
+
+    /// <summary>연결·명령 구분 없이 모든 FTP 오류를 FileAccessError로 변환한다.</summary>
+    private static async Task<T> WrapAsync<T>(Func<Task<T>> op)
+    {
+        try { return await op(); }
+        catch (Exception ex) when (ex is not FileAccessException) { throw Classify(ex); }
+    }
+
+    private static FileAccessException Classify(Exception ex) => ex switch
+    {
+        FtpAuthenticationException => new(FileAccessError.AuthenticationFailed, "ftp auth failed", ex),
+        SocketException => new(FileAccessError.ConnectionFailed, "ftp connection failed", ex),
+        TimeoutException => new(FileAccessError.Timeout, "ftp timeout", ex),
+        FtpException => new(FileAccessError.ProtocolError, "ftp protocol error", ex),
+        _ => new(FileAccessError.ProtocolError, "ftp failure", ex),
+    };
+
 
     private async Task<AsyncFtpClient> ConnectAsync(FileServerConnection server, CancellationToken ct)
     {
-        try
-        {
-            var config = new FtpConfig
-            {
-                ConnectTimeout = options.ConnectTimeoutSeconds * 1000,
-                ReadTimeout = options.ReadTimeoutSeconds * 1000,
-                DataConnectionConnectTimeout = options.ConnectTimeoutSeconds * 1000,
-                DataConnectionReadTimeout = options.ReadTimeoutSeconds * 1000,
-            };
-            var client = new AsyncFtpClient(server.Host, options.UserName ?? "", options.Password ?? "",
-                options.HostPortOverride ?? 21, config);
-            await client.Connect(ct);
-            return client;
-        }
-        catch (FtpAuthenticationException ex) { throw Map(ex, "auth"); }
-        catch (SocketException ex) { throw Map(ex, "conn"); }
-        catch (TimeoutException ex) { throw Map(ex, "timeout"); }
-        catch (FtpException ex) { throw Map(ex, "proto"); }
+        var client = new AsyncFtpClient(server.Host, options.UserName ?? "", options.Password ?? "",
+            options.HostPortOverride ?? 21, FtpOptions.ToFtpConfig(options));
+        try { await client.Connect(ct); return client; }
+        catch { await client.DisposeAsync(); throw; }
     }
 
-    private static bool IsNoSuchPath(FtpException ex)
+    private static bool IsFileNotFoundReply(FtpException ex)
         => ex.Message.Contains("550", StringComparison.Ordinal) ||
            ex.InnerException?.Message.Contains("550", StringComparison.Ordinal) == true;
 
-    private static FileAccessException Map(Exception ex, string kind) => kind switch
-    {
-        "auth" => new(FileAccessError.AuthenticationFailed, "ftp auth failed", ex),
-        "conn" => new(FileAccessError.ConnectionFailed, "ftp connect failed", ex),
-        "timeout" => new(FileAccessError.Timeout, "ftp timeout", ex),
-        _ => new(FileAccessError.ProtocolError, "ftp protocol error", ex),
-    };
+    private static bool IsNoSuchPath(Exception ex) => IsFileNotFoundReply((FtpException)ex);
 
-    private sealed class OwnedFtpStream(Stream inner, AsyncFtpClient client) : Stream
+    private sealed class OwnedFtpStream(Stream inner, AsyncFtpClient client, FtpConcurrencyLimiter.FtpLease lease) : Stream
     {
         public override async ValueTask<int> ReadAsync(Memory<byte> b, CancellationToken ct) => await inner.ReadAsync(b, ct);
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override long Length => inner.Length;
-        public override async ValueTask DisposeAsync() { await inner.DisposeAsync(); await client.DisposeAsync(); }
+        public override async ValueTask DisposeAsync()
+        {
+            await inner.DisposeAsync();
+            await client.DisposeAsync();
+            await lease.DisposeAsync();
+        }
         public override void Flush() => throw new NotSupportedException();
         public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
@@ -1018,7 +1159,10 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
+
 ```
+
+구현 정리 노트: `ListFilesAsync`의 "디렉터리 부재" 판정(`IsNoSuchPath`)은 op 본문에서 `FtpException`을 `ProtocolError`로 변환하기 전에 먼저 적용해 `RemoteDirectoryListing.Missing`을 반환한다(테스트 `ListFiles_reports_missing_directory_as_not_exists`가 검증). 미사용 헬퍼는 제거한다.
 
 구현 시 FluentFTP 실제 예외 타입/오버로드를 통합테스트로 검증하며 보정한다(550 감정, `OpenRead` 오버로드, dispose 소유권). 불일치가 있으면 테스트가 통과하도록 최소한으로 수정한다.
 
@@ -1232,7 +1376,7 @@ public static class LogDefinitionValidator
         if (meta.Mode == MetadataMode.Template)
         {
             foreach (var token in ExtractTokens(meta.Pattern))
-                if (!DateTokens.Contains(token) && token != "{subtype}" && !token.StartsWith("{attr."))
+                if (!DateTokens.Contains(token) && token != "{subtype}" && !token.StartsWith("{attribute."))
                     errors.Add($"unknown metadata token: {token}");
             var hasDate = HasToken(meta.Pattern, "{yyyy}") && HasToken(meta.Pattern, "{MM}") && HasToken(meta.Pattern, "{dd}");
             var hasHour = HasToken(meta.Pattern, "{HH}");
@@ -1265,7 +1409,7 @@ public static class LogDefinitionValidator
                                 errors.Add($"mapping group not in regex: {m.Group}");
                         }
                     }
-                    else if (m.Target is not "subtype" && !m.Target.StartsWith("attr."))
+                    else if (m.Target is not "subtype" && !m.Target.StartsWith("attribute."))
                         errors.Add($"unsupported mapping target: {m.Target}");
                 }
             }
@@ -1317,7 +1461,7 @@ git add -A && git commit -m "feat(reference-data): validated reference data snap
   - `interface IReferenceDataSource { Task<ReferenceDataRaw> ReadAsync(CancellationToken ct); }`
   - `class SpReferenceDataSource(string connectionString) : IReferenceDataSource` — SP `FileGateway_GetReferenceData` 호출, 4 result set을 `ReferenceDataRaw`로 매핑
   - `interface IReferenceDataView { Task<ReferenceDataSnapshot> GetSnapshotAsync(CancellationToken ct); }`
-  - `class ReferenceDataCache(IReferenceDataSource source, TimeSpan ttl) : IReferenceDataView` + `ReferenceDataSnapshot? CurrentSnapshot { get; }`, `bool HasUsableSnapshot { get; }`, `DateTimeOffset? LastGoodRefreshAt { get; }`, `DateTime? LastRefreshFailedAt`, `string? LastRefreshError`
+  - `class ReferenceDataCache(IReferenceDataSource source, TimeSpan ttl) : IReferenceDataView` + `ReferenceDataSnapshot? CurrentSnapshot { get; }`, `bool HasUsableSnapshot { get; }`, `DateTimeOffset? LastGoodRefreshAt { get; }`, `DateTime? LastRefreshFailedAt`, `string? LastRefreshError`. **`GetSnapshotAsync` 의미**: usable cache + TTL 유효 → 즉시 반환. usable cache + TTL 만료 → 단일 background refresh(single-flight)를 촉발하고 **현재 stale snapshot을 즉시 반환**(요청이 DB refresh를 기다리지 않는다). cache 없음 → 공유 최초 로딩을 await(실패 시 `ReferenceDataUnavailable`, 동시 요청은 동일 결과 공유).
 
 - [ ] **Step 1: DB 계약 스크립트**
 
@@ -1369,7 +1513,7 @@ namespace FileGateway.IntegrationTests;
 public sealed class DatabaseFixture : IAsyncLifetime
 {
     private readonly MsSqlContainer _container = new MsSqlBuilder()
-        .WithImage("mcr.microsoft.com/mssql/server:2022-latest").Build();
+        .WithImage("mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04").Build(); // latest 금지: 실행 시점 최신 CU 태그로 고정(확정 결정 17)
 
     public string ConnectionString => _container.GetConnectionString();
 
@@ -1462,6 +1606,30 @@ public class ReferenceDataCacheTests
         var results = await Task.WhenAll(Enumerable.Range(0, 10).Select(_ => cache.GetSnapshotAsync(CancellationToken.None)));
         Assert.Equal(1, src.Calls);
         Assert.All(results, r => Assert.Same(results[0], r));
+    }
+
+    [Fact]
+    public async Task Expired_cache_returns_stale_immediately_and_refreshes_in_background()
+    {
+        var v1 = Raw("EQ-A");
+        var v2 = Raw("EQ-B");
+        var src = new FakeSource(v1)
+        {
+            Next = async () => { await Task.Delay(300); return v2; }
+        };
+        var cache = new ReferenceDataCache(src, TimeSpan.FromMilliseconds(50));
+        var first = await cache.GetSnapshotAsync(CancellationToken.None);
+
+        await Task.Delay(100); // TTL 경과, refresh는 300ms 지연
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var second = await cache.GetSnapshotAsync(CancellationToken.None);
+        sw.Stop();
+
+        Assert.Same(first, second);                     // DB refresh를 기다리지 않고 stale 즉시 반환
+        Assert.True(sw.ElapsedMilliseconds < 200);
+
+        await Task.Delay(400);                           // background refresh 완료 대기
+        Assert.Contains("EQ-B", cache.CurrentSnapshot!.EquipmentIds); // atomic 교체 확인
     }
 
     [Fact]
@@ -1576,23 +1744,52 @@ public sealed class ReferenceDataCache(IReferenceDataSource source, TimeSpan ttl
     {
         lock (_gate)
         {
-            if (CurrentSnapshot is not null && DateTimeOffset.UtcNow - _loadedAt < ttl)
+            if (CurrentSnapshot is not null)
+            {
+                if (DateTimeOffset.UtcNow - _loadedAt < ttl)
+                    return Task.FromResult(CurrentSnapshot);
+                // TTL 만료: single-flight background refresh 촉발 후 stale 즉시 반환.
+                // 요청이 DB를 기다리지 않는다(확정 결정 14, 리뷰 P1 반영).
+                _ = TriggerRefresh();
                 return Task.FromResult(CurrentSnapshot);
-            return _inFlight ??= LoadAsync(ct);
+            }
+            // 최초 로딩: 동시 요청이 동일 공유 로딩을 await
+            return _inFlight ??= InitialLoadAsync();
         }
     }
 
-    private async Task<ReferenceDataSnapshot> LoadAsync(CancellationToken ct)
+    private async Task TriggerRefresh()
+    {
+        lock (_gate)
+        {
+            if (_inFlight is not null) return; // single-flight
+            _inFlight = LoadAsync();
+        }
+        try { await _inFlight!; }
+        catch { /* 실패는 아래 LoadAsync에서 상태로 기록됨. stale cache 유지. */ }
+    }
+
+    private async Task<ReferenceDataSnapshot> InitialLoadAsync()
+    {
+        try { return await LoadAsync(); }
+        finally
+        {
+            lock (_gate) { _inFlight = null; } // 이후 요청이 재시도 가능
+        }
+    }
+
+    private async Task<ReferenceDataSnapshot> LoadAsync()
     {
         try
         {
-            var raw = await source.ReadAsync(ct);
-            var snapshot = ReferenceDataSnapshotBuilder.Build(raw); // 실패 시 예외 → 새 스냅샷 버림
+            var raw = await source.ReadAsync(CancellationToken.None);
+            var snapshot = ReferenceDataSnapshotBuilder.Build(raw); // 검증 실패 → 새 스냅샷 전체 거부
             lock (_gate)
             {
                 CurrentSnapshot = snapshot;   // atomic 참조 교체
                 _loadedAt = DateTimeOffset.UtcNow;
                 LastRefreshError = null; LastRefreshFailedAt = null;
+                _inFlight = null;
                 return snapshot;
             }
         }
@@ -1602,26 +1799,16 @@ public sealed class ReferenceDataCache(IReferenceDataSource source, TimeSpan ttl
             {
                 LastRefreshFailedAt = DateTime.UtcNow;
                 LastRefreshError = ex.Message;
-                if (CurrentSnapshot is null)
-                {
-                    // 최초 로딩 실패: 동시 대기 요청이 동일 실패를 공유
-                    var failed = Task.FromException<ReferenceDataSnapshot>(
-                        new FileGatewayException("ReferenceDataUnavailable", "reference data unavailable"));
-                    _inFlight = null;
-                    return await failed;
-                }
-                return CurrentSnapshot; // last-known-good stale 반환
+                _inFlight = null;
+                if (CurrentSnapshot is not null) return CurrentSnapshot; // stale 유지
+                throw new FileGatewayException("ReferenceDataUnavailable", "reference data unavailable");
             }
-        }
-        finally
-        {
-            lock (_gate) { _inFlight = null; }
         }
     }
 }
 ```
 
-실패 공유 정확화: 최초 로딩 실패 시 `_inFlight`를 실패 Task로 반환해 동시 요청이 동일 예외를 받도록 하고, 성공/실패 후 `_inFlight = null`로 다음 요청이 재시도하게 한다. 위 골격의 lock 순서가 이 요구를 만족하도록 단위테스트 통과 시점까지 정리한다(요구: TTL 만료 동시 요청 refresh 1회, 최초 실패 공유, stale 유지).
+동작 요약: TTL 만료 후 요청은 즉시 stale를 받고 refresh는 1회만 실행된다. 최초 로딩 실패는 `ReferenceDataUnavailable` 예외로 모든 동시 대기자에게 전파되고(공유 Task), 다음 요청이 재시도한다. background refresh의 `ct`는 호출자 요청 취소와 분리한다(`CancellationToken.None`) — 취소된 요청이 cache 상태를 좌우하지 않게 한다.
 
 - [ ] **Step 6: 통과 확인 후 커밋**
 
@@ -1703,6 +1890,14 @@ public class SlotExpansionTests
         Assert.Equal(TimeSpan.FromHours(9), parsed.Offset);
     }
 
+    [Theory]
+    [InlineData("2026-08-22T18:00:00Z", 0)]          // Z → UTC
+    [InlineData("2026-08-22T18:00:00+09:00", 9)]     // 명시적 offset 유지
+    [InlineData("2026-08-22T18:00:00-05:00", -5)]
+    [InlineData("2026-08-22T18:00:00", 9)]           // offset 없음 → Seoul (머신 timezone 무관)
+    public void SiteTime_parse_respects_offset_contract(string iso, int expectedOffsetHours)
+        => Assert.Equal(TimeSpan.FromHours(expectedOffsetHours), SiteTime.Parse(iso).Offset);
+
     [Fact]
     public void SiteTime_midnight_uses_seoul_offset()
         => Assert.Equal(new DateTimeOffset(2026, 8, 22, 0, 0, 0, TimeSpan.FromHours(9)),
@@ -1730,12 +1925,23 @@ public static class SiteTime
         return new DateTimeOffset(l.Date, l.Offset);
     }
 
+    /// <summary>API 시각 파싱. offset 포함 값은 그 offset을 그대로, offset 없는 값은 Asia/Seoul(+09:00)로 해석한다.
+    /// 실행 머신 local timezone은 절대 사용하지 않는다(확정 결정 9).</summary>
     public static DateTimeOffset Parse(string iso)
-        => DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.None, out var withOffset)
-            ? withOffset
-            : throw new ArgumentException($"unparseable timestamp: {iso}");
-    // offset 없는 입력은 DateTimeOffset.TryParse가 로컬 zone으로 해석하므로, 명시적으로 Site local 지정:
-    // DateTime.TryParse → new DateTime + TimeSpan.FromHours(9) 경로 사용
+    {
+        if (!HasOffset(iso) && DateTime.TryParse(iso, CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var naive))
+            return new DateTimeOffset(naive, Local.GetUtcOffset(naive)); // offset 없음 → Asia/Seoul 확정
+        if (DateTimeOffset.TryParse(iso, CultureInfo.InvariantCulture, DateTimeStyles.None, out var withOffset))
+            return withOffset;
+        throw new ArgumentException($"unparseable timestamp: {iso}");
+    }
+
+    private static bool HasOffset(string iso)
+        => iso.EndsWith("Z", StringComparison.OrdinalIgnoreCase)
+        || iso.Contains('+')
+        || iso.LastIndexOf('-') >= 10; // ISO 날짜부 "YYYY-MM-DD"는 10자: 이후의 '-'는 시간대 offset
+    }
 }
 
 // src/FileGateway.Logs/Internal/PathTemplate.cs
@@ -1836,7 +2042,7 @@ public class MetadataRuleParserTests
     public void Template_extracts_attributes()
     {
         var rule = new LogMetadataRule(MetadataMode.Template,
-            "Logs/{yyyy}/{MM}/{dd}/{HH}/Event_{attr.lot}_{subtype}.zip", []);
+            "Logs/{yyyy}/{MM}/{dd}/{HH}/Event_{attribute.lot}_{subtype}.zip", []);
         var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly,
             "Logs/2026/08/22/18/Event_L07_A.zip")!;
         Assert.Equal("L07", meta.Attributes["lot"]);
@@ -1887,8 +2093,8 @@ public class MetadataRuleParserTests
     [Fact]
     public void Regex_attribute_mapping()
     {
-        var rule = new LogMetadataRule(MetadataMode.Regex, @"^L/(??<v>\d+)/a\.log$",
-            [new MetadataMapping("v", "attr.version", null)]);
+        var rule = new LogMetadataRule(MetadataMode.Regex, @"^L/(?<v>\d+)/a\.log$",
+            [new MetadataMapping("v", "attribute.version", null)]);
         var meta = MetadataRuleParser.Parse(rule, GenerationType.Continuous, "L/3/a.log")!;
         Assert.Equal("3", meta.Attributes["version"]);
     }
@@ -1997,8 +2203,8 @@ public static partial class MetadataRuleParser
                 "HH" => "(?<fg_ts_HH>\\d{2})",
                 "mm" => "(?<fg_ts_mm>\\d{2})",
                 "subtype" => "(?<fg_subtype>[^/]+?)",
-                var a when a.StartsWith("attr.", StringComparison.Ordinal)
-                    => $"(?<fg_attr_{a["attr.".Length..]}>[^/]+?)",
+                var a when a.StartsWith("attribute.", StringComparison.Ordinal)
+                    => $"(?<fg_attr_{a["attribute.".Length..]}>[^/]+?)",
                 _ => throw new ArgumentException($"unknown token {tok}")
             });
             last = tm.Index + tm.Length;
@@ -2030,8 +2236,8 @@ public static partial class MetadataRuleParser
                     : unspecified;
             }
             else if (map.Target == "subtype") subtype = value;
-            else if (map.Target.StartsWith("attr.", StringComparison.Ordinal))
-                attrs[map.Target["attr.".Length..]] = value;
+            else if (map.Target.StartsWith("attribute.", StringComparison.Ordinal))
+                attrs[map.Target["attribute.".Length..]] = value;
             else return null;
         }
         if (generation is GenerationType.Hourly or GenerationType.Daily && timestamp is null) return null;
@@ -2182,6 +2388,22 @@ public class LogResolverTests
     }
 
     [Fact]
+    public async Task Same_basename_in_different_hour_directories_is_not_conflict()
+    {
+        // 논리 identity는 timestamp + fileName: 서로 다른 시간대 디렉터리의 같은 basename은 별개 파일이다
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/2026/08/22/17/Event_A.zip", "x"u8.ToArray());
+        ftp.AddFile("Logs/2026/08/22/18/Event_A.zip", "y"u8.ToArray());
+        var range = new EffectiveRange(
+            new DateTimeOffset(2026, 8, 22, 17, 0, 0, TimeSpan.FromHours(9)),
+            new DateTimeOffset(2026, 8, 22, 19, 0, 0, TimeSpan.FromHours(9)));
+        var files = await new LogResolver(ftp).ResolveAsync(Def(), range, CancellationToken.None);
+        Assert.Equal(2, files.Count);
+        Assert.Equal(["Logs/2026/08/22/18/Event_A.zip", "Logs/2026/08/22/17/Event_A.zip"],
+            files.Select(f => f.RelativePath)); // timestamp DESC
+    }
+
+    [Fact]
     public async Task Single_cardinality_with_two_files_in_slot_is_conflict()
     {
         var ftp = new FakeFileAccess();
@@ -2291,19 +2513,21 @@ public sealed class LogResolver(IFileAccess fileAccess)
             .ToList();
 
         var files = new List<ResolvedLogFile>();
-        var seenNames = new HashSet<string>(FileNameComparison.Comparer);
 
         foreach (var dir in directories)
         {
             var listing = await fileAccess.ListFilesAsync(def.Server, dir, ct); // I/O 오류는 그대로 상향(전체 실패)
             if (!listing.Exists) continue;                                      // 디렉터리 부재 = 정상 0개
 
+            // 중복 판정은 "동일 탐색 결과(동일 디렉터리)" 기준이다(문서: 동일 탐색 범위의 case-insensitive 동일 파일명).
+            // 서로 다른 디렉터리의 같은 basename은 논리 timestamp가 다른 별개 파일이므로 충돌이 아니다.
+            var seenNames = new HashSet<string>(FileNameComparison.Comparer);
             foreach (var entry in listing.Files)
             {
                 if (!glob.Matches(entry.Name)) continue;
                 if (!seenNames.Add(entry.Name))
                     throw new FileGatewayException("FileDefinitionConflict",
-                        $"case-insensitive duplicate file name: {entry.Name}");
+                        $"case-insensitive duplicate file name in {dir}: {entry.Name}");
                 var relativePath = dir + "/" + entry.Name;
                 var meta = MetadataRuleParser.Parse(d.MetadataRule, d.GenerationType, relativePath);
                 if (meta is null)
@@ -2892,6 +3116,20 @@ public class HistoryResolverTests
     }
 
     [Fact]
+    public async Task Non_midnight_from_excludes_that_days_snapshot()
+    {
+        var ftp = new FakeFileAccess();
+        Seed(ftp, 22, "PM1.cfg");
+        Seed(ftp, 23, "PM1.cfg");
+        // from=22T12:00 → 22일 자정 snapshot은 [from,to) 밖, 23일 자정만 포함
+        var files = await new HistoryResolver(ftp).ResolveAsync(
+            new(new DateTimeOffset(2026, 8, 22, 12, 0, 0, TimeSpan.FromHours(9)),
+                new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.FromHours(9))), CancellationToken.None);
+        var ts = Assert.Single(files).SnapshotTimestamp;
+        Assert.Equal(23, ts.Day);
+    }
+
+    [Fact]
     public async Task Duplicate_case_insensitive_name_is_conflict()
     {
         var ftp = new FakeFileAccess();
@@ -2946,7 +3184,10 @@ public sealed class HistoryResolver(IFileAccess fileAccess)
         var files = new List<ResolvedSnapshotFile>();
         var seen = new HashSet<string>(FileNameComparison.Comparer);
 
-        for (var date = SiteTime.SiteLocalMidnight(range.From); date < range.To; date = date.AddDays(1))
+        // [from, to)의 정확한 하한: from이 자정이 아니면 그날 자정 snapshot은 from 이전이므로 제외한다.
+        var start = SiteTime.SiteLocalMidnight(range.From);
+        if (start < range.From) start = start.AddDays(1);
+        for (var date = start; date < range.To; date = date.AddDays(1))
         {
             var markerRel = ExpandDate(rule.MarkerPathTemplate, date);
             if (!await fileAccess.FileExistsAsync(def.Server, markerRel, ct)) continue; // 미완료 Set 제외
@@ -3001,12 +3242,12 @@ git add -A && git commit -m "feat(configurations): snapshot history with complet
 - Produces:
   - `FileGatewayOptions`(섹션 "FileGateway"): `Logs.MaxQueryRange`(기본 31일), `Configurations.HistoryMaxQueryRange`(기본 366일), `Paging.LimitDefault=100`/`LimitMax=1000`, `Tokens.FileIdTtl=24h`/`ContinuationTtl=30분`, `ReferenceData.CacheTtl=15분`. 시작 시 `MaxQueryRange < 2일`이면 실패.
   - `ApiKeyOptions`(섹션 "Authentication"): `List<ApiKeyEntry> ApiKeys { string Key; string CallerId; }` — Secret 공급(환경변수 등).
-  - 미들웨어 순서: ErrorMapping → Audit → ApiKey → endpoints.
+  - 미들웨어 순서: **Audit(최외곽) → ErrorMapping → ApiKey → endpoints**. 이유: 엔드포인트/ApiKey에서 던진 예외는 ErrorMapping이 받아 ProblemDetails를 쓰고 `Items["Audit.ErrorCode"]=code`를 남긴 뒤 Audit이 unwind하므로, Audit은 **실패 요청을 포함해** 최종 `Response.StatusCode`와 errorCode를 함께 기록할 수 있다(확정 결정 15).
   - DI 등록(이후 Task가 확장): `ITokenCodec=DataProtectionTokenCodec`, `IFileAccess=FtpFileAccess`(transient)+`FtpConcurrencyLimiter`(singleton), `ReferenceDataCache`(singleton) as `IReferenceDataView`, `LogQueryService`/`ConfigurationQueryService`(옵션 주입), `TimeProvider.System`.
-  - `ErrorMappingMiddleware`: `FileGatewayException` → `FileGatewayErrors.Map(code)`로 (status,title) → `{type:"about:blank",title,status,code,traceId}` JSON. `OperationCanceledException` + `HttpContext.RequestAborted` → `ClientCancelled` 로그, 응답 없음(이미 시작됐을 수 있음). 그 외 → 500 `InternalError`(상세는 서버 로그만).
+  - `ErrorMappingMiddleware`: `FileGatewayException` → `FileGatewayErrors.Map(code)`로 (status,title) → `{type:"about:blank",title,status,code,traceId}` JSON + `Items["Audit.ErrorCode"]=ex.Code`. `OperationCanceledException` + `HttpContext.RequestAborted` → `Items["Audit.ErrorCode"]="ClientCancelled"` 처리 후 로그, 새 응답 없음(이미 시작됐을 수 있음). 그 외 → 500 `InternalError`(상세는 서버 로그만, `Items["Audit.ErrorCode"]="InternalError"`).
   - `FileGatewayErrors`(Core.Errors): 코드→(status,title) 정적 사전. Global Constraints 오류 표와 1:1.
-  - `AuditMiddleware`: 완료 시 `ILogger("FileGateway.Audit")` 구조화 로그 — `callerId`,`clientIp`(X-Forwarded-For 무시, RemoteIpAddress),`method`,`path`(route template),`equipmentId`,`logType`/`configurationType`(Items),`fileId`(Items),`fileName`,`fileSize`(Items),`status`,`errorCode`(Items),"elapsedMs". `/health/*` 미기록. API Key 원문·token payload·물리 경로 미기록.
-  - `/health/live` 200 상시, `/health/ready`: `IReferenceDataView`가 `ReferenceDataCache`인 경우 `HasUsableSnapshot` → 200/503.
+  - `AuditMiddleware`: 완료 시 `ILogger("FileGateway.Audit")` 구조화 로그 — `callerId`,`clientIp`(X-Forwarded-For 무시, RemoteIpAddress),`method`,`path`(route template),`equipmentId`,`logType`/`configurationType`(Items),`fileId`(Items),`fileName`,`fileSize`(Items),**`status`=최종 Response.StatusCode**,**`errorCode`=Items["Audit.ErrorCode"]**,"elapsedMs". `/health/*` 미기록. API Key 원문·token payload·물리 경로 미기록.
+  - `/health/live` 200 상시. `/health/ready`: `GetSnapshotAsync`를 짧은 timeout(예: 5초 linked CTS)으로 호출해 **최초 기준정보 로딩을 실제로 유발**하고 결과를 반영한다(확정 결정 14). 성공 또는 stale cache 존재 → 200(본문에 `lastGoodRefreshAt`/`stale` 정보 포함). 최초 로딩 실패/timeout으로 usable cache 없음 → 503. FTP 서버 접근 없음.
 
 - [ ] **Step 1: 실패 테스트**
 
@@ -3034,6 +3275,13 @@ public class ApiBootstrapTests
                 configure?.Invoke(services);
             });
         }
+    }
+
+    private sealed class CountingSource(ReferenceDataSnapshot snapshot) : IReferenceDataSource
+    {
+        public int Calls;
+        public Task<ReferenceDataRaw> ReadAsync(CancellationToken ct)
+        { Calls++; return Task.FromResult(new ReferenceDataRaw(["EQ-001"], [], [], [])); }
     }
 
     private static Factory FactoryWithSnapshot(bool withUsableSnapshot)
@@ -3081,14 +3329,50 @@ public class ApiBootstrapTests
     }
 
     [Fact]
-    public async Task Health_ready_reflects_usable_snapshot()
+    public async Task Health_ready_triggers_initial_load_and_fails_when_unavailable()
     {
+        // ready는 최초 기준정보 로딩을 실제로 유발한다(확정 결정 14). FixedSnapshotView(null)은
+        // GetSnapshotAsync에서 ReferenceDataUnavailable을 throw하므로 ready는 503이고,
+        // 실 ReferenceDataCache라면 ready 호출 시점에 source가 1회 호출된다.
         using var noData = FactoryWithSnapshot(false);
         Assert.Equal(503, (int)(await noData.CreateClient().GetAsync("/health/ready")).StatusCode);
 
         using var withData = FactoryWithSnapshot(true);
         Assert.Equal(200, (int)(await withData.CreateClient().GetAsync("/health/ready")).StatusCode);
     }
+
+    [Fact]
+    public async Task Health_ready_induces_single_initial_load_on_real_cache()
+    {
+        var source = new CountingSource(ReferenceDataSnapshotBuilder.Build(new(["EQ-001"], [], [], [])));
+        using var factory = new Factory(services =>
+        {
+            services.AddSingleton<IReferenceDataSource>(source);
+            services.AddSingleton<IReferenceDataView>(sp => new ReferenceDataCache(
+                sp.GetRequiredService<IReferenceDataSource>(), TimeSpan.FromMinutes(15)));
+        });
+
+        var client = factory.CreateClient();
+        Assert.Equal(200, (int)(await client.GetAsync("/health/ready")).StatusCode);   // 최초 로딩 유발
+        Assert.Equal(1, source.Calls);                                                 // 로딩 실제 실행(단 1회)
+        await client.GetAsync("/health/ready");                                        // TTL 내 재호출
+        Assert.Equal(1, source.Calls);
+    }
+
+    [Fact]
+    public async Task Audit_log_records_failed_request_with_status_and_error_code()
+    {
+        var logs = new CollectingLoggerProvider();
+        using var factory = new Factory(s => s.AddSingleton<ILoggerProvider>(logs));
+        var response = await factory.CreateClient()
+            .GetAsync("/api/v1/equipments/EQ-001/file-types"); // API Key 누락 → 401
+        Assert.Equal(401, (int)response.StatusCode);
+
+        var entry = logs.Entries.Single(e => e.Category == "FileGateway.Audit");
+        Assert.Contains("401", entry.Message);                    // 최종 status
+        Assert.Contains("InvalidApiKey", entry.Message);           // 안정적 오류 분류
+    }
+
 
     [Fact]
     public async Task Reference_data_unavailable_maps_to_503_problem_details()
@@ -3179,8 +3463,8 @@ builder.Services.AddSingleton<ILogQueryService>(sp => LogQueryServiceFactory.Cre
 builder.Services.AddSingleton<IConfigurationQueryService>(sp => ConfigurationQueryServiceFactory.Create(sp));
 
 var app = builder.Build();
+app.UseMiddleware<AuditMiddleware>();       // 최외곽: 최종 status + Audit.ErrorCode를 함께 기록
 app.UseMiddleware<ErrorMappingMiddleware>();
-app.UseMiddleware<AuditMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
 app.MapHealthEndpoints();
 app.MapCatalogEndpoints();          // Task 15 (등록부만 먼저 추가 가능)
@@ -3205,16 +3489,17 @@ public sealed class ErrorMappingMiddleware(RequestDelegate next)
         catch (FileGatewayException ex)
         {
             var (status, title) = FileGatewayErrors.Map(ex.Code);
+            context.Items["Audit.ErrorCode"] = ex.Code;
             if (context.Response.HasStarted) { /* 다운로드 중 오류: 응답 불가, 로그만 */ }
             else await WriteProblem(context, status, ex.Code, title);
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
-            // ClientCancelled: 운영 분류 로그. 새 응답 불가 시 연결 종료에 맡긴다.
-            LogCancelled(context);
+            context.Items["Audit.ErrorCode"] = "ClientCancelled"; // 연결 종료에 맡긴다(새 응답 없음)
         }
         catch (Exception ex)
         {
+            context.Items["Audit.ErrorCode"] = "InternalError";
             context.RequestServices.GetRequiredService<ILogger<ErrorMappingMiddleware>>()
                 .LogError(ex, "unhandled error {Path}", context.Request.Path);
             if (!context.Response.HasStarted)
@@ -4013,6 +4298,8 @@ else
     "Ftp": {
       "UserName": null,
       "Password": null,
+      "Security": "Plain",
+      "AcceptUntrustedCertificates": false,
       "ConnectTimeoutSeconds": 15,
       "ReadTimeoutSeconds": 60,
       "MaxConcurrentGlobal": 50,
@@ -4022,18 +4309,70 @@ else
 }
 ```
 
-비밀(`Authentication:ApiKeys`, `ConnectionStrings:ReferenceData`, `Ftp:UserName/Password`, `DataProtection:KeyDirectory`)은 환경변수/Secret으로만 주입한다고 README에 명시. README에 다음 배포 전 확인 목록 요약 링크(`docs/10-testing-and-deployment.md` "배포 전 필수 확인")와 IIS Hosting Bundle, FTP Passive 포트 안내를 추가한다.
+비밀(`Authentication:ApiKeys`, `ConnectionStrings:ReferenceData`, `Ftp:UserName/Password`, `DataProtection:KeyDirectory`)은 환경변수/Secret으로만 주입한다고 README에 명시. README에 `Ftp:Security`(`Plain | ExplicitTls | ImplicitTls`)·인증서 정책 안내와 배포 전 확인 목록 링크(`docs/10-testing-and-deployment.md` "배포 전 필수 확인"), IIS Hosting Bundle, FTP Passive 포트 안내를 추가한다.
 
-- [ ] **Step 3: 전체 검증 게이트**
+- [ ] **Step 3: 자동화 검증 게이트**
 
 Run: `dotnet build && dotnet test`
 Expected: 빌드 경고 0(TreatWarningsAsErrors), 전체 테스트 PASS
+
+주의: 이 게이트 통과는 **구현 완료**를 의미할 뿐 MVP 완료가 아니다(확정 결정 18). MVP 완료는 Task 21 수동 배포 검증까지 통과해야 한다.
 
 - [ ] **Step 4: 커밋**
 
 ```bash
 git add -A && git commit -m "chore(deploy): key persistence, settings layout and runbook notes"
 ```
+
+### Task 21: 수동 배포 검증 게이트 (MVP 완료 조건)
+
+**Files:**
+- Record: 검증 결과는 배포 PR 본문 또는 릴리스 노트의 체크리스트로 기록한다(신규 설계문서를 만들지 않는다).
+
+**Interfaces:**
+- Consumes: Task 20 산출(배포 가능한 빌드), `docs/10-testing-and-deployment.md` "배포 전 필수 확인" + "MVP 완료 기준"
+- Produces: 운영 유사 환경(Windows Server + IIS + 실제 MSSQL + 실제 파일 서버 FTP/FTPS)에서의 수동 검증 완료. **Task 1~20의 자동화 게이트는 이 Task를 대체하지 않는다**(확정 결정 18). 아래 항목이 전부 체크되기 전까지 MVP를 완료로 선언하지 않는다.
+
+- [ ] **Step 1: 배포 전 필수 확인** (`docs/10-testing-and-deployment.md` 원문 항목 전체)
+
+운영 유사 환경에서 순서대로 확인하고 결과(통과/차단+원인)를 기록한다:
+
+- [ ] HTTPS 인증서/바인딩
+- [ ] IIS ASP.NET Core Hosting Bundle/권한
+- [ ] 여러 `X-Api-Key` 인증/호출자 구분 및 query string key 비허용(실제 요청으로 401 확인)
+- [ ] API Key 신/구 overlap 회전(두 key 동시 활성 → 구 key 폐기)
+- [ ] MSSQL 연결(SP 실행 및 기준정보 로딩)
+- [ ] 설비별 제공 파일 종류 API가 DB 기준정보와 일치하고 FTP 접근 없이 동작
+- [ ] 기준정보 구조 validation/atomic cache 교체/stale fallback/single-flight 동작(잘못된 정의 1건 주입 → 전체 refresh 거부 확인)
+- [ ] 기준정보 refresh가 FTP 실재 검사를 수행하지 않는지 확인(FTP 중단 상태에서 catalog 정상)
+- [ ] 각 파일 서버 21번 제어 연결
+- [ ] IIS FTP SSL 설정 확인(FTP vs FTPS) 및 `Ftp:Security` 설정값 확정
+- [ ] Passive 데이터 포트 범위/방화벽
+- [ ] 실제 파일 목록/다운로드(대표 로그 + Current Configuration + History Snapshot)
+- [ ] 여러 시간 슬롯이 동일 물리 디렉터리를 사용하는 로그 탐색
+- [ ] 디렉터리 부재/파일 서버 장애/부분 FTP 실패 구분(각각 200 빈 목록 / 502 / 전체 실패)
+- [ ] FTP 전체/서버별 동시성 제한(동시 다운로드 부하 시도)
+- [ ] Configuration History 완료 marker 존재 조건과 Snapshot `fileId` 재검증 동작(marker 삭제 → 404)
+- [ ] token 보호 key 재시작 내구성(IIS 재시작 후 기존 fileId 유효) 및 rotation 시 기존 fileId TTL 유지
+- [ ] rootPath 경계/traversal 차단(경계 위반 정의 주입 → refresh 거부)
+- [ ] 로그/Secret에 민감정보 비노출(감사로그·응용로그 샘플 검토)
+
+- [ ] **Step 2: MVP 완료 기준 최종 확인** (`docs/10-testing-and-deployment.md` 원문)
+
+- [ ] Windows Server + IIS 기동
+- [ ] MSSQL 기준정보 조회/검증/캐시
+- [ ] 설비별 제공 파일 종류 조회
+- [ ] 실제 FTP/FTPS 대상 목록/metadata/download
+- [ ] 대표 로그 규칙
+- [ ] Current Configuration 및 Configuration Snapshot History 규칙
+- [ ] API Key/HTTPS
+- [ ] 감사로그/Health Check
+- [ ] 주요 오류 시나리오
+- [ ] 테스트/빌드 성공
+
+- [ ] **Step 3: 차단 항목 처리**
+
+실패/차단 항목은 완료 선언 전에 수정하고 재검증한다. 환경 제약으로 연기가 필요하면 미실행 항목과 이유를 명시한 채 "MVP 완료"가 아닌 "구현 완료, 배포 검증 보류" 상태로 둔다.
 
 ---
 
@@ -4042,7 +4381,6 @@ git add -A && git commit -m "chore(deploy): key persistence, settings layout and
 **1. Spec coverage** (역할별 문서 요구사항 → Task 매핑):
 
 - 파일명 case-insensitive 비교/중복 충돌/casing 보존: Task 2, 10, 12, 13. ✓
-- pathTemplate/filePattern/metadata 규칙(스롯≠디렉터리, 디렉터리 부재 0개, 부분 실패 전체 실패, 무recursive): Task 8, 10. ✓
 - 시간 규칙([from,to), 기본값, MaxQueryRange≥2일, Daily 00:00, Continuous 거부/시간없음 null): Task 8, 10, 16. ✓
 - fileId(24h, resourceKind purpose, 재해석, marker 재확인, 오류 구분): Task 4, 11, 13, 18. ✓
 - continuationToken(stateless, 바인딩, limit 변경, 400 통합): Task 11, 13, 16, 17. ✓
@@ -4054,8 +4392,26 @@ git add -A && git commit -m "chore(deploy): key persistence, settings layout and
 - FTP Adapter 격리/오류 매핑/동시성 한도: Task 5. ✓
 - 키 내구성/rotation: Task 4(동일 key ring 재검증), 20(파일 persist + 재시작 테스트). ✓
 
-갭 확인: `to`-only 거부/`attr.` 필터 case-sensitive/glob 파일명 한정 등 문서 단위테스트 목록의 잔여 항목은 각 Task 테스트에 포함되어 있다(EffectiveRangeTests, LogQueryServiceTests 등). IIS 실서버 검증(Passive port, FTPS SSL)은 문서상 배포 단계 확인 목록으로 README에서 안내(Task 20) — 자동화 범위 밖임을 명시.
+갭 확인: `to`-only 거부/`attr.` 필터 case-sensitive/glob 파일명 한정 등 문서 단위테스트 목록의 잔여 항목은 각 Task 테스트에 포함되어 있다(EffectiveRangeTests, LogQueryServiceTests 등). IIS 실서버 검증은 Task 21 수동 게이트로 MVP 완료 조건에 포함했다(자동화 범위 밖임을 명시).
 
 **2. Placeholder scan**: Task 11 `ResolveSingleAsync`, Task 13 서비스 테스트의 `[Fact]` 주석 본문, Task 12/13/17 "구현" 절의 산문 지시는 코드 블록 대신 시나리오를 서술한 형태다. 실행자는 Task 11의 `ListAsync` 전체 구현 패턴과 동일 구조로 작성한다 — 두 service의 공개 시그니처와 분기 규칙은 Interfaces에 완전히 명시되어 있으므로 해석의 여지가 없다. 그 외 "TBD/TODO" 없음.
 
 **3. Type consistency**: `PagedResult<T>`/`MatchCount`/`SingleFileMatch`는 Task 11에서 Core(`FileGateway.Core.Queries`)에 두고 Logs/Configurations/Api가 공유한다(Task 12 Interfaces에 명시). `EffectiveRange`는 Logs Internal → Configurations도 사용하므로 Task 13 이전에 `FileGateway.Core.Time`으로 승격한다(SiteTime과 함께). `FakeFileAccess.TruncateAfterOpen`(Task 18)은 Task 3 헬퍼에 추가한다. 이 두 조정은 Task 12/13/18의 Consumes에 반영했다.
+
+**4. PR 리뷰 반영 (2026-08-23, PR #1)**:
+
+| 리뷰 항목 | 반영 |
+|---|---|
+| ready 최초 로딩 미유도(P1) | 확정 결정 14, Task 14 ready가 `GetSnapshotAsync` 호출(5s timeout)·테스트 2건 추가 |
+| FTPS 구성 누락(P1) | 확정 결정 13, `FtpSecurity`/`AcceptUntrustedCertificates` + `ToFtpConfig` 매핑 테스트, appsettings/README 반영, Task 21에서 실제 FTPS 검증 |
+| offset 없는 입력의 Seoul 해석 불일치(P1) | `SiteTime.Parse` 재작성(명시적 offset 판별), 파생 Theory 테스트 4케이스 |
+| 감사 실패 status/errorCode 경로(P2) | 확정 결정 15, 순서 `Audit → ErrorMapping → ApiKey`, ErrorMapping이 `Audit.ErrorCode` 기록, 실패 요청 감사 테스트 |
+| 계약 잠금의 역할별 문서 미반영(P2) | Task 0(문서별 반영 표)를 모든 구현 Task의 선행 조건으로 추가. `attr.` vs `attribute.` 표기 충돌은 계획 본문에서 설계문서 표기로 정렬 |
+| MVP 완료 게이트(P2) | 확정 결정 18 + Task 21 수동 배포 검증 게이트(체크리스트 전체), Task 20은 "구현 완료"로 한정 |
+| MSSQL `latest` 태그(P3) | 확정 결정 17, CU 태그 고정 |
+| FTP client 조기 dispose(P1, inline) | `OpenReadAsync`가 client/lease를 반환 스트림에 소유, 실패 시 명시적 정리 |
+| 동시성 permit 조기 해제(P1, inline) | `FtpLease` 도입 — 스트림 dispose 시 해제, permit 유지 테스트 추가 |
+| 로그 중복 판정 scope(P1, inline) | 디렉터리(동일 탐색 결과) 단위로 한정, 교차 디렉터리 동일 basename 정상 테스트 |
+| stale cache refresh 대기(P1, inline) | TTL 만료 시 stale 즉시 반환 + single-flight background refresh, 단위테스트 |
+| History 하한 경계(P2, inline) | from이 자정이 아니면 그날 자정 Set 제외, 테스트 |
+| 연결 후 FTP 명령 오류 매핑(P1, inline) | `WrapAsync`/`Classify`로 전 명령 공통 매핑, MLST 550 → 부재 처리 |
