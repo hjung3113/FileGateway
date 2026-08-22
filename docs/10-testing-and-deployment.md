@@ -15,7 +15,8 @@
   - `from`만 있음 → `[from, from + 2일)`
   - `to`만 있음 → `InvalidRequest`
   - `from`/`to` 모두 있음 → 지정 범위
-  - 최대 조회 기간 초과 → `InvalidRequest`
+  - `Logs.MaxQueryRange` 초과 → `InvalidRequest`
+  - `Logs.MaxQueryRange`가 2일 미만이면 설정 검증 실패
 - Daily timestamp의 Site local `00:00` 처리
 - Continuous timestamp가 없는 경우 `null` 처리
 - attribute filter의 case-sensitive 일치
@@ -27,8 +28,11 @@
 - continuation token 유지 중 `limit` 변경 허용
 - direct download multiple-match 판단
 - Current Configuration과 History 분리
+- Current Configuration `fileName ASC` 정렬
 - Configuration History 정렬
+- `Configurations.HistoryMaxQueryRange` 초과 → `InvalidRequest`
 - History 완료 조건/marker 판정
+- 정규화 경로의 `rootPath` 경계 검증 및 traversal 차단
 
 `IFileAccess` fake/stub으로 Resolver를 독립 테스트한다.
 
@@ -39,6 +43,7 @@
 - 시작 후 기준정보 미확보 상태의 `ReferenceDataUnavailable`
 - FTP 목록/Stat/OpenRead
 - FTP timeout/인증/경로 오류
+- root 밖 경로/`..` traversal 정의의 원격 접근 차단
 - Continuous 파일의 시작 시점 크기 제한
 - Continuous 다운로드 중 growth/truncate 처리
 - Current Configuration 변경 파일 조회/다운로드
@@ -53,18 +58,24 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 
 - API Key 인증
 - 로그 목록/페이지네이션
+- Log 목록 응답이 `{ items, continuationToken }` envelope인지 검증
+- 빈 Log 결과가 `items=[]`, `continuationToken=null`인지 검증
 - Configuration Current/History API 분리
+- Current 응답이 단순 배열이며 `fileName ASC`인지 검증
 - History `from`/`to` 필수 검증
+- History 최대 조회 기간 검증
+- History 목록 응답이 `{ items, continuationToken }` envelope인지 검증
 - 페이지 중 조회조건 변경 거부 및 `limit` 변경 허용
 - 페이지 사이 원격 파일 집합 변경 시 완전 snapshot을 보장하지 않는 동작
-- 공통 `/files/{fileId}`가 `fileId`, `fileName`, `size` 최소 metadata만 반환하는지 검증
-- 파일 정보/HEAD의 실제 원격 stat 수행
+- 공통 `GET /files/{fileId}`가 `fileId`, `fileName`, `size` 최소 metadata만 반환하고 실제 원격 stat을 수행하는지 검증
+- `/files/{fileId}` HEAD endpoint가 MVP API에 존재하지 않는지 검증
 - fileId 다운로드
 - 조건 기반 직접 다운로드
 - Problem Details 기반 공통 오류 body와 안정적인 `code`, `traceId`
 - 오류 응답에 FTP host/path, stack trace 등 내부정보 비노출
 - streaming/cancel 및 `ClientCancelled` 분류
 - 다운로드 `Content-Length`, `Content-Type`, `Content-Disposition`
+- `Content-Disposition` filename의 header-safe 처리
 - 물리 host/path 비노출
 
 ## 배포 구조
@@ -84,7 +95,9 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 - 공통 비민감 설정: `appsettings.json`
 - 환경별 비민감 설정: `appsettings.<Environment>.json`
 - API Key/FTP credential/DB credential/token signing key: Secret/환경변수 등 별도 공급
-- timeout/cache TTL/concurrency limit/로그 최대 조회 기간/continuationToken TTL: 운영 설정 가능
+- timeout/cache TTL/concurrency limit/continuationToken TTL: 운영 설정 가능
+- `Logs.MaxQueryRange`: 운영 설정, 최소 2일 이상이어야 함
+- `Configurations.HistoryMaxQueryRange`: 로그 조회 기간과 독립적인 운영 설정
 
 ## 배포 전 필수 확인
 
@@ -97,6 +110,7 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 - 실제 파일 목록/다운로드
 - Configuration History 완료 marker/조건 동작
 - token signing key rotation 시 기존 fileId TTL 유지
+- rootPath 경계/traversal 차단
 - 로그/Secret에 민감정보 비노출
 
 ## MVP 완료 기준
