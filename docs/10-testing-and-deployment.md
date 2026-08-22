@@ -14,7 +14,8 @@
 - timestamp/subtype/attributes 매핑
 - Hourly/Daily/Continuous 필터
 - 조회 범위로 필요한 디렉터리만 계산하고 무제한 recursive scan하지 않음
-- 동일 디렉터리가 여러 슬롯에서 계산될 때 중복 탐색 제거
+- 여러 논리 시간 슬롯이 동일 디렉터리를 계산하는 구조 허용 및 동일 디렉터리 중복 탐색 제거
+- 한 디렉터리 안의 여러 시간대 파일을 MetadataRule로 구분해 범위 필터 적용
 - Hourly/Daily 로그 시간 범위 규칙
   - `from`/`to` 없음 → 최근 24시간
   - `from`만 있음 → `[from, from + 2일)`
@@ -35,11 +36,12 @@
 - attribute filter의 case-sensitive 일치
 - `cardinality`의 슬롯 단위 검증
 - 후보 파일 metadata 파싱 실패 → `FileDefinitionConflict`
-- 계산된 목록 디렉터리 없음 → 해당 슬롯 결과 0개
-- `fileId` 서명/만료/논리 identity/resourceKind
+- 계산된 목록 디렉터리 없음 → 해당 탐색 결과 0개
+- `fileId` 보호/만료/논리 identity/resourceKind
+- token payload가 클라이언트에 노출되지 않는 opaque 보호
 - Configuration Snapshot `fileId` 재해석 시 완료 marker 재확인
 - Snapshot 파일이 남아 있어도 marker가 사라졌으면 `FileNotFound`
-- signing key rotation 중 이전 key로 발급된 유효 `fileId` 검증
+- 보호 key rotation 중 이전 key로 발급된 유효 `fileId` 검증
 - continuation token의 조회조건 종속성/TTL/stateless cursor
 - continuation token 유지 중 `limit` 변경 허용
 - direct download multiple-match 판단
@@ -73,15 +75,18 @@
 - FTP timeout/인증/경로 오류
 - 목록 대상 디렉터리 부재와 연결/인증/프로토콜 장애 구분
 - 디렉터리 부재 시 목록 결과 0개 처리
+- 여러 디렉터리 조회 중 하나의 실제 FTP I/O 오류가 발생하면 부분 결과를 반환하지 않고 요청 전체 실패
 - FTP 서버 wildcard 기능에 의존하지 않고 목록 후 case-insensitive glob 후보 판정
 - case-insensitive 중복 파일명 발견 시 `FileDefinitionConflict`
 - root 밖 경로/`..` traversal 정의의 원격 접근 차단
+- FileGateway 전체 FTP 동시성 한도와 서버별 한도 적용
 - Continuous 파일의 시작 시점 크기 제한
 - Continuous 다운로드 중 growth/truncate 처리
 - Current Configuration 변경 파일 조회/다운로드
 - 완료 marker가 없는 Configuration Snapshot Set 제외
 - 완료 marker가 있는 Snapshot Set 포함 및 marker 내용 미사용
 - Snapshot `fileId` 발급 후 marker 제거 시 metadata/download가 `FileNotFound`
+- IIS/애플리케이션 재시작 후 재시작 전에 발급된 유효 `fileId` 검증
 
 Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적 replace 여부, 생산 중 내용 일관성은 FileGateway 테스트 책임에 포함하지 않는다. FileGateway는 이미 저장소에 보이는 파일을 읽는 동작과 외부 변경으로 발생한 I/O 실패 처리를 검증한다.
 
@@ -90,6 +95,8 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 ### API Test
 
 - `X-Api-Key` header 인증
+- 여러 활성 API Key가 각각 대응 `callerId`로 인증/감사 추적되는지 검증
+- 신/구 API Key overlap 활성화 가능 여부 검증
 - API Key query string 전달을 인증 수단으로 허용하지 않음
 - API Key 누락/오류 모두 `401 InvalidApiKey`
 - 로그 목록/페이지네이션
@@ -134,8 +141,9 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 
 - 공통 비민감 설정: `appsettings.json`
 - 환경별 비민감 설정: `appsettings.<Environment>.json`
-- API Key/FTP credential/DB credential/token signing key: Secret/환경변수 등 별도 공급
-- timeout/cache TTL/concurrency limit/continuationToken TTL: 운영 설정 가능
+- API Key 목록/FTP credential/DB credential/token 보호 key: Secret/환경변수 등 별도 공급
+- token 보호 key는 IIS 프로세스 재시작으로 소실되지 않는 방식으로 공급/보관
+- timeout/cache TTL/FTP 전체 동시성/서버별 동시성/continuationToken TTL: 운영 설정 가능
 - `Logs.MaxQueryRange`: 운영 설정, 최소 2일 이상이어야 함
 - `Configurations.HistoryMaxQueryRange`: 로그 조회 기간과 독립적인 운영 설정
 
@@ -143,7 +151,8 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 
 - HTTPS 인증서/바인딩
 - IIS ASP.NET Core Hosting Bundle/권한
-- `X-Api-Key` 인증 동작 및 query string key 비허용
+- 여러 `X-Api-Key` 인증/호출자 구분 및 query string key 비허용
+- API Key 신/구 overlap 회전
 - MSSQL 연결
 - 기준정보 구조 validation/atomic cache 교체/stale fallback/single-flight 동작
 - 기준정보 refresh가 FTP 실재 검사를 수행하지 않는지 확인
@@ -151,9 +160,11 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 - IIS FTP SSL 설정(FTP vs FTPS)
 - Passive 데이터 포트 범위/방화벽
 - 실제 파일 목록/다운로드
-- 디렉터리 부재/파일 서버 장애 구분
+- 여러 시간 슬롯이 동일 물리 디렉터리를 사용하는 로그 탐색
+- 디렉터리 부재/파일 서버 장애/부분 FTP 실패 구분
+- FTP 전체/서버별 동시성 제한
 - Configuration History 완료 marker 존재 조건과 Snapshot `fileId` 재검증 동작
-- token signing key rotation 시 기존 fileId TTL 유지
+- token 보호 key 재시작 내구성 및 rotation 시 기존 fileId TTL 유지
 - rootPath 경계/traversal 차단
 - 로그/Secret에 민감정보 비노출
 
