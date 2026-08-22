@@ -87,8 +87,19 @@ GET /api/v1/configurations/current?equipmentId=...&configurationType=...
 - 개별 파일을 `subtype`/`attributes`로 세분화하지 않음
 - 시간 필터를 사용하지 않음
 - Current를 History 결과에 포함하지 않음
+- 결과는 개별 Current Configuration File들의 배열
+- 결과가 없으면 `200 OK`와 빈 배열
+- Current는 `limit`/`continuationToken` 없이 현재 파일 전체를 한 번에 반환
 
-Current 응답 형식, Current File의 개별 logical identity, Current 직접 다운로드의 다중 파일 처리, Current pagination 여부는 Q70~Q72/Q74에서 확정한다.
+Current item의 핵심 필드:
+
+- `fileId`
+- `fileName`
+- `equipmentId`
+- `configurationType`
+- `size`
+
+Current Configuration File의 logical identity는 `equipmentId + configurationType + fileName`이다. `fileName`이 바뀌면 다른 논리 파일로 취급한다.
 
 ### Current Configuration 직접 다운로드
 
@@ -96,7 +107,13 @@ Current 응답 형식, Current File의 개별 logical identity, Current 직접 �
 GET /api/v1/configurations/current/download?equipmentId=...&configurationType=...
 ```
 
-동일 `configurationType`에 여러 Current 파일이 존재할 수 있음이 확인되어, 이 endpoint의 0/1/N 처리 규칙은 Q72에서 재확정한다.
+Current 조회와 동일한 Resolver 규칙을 사용한다.
+
+- 0개 일치 → `FileNotFound`
+- 1개 일치 → 해당 Current Configuration File 다운로드
+- 2개 이상 일치 → `MultipleFilesMatched` (409)
+
+여러 Current 파일이 있는 경우 목록에서 원하는 파일의 `fileId`를 얻은 뒤 공통 `/api/v1/files/{fileId}/download`를 사용한다. 직접 다운로드 endpoint에 `fileName`이나 Configuration 전용 subtype 조건을 추가하지 않는다.
 
 ### Configuration History 목록
 
@@ -173,7 +190,7 @@ GET /api/v1/files/{fileId}/download
 - 다운로드 시 현재 기준정보를 다시 조회하여 논리 identity의 현재 물리 위치를 해석
 - 물리 서버/경로가 변경돼도 같은 논리 파일이 새 위치에 존재하면 기존 `fileId`로 정상 접근
 
-논리 identity는 현재 확정된 범위에서 다음 값을 사용한다.
+논리 identity는 다음 값을 사용한다.
 
 ```text
 Log:
@@ -181,11 +198,14 @@ Log:
 
 Configuration Snapshot File:
   equipmentId + configurationType + snapshotTimestamp + fileName
+
+Current Configuration File:
+  equipmentId + configurationType + fileName
 ```
 
-Current Configuration File은 하나의 `configurationType` 아래 여러 파일이 가능하므로 개별 identity 규칙을 Q71에서 확정한다.
-
 `subtype`/`attributes`는 파일을 다시 식별하기 위한 핵심 identity로 사용하지 않는다.
+
+Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하지 않는다. 같은 논리 identity의 파일 내용이 변경돼도 다운로드 시점의 현재 내용을 제공한다. 파일명이 바뀌면 다른 논리 파일이므로 기존 `fileId`로 새 이름의 파일을 가리키지 않는다.
 
 다운로드 응답은 스트림 시작 직전에 실제 파일 크기를 확인하고 그 값을 `Content-Length`로 사용한다.
 
