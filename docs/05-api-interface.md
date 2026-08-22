@@ -27,9 +27,11 @@ GET /api/v1/logs
 - `limit` (선택)
 - `continuationToken` (선택)
 
-`equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자다.
+`equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자이며 하나의 FileGateway 배포 범위 안에서 유일하다.
 
-`from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준이다.
+`from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준 반개구간 `[from, to)`다. `from`은 포함하고 `to`는 제외한다.
+
+Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다.
 
 응답 item의 핵심 필드:
 
@@ -101,4 +103,4 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 
 서버 재배치, 물리 경로 변경, 향후 Site 변경이 API 계약 변경으로 이어지지 않아야 한다.
 
-`Configuration File`은 로그가 아니므로 `/api/v1/logs`에 포함할지 여부를 여기서 암묵적으로 가정하지 않는다. 별도 API 경계는 설계 인터뷰에서 확정한다.
+`Configuration File`은 MVP 제공 대상이지만 로그가 아니므로 `/api/v1/logs`에 포함하지 않는다. Configuration 전용 API 경계는 설계 인터뷰에서 확정한다.
