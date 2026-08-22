@@ -6,14 +6,21 @@
 - FileGateway는 Stored Procedure로 기준정보를 조회한다.
 - DB 테이블 구조는 애플리케이션/API에 노출하지 않는다.
 
+단일 SP `FileGateway_GetReferenceData`가 다음 순서로 4개 result set을 반환한다.
+
+1. `Equipments`: `EquipmentId` (`ServerId` 아님)
+2. `Servers`: `ServerId`, `Host`, `RootPath`
+3. `LogDefinitions`: `EquipmentId`, `LogType`, `ServerId`, `GenerationType`, `PathTemplate`, `FilePattern`, `Cardinality`, `MetadataMode`, `MetadataPattern`, `MetadataMappings`
+4. `ConfigurationDefinitions`: `EquipmentId`, `ConfigurationType`, `ServerId`, `CurrentPathTemplate`, `CurrentFilePattern`, `HistoryPathTemplate`, `HistoryFilePattern`, `HistoryMarkerPathTemplate`
+
+`MetadataMappings`은 JSON 배열 `[{"group":"...","target":"...","format":"..."}]`이며 `format`은 선택이다. SP/스키마 스크립트는 `db/`에 테스트·개발용 계약 구현으로 제공하고 운영 DB 내부 구조는 이 계약만 지키면 자유롭다.
+
 ## SP가 제공해야 하는 논리 정보
 
 ### 서버/설비 매핑
 
-- equipmentId
-- serverId
-- host 또는 서버 연결에 필요한 비민감 식별정보
-- rootPath
+- `Equipments` result set: `EquipmentId`
+- `Servers` result set: `ServerId`, `Host`, `RootPath`
 
 `equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자이며 하나의 FileGateway 배포 범위 안에서 유일하다.
 
@@ -21,12 +28,16 @@
 
 ### 로그 정의
 
-- logType
-- generationType: Hourly / Daily / Continuous
-- pathTemplate
-- filePattern
-- cardinality
-- metadata mode/pattern/mapping
+- `EquipmentId`
+- `LogType`
+- `ServerId`
+- `GenerationType`: `Hourly | Daily | Continuous`
+- `PathTemplate`
+- `FilePattern`
+- `Cardinality`
+- `MetadataMode`
+- `MetadataPattern`
+- `MetadataMappings`
 
 하나의 FileGateway 배포 범위에서 `equipmentId + logType`은 정확히 하나의 로그 정의를 식별한다. 동일 조합의 중복 정의는 기준정보 오류다.
 

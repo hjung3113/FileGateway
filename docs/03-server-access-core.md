@@ -6,15 +6,19 @@
 
 ## 핵심 계약
 
-개념적으로 `IFileAccess`는 다음 기능을 제공한다.
+`IFileAccess`는 다음 구체 시그니처를 제공한다.
 
-- 목록 조회
-- 존재 여부 확인
-- 파일 크기/기본 메타데이터 조회
-- 읽기 스트림 열기
-- 요청 취소 전달
+```csharp
+interface IFileAccess
+{
+    Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string relativeDirectory, CancellationToken ct);
+    Task<long> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct);
+    Task<bool> FileExistsAsync(FileServerConnection server, string relativePath, CancellationToken ct);
+    Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string relativePath, CancellationToken ct);
+}
+```
 
-구체적인 메서드 이름/시그니처는 구현 계획에서 확정한다.
+`StatFileAsync`는 파일 부재 시 `FileAccessException(FileAccessError.FileNotFound)`를 던지고, `FileExistsAsync`는 파일 부재 시 `false`를 반환한다. 전송 오류는 두 메서드 모두 예외로 전달한다. 모든 메서드는 `CancellationToken`으로 요청 취소를 전달한다.
 
 파일 크기는 조회한 시점의 관측값이다. Continuous 로그나 Current Configuration처럼 변경 가능한 파일은 이후 크기가 달라질 수 있다.
 
@@ -39,7 +43,13 @@ FluentFTP는 구현 세부사항으로 `FileGateway.Infrastructure` 안에 격�
 - FluentFTP 예외/응답 모델을 그대로 상위 계층에 전달하지 않고 `IFileAccess`의 공통 원격 I/O 의미로 변환한다.
 - FTP 서버 wildcard 동작, 경로 표현 등 라이브러리/프로토콜별 차이가 도메인 규칙에 새지 않게 한다.
 - 향후 다른 프로토콜 Adapter 도입 시 기존 feature 계층을 변경하지 않는 것을 목표로 한다.
-- 구체 패키지 버전은 구현 시점의 .NET 지원 범위와 유지보수 상태를 확인해 고정한다.
+- `FluentFTP` 버전은 `csproj`에 고정한다.
+
+FTP/FTPS 옵션 계약은 `FtpOptions.Security` = `Plain | ExplicitTls | ImplicitTls`(기본 `Plain`)와 `FtpOptions.AcceptUntrustedCertificates`(기본 `false`)를 사용한다. 두 값은 `FtpConfig`의 `EncryptionMode`와 인증서 검증 정책에 반영한다.
+
+`FtpConcurrencyLimiter`의 `Task<FtpLease> AcquireAsync(FileServerConnection server, CancellationToken ct)`는 FileGateway 전체와 파일 서버별 permit을 함께 확보하고, `FtpLease : IAsyncDisposable`의 `DisposeAsync`로 해제한다. 단기 FTP 명령은 `Task<T> RunAsync<T>(FileServerConnection server, Func<CancellationToken, Task<T>> op, CancellationToken ct)`로 lease를 명령 완료까지 유지한다. `OpenReadAsync`가 반환하는 스트림은 FTP client와 lease를 소유하며 `DisposeAsync`에서 함께 해제하므로 다운로드가 진행되는 동안 동시성 permit을 유지한다.
+
+연결 이후 FTP 명령 오류도 `ConnectAsync`와 동일한 `FileAccessException` 매핑으로 변환한다. 실제 FTPS 연동과 인증서 검증은 Task 21 수동 게이트에서 확인한다.
 
 MVP 전제:
 

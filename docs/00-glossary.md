@@ -57,7 +57,7 @@ Hourly/Daily 및 Configuration History의 시간 기반 조회에 적용하는 �
 _Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현, Continuous에 시간 범위를 적용
 
 **File Name Comparison**:
-MVP Windows/IIS FTP 환경에서 `fileName` 관련 비교에 사용하는 case-insensitive 규칙이다. `filePattern` matching, logical identity, 정렬, pagination cursor에 동일하게 적용하며 실제 파일명의 casing은 응답에 그대로 보존한다. `subtype`/`attributes` 비교는 이 규칙과 무관하게 case-sensitive다.
+MVP Windows/IIS FTP 환경에서 `fileName` 관련 비교에 사용하는 case-insensitive 규칙이다. 구현은 `StringComparer.OrdinalIgnoreCase`로 단일화하며 `filePattern` matching, logical identity, 정렬, pagination cursor에 동일하게 적용한다. 실제 파일명의 casing은 응답에 그대로 보존하며 `subtype`/`attributes` 비교는 이 규칙과 무관하게 case-sensitive다.
 _Avoid_: 위치마다 다른 파일명 대소문자 규칙
 
 **Logical File Identity**:
@@ -77,7 +77,15 @@ _Avoid_: query token, physical path identifier
 _Avoid_: offset/page 번호, 서버 세션에 전체 결과를 저장하는 pagination token
 
 **Token Codec**:
-`fileId`와 `continuationToken`의 서명/검증, opaque encoding/decoding, TTL 처리를 담당하는 공통 기계적 계약이다. Log/Configuration identity나 pagination 의미는 해석하지 않는다.
+`fileId`와 `continuationToken`의 서명/검증, opaque encoding/decoding, TTL 처리를 담당하는 공통 기계적 계약이다. ASP.NET Core DataProtection으로 payload JSON을 purpose protector로 보호한 뒤 Base64Url로 인코딩한다. payload에는 `exp`(`IssuedAt+Ttl`)를 포함하고 decode 시 만료/변조/형식 오류를 `Expired`/`Invalid`로 구분한다. token 종류마다 독립된 purpose 문자열을 사용하며 다음 값을 고정한다.
+
+- Logs fileId: `fg.fileid.log`
+- Logs cursor: `fg.page.log`
+- ConfigurationCurrent fileId: `fg.fileid.cfgcurrent`
+- ConfigurationSnapshot fileId: `fg.fileid.cfgsnapshot`
+- History cursor: `fg.page.cfghistory`
+
+key ring은 DataProtection가 관리하며 자동 rotation을 사용한다. 기본 수명은 90일로 `fileId` TTL 24시간 이상이어야 하고, IIS 배포에서는 재시작 내구성을 위해 key ring을 파일 시스템에 persist한다. Log/Configuration identity나 pagination 의미는 해석하지 않는다.
 _Avoid_: 공통 token 계층에 Log/Configuration 업무 규칙을 넣는 것
 
 **Reference Data Snapshot**:

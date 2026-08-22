@@ -67,6 +67,8 @@ EquipmentConfigurationDefinition
 - `currentRule`: 현재 Configuration File 집합의 위치/후보 패턴을 해석하는 규칙
 - `historyRule`: 날짜별 히스토리 디렉터리/파일 패턴, `snapshotTimestamp`, Snapshot Set 완료 marker 이름/위치를 해석하는 규칙
 
+`currentRule.pathTemplate`과 `historyRule.pathTemplate`은 `/`로 구분하는 상대 경로와 리터럴, `{yyyy}` `{MM}` `{dd}` `{HH}` 토큰을 사용한다. 토큰은 논리 슬롯의 Site local(`Asia/Seoul`) 구성요소로 치환하며 토큰 없는 고정 경로도 허용한다. `..`, rooted 경로, `:`는 금지한다.
+
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
 ## 파일명 비교 규칙
@@ -135,6 +137,7 @@ Current 조회와 같은 Resolver 규칙을 사용한다.
 - timezone 없는 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 - 시간 범위는 `[from, to)` 규칙을 사용한다.
 - History 조회에서는 `from`과 `to`를 모두 필수로 요구한다. 전체 히스토리 또는 임의 기본 기간을 암묵적으로 조회하지 않는다.
+- `[from, to)` 경계는 `snapshotTimestamp`에 정확히 적용한다. `from`이 자정이 아니면 그날 Site local 자정에 생성된 Snapshot Set은 제외한다.
 - History 조회에는 설정 가능한 `Configurations.HistoryMaxQueryRange`를 적용하고 초과 요청은 `InvalidRequest`로 처리한다.
 - History API는 Snapshot Set을 별도 중첩 객체로 만들지 않고 개별 Snapshot File을 반환하며, 같은 시점의 파일들은 동일한 `snapshotTimestamp`로 구분할 수 있다.
 - Snapshot File용 `fileId`는 `equipmentId + configurationType + snapshotTimestamp + fileName`의 논리 identity로 특정 파일 하나를 가리키며 `fileName`은 case-insensitive 비교한다.

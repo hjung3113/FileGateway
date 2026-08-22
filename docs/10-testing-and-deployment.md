@@ -137,15 +137,16 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 
 ## 오픈소스 테스트 도구
 
-자동 통합테스트 환경 구성에는 **Testcontainers for .NET** 사용을 우선 검토한다.
+자동 통합테스트 환경 구성에는 **Testcontainers.MsSql**을 사용한다.
 
 - MSSQL 등 외부 의존성을 테스트 실행 단위로 격리하는 데 사용한다.
+- FTP 테스트 서버는 테스트 전용 `FubarDev.FtpServer`를 사용한다.
 - FTP/FTPS 테스트 컨테이너를 사용할 경우에도 `IFileAccess` 계약과 FluentFTP Adapter 동작 검증에 한정한다.
 - 컨테이너 환경이 실제 Windows Server + IIS FTP/FTPS의 SSL 설정, Passive port, 방화벽/NAT 동작을 완전히 대체한다고 가정하지 않는다.
 - 최종 MVP 완료 조건에는 운영과 유사한 Windows Server/IIS + 실제 MSSQL/FTP 연동 검증이 계속 포함된다.
-- Testcontainers 패키지/이미지 버전은 구현 시점에 고정한다.
+- Testcontainers MSSQL 이미지는 `latest`를 사용하지 않고 실행 시점의 구체 CU 태그로 고정한다(예: `mcr.microsoft.com/mssql/server:2022-CU17-ubuntu-22.04`). `Testcontainers.MsSql`, `FubarDev.FtpServer`, `FluentFTP` 패키지 버전은 각 `csproj`에 고정된 값으로 기록한다.
 
-Unit/API 테스트 프레임워크는 .NET 기본 테스트 생태계의 단순한 구성을 우선하며, 추가 mocking/assertion framework는 실제 필요가 확인될 때만 도입한다.
+Unit/API 테스트 프레임워크는 .NET 기본 테스트 생태계의 단순한 구성을 우선하며, 추가 mocking/assertion framework는 도입하지 않는다.
 
 ## 배포 구조
 
@@ -192,6 +193,8 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 - 로그/Secret에 민감정보 비노출
 
 ## MVP 완료 기준
+
+Task 1~20의 자동화 게이트(`dotnet build && dotnet test`)는 구현 완료 조건일 뿐 MVP 완료가 아니다. MVP 완료는 Task 21의 수동 배포 검증 체크리스트(10 문서 "배포 전 필수 확인" + "MVP 완료 기준")까지 통과해야 한다.
 
 `01-requirements.md`의 MVP 기능을 충족하고 아래를 검증해야 완료로 본다.
 
