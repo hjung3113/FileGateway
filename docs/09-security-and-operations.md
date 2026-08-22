@@ -50,6 +50,13 @@ MVP는 HTTPS + API Key를 사용한다.
 - 기준정보 정의 삭제: 해당 `*DefinitionNotFound`
 - 기준정보는 정상이나 실제 파일 없음: `FileNotFound`
 
+### token signing key rotation
+
+- 새 token은 현재(active) signing key로만 발급한다.
+- key 교체 후에도 이미 발급된 `fileId`가 TTL 24시간 동안 갑자기 무효화되지 않도록 이전 검증 key를 함께 유지한다.
+- 이전 key는 그 key로 발급된 `fileId`의 최대 TTL이 모두 경과한 뒤 제거할 수 있다.
+- key 식별/선택 방식은 구현 세부사항이며 외부 API에는 노출하지 않는다.
+
 ### continuationToken
 
 - 목록 페이지네이션을 위한 stateless cursor
@@ -97,6 +104,10 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 - 스트리밍 시작 후 FTP/I/O 오류는 이미 시작된 응답을 성공 처리하거나 JSON 오류로 바꾸지 않고 스트림/연결을 중단한다.
 - 클라이언트 연결 종료/요청 취소는 `ClientCancelled`로 분류하고 파일 서버 장애나 streaming I/O failure와 구분한다.
 - 다운로드 기본 Content-Type은 `application/octet-stream`이며 논리 `fileName`을 attachment 파일명으로 사용한다.
+
+FileGateway는 이미 저장소에 보이는 파일을 읽어 제공하는 시스템이다. Current Configuration 및 Hourly/Daily 로그의 생산 방식, 원자적 replace 여부, 쓰기 중 읽기 일관성은 생산 시스템 책임이며 FileGateway는 이를 위해 snapshot 복사, 파일 잠금, 버전 고정 또는 별도 생산 완료 판정을 수행하지 않는다. 외부 변경으로 읽기 길이 불일치나 I/O 실패가 발생하면 일반 streaming failure로 처리한다.
+
+Configuration History는 예외적으로 History 생산자가 제공하는 **완료 조건/marker가 확인된 Snapshot Set만 탐색 대상**으로 삼는다. 이는 snapshot 생성 책임을 FileGateway가 가진다는 뜻이 아니라, 불완전한 복사 결과를 읽지 않기 위한 조회 조건이다.
 
 ## 장애/timeout
 
