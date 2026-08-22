@@ -166,7 +166,7 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 - `to`만 있음: 지원하지 않으며 `InvalidRequest`
 - `from`, `to` 모두 있음: 지정한 `[from, to)`
 
-시간 기반 로그 조회에는 설정 가능한 최대 조회 기간을 적용한다. 구체적인 기간 값은 운영 설정으로 두고, 요청 범위가 이를 초과하면 `InvalidRequest`로 처리한다.
+시간 기반 로그 조회에는 설정 가능한 `Logs.MaxQueryRange`를 적용한다. 요청 범위가 이를 초과하면 `InvalidRequest`로 처리한다. `from` 단독 요청이 항상 2일 범위를 의미하므로 `Logs.MaxQueryRange` 설정은 **최소 2일 이상**이어야 하며 애플리케이션 시작 시 설정값을 검증한다.
 
 Continuous 로그는 시간 범위와 별도로 현재 파일을 포함한다.
 
