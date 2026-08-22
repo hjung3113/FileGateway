@@ -48,7 +48,9 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 - isContinuous
 - attributes
 
-시간 기반 로그 목록의 기본 정렬은 `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`다. `timestamp=null`인 Continuous 항목의 목록 내 위치는 별도 API 응답 계약으로 확정한다.
+`size`는 목록/metadata 조회 시점의 관측값이다. Continuous 로그나 Current Configuration처럼 변경 가능한 파일은 이후 다운로드 시점 크기와 다를 수 있다.
+
+시간 기반 로그 목록의 기본 정렬은 `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`다. `equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
 
 목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
 
@@ -105,8 +107,15 @@ GET /api/v1/files/{fileId}
 HEAD /api/v1/files/{fileId}
 ```
 
-- GET: 현재 존재 여부를 검증하고 크기/메타데이터 반환
-- HEAD: 파일 존재 여부 확인 용도
+GET과 HEAD 모두 다음 순서로 실제 대상 상태를 검증한다.
+
+1. `fileId` 검증
+2. 현재 기준정보로 논리 identity 재해석
+3. 실제 원격 파일 stat/존재 여부 확인
+
+- GET: 현재 파일의 metadata를 JSON으로 반환
+- HEAD: GET과 같은 검증을 수행하되 body 없이 현재 `Content-Length`를 반환
+- metadata의 `size`는 해당 조회 시점의 관측값이며 이후 변경 가능한 파일의 크기를 고정하지 않음
 
 ### fileId 다운로드
 
@@ -138,7 +147,25 @@ Current Configuration:
 
 Current Configuration `fileId`는 특정 물리 버전이 아니라 현재 파일 슬롯을 가리키므로 토큰 발급 후 내용이 바뀌어도 다운로드 시점의 현재 내용을 제공한다.
 
-Continuous 로그 다운로드는 시작 직전 확인한 파일 크기를 해당 응답의 전송 상한으로 사용한다. 다운로드 중 파일이 커져도 추가된 내용은 보내지 않는다. 반대로 truncate/rotation으로 시작 크기까지 읽지 못하면 정상 완료가 아니라 streaming I/O 실패로 취급하며 새 파일로 이어 붙이거나 자동 재시도하지 않는다. 스트림 시작 후 실패의 HTTP 표현 방식은 다운로드 응답 계약 라운드에서 별도 확정한다.
+다운로드 응답은 스트림 시작 직전에 실제 파일 크기를 확인하고 그 값을 `Content-Length`로 사용한다.
+
+- 일반 로그 / Configuration Snapshot: 해당 파일의 시작 직전 크기
+- Continuous 로그: 다운로드 시작 시점 크기를 전송 상한으로 고정
+- Current Configuration: 다운로드 시작 시점의 현재 파일 크기
+
+Continuous 로그는 다운로드 중 파일이 커져도 시작 크기 이후의 추가 내용은 보내지 않는다. 반대로 truncate/rotation으로 `Content-Length`만큼 읽지 못하면 정상 완료가 아니라 streaming I/O 실패다. 새 파일로 이어 붙이거나 자동 재시도하지 않는다.
+
+다운로드 응답의 기본 헤더는 다음 원칙을 따른다.
+
+- `Content-Type: application/octet-stream`
+- `Content-Disposition: attachment`에 논리 `fileName` 사용
+- 물리 서버명/경로는 헤더에 노출하지 않음
+
+스트리밍 시작 전 원격 stream open/FTP 처리에 실패하면 아직 일반 HTTP 오류 응답이 가능하므로 기존 오류 매핑에 따라 `FileServerUnavailable` 또는 `FileServerProtocolError` 등 JSON 오류를 반환한다.
+
+스트리밍 시작 후 원격 I/O 오류가 발생하면 이미 시작된 응답을 JSON 오류로 변경하지 않는다. 응답 스트림을 중단하고 연결을 종료하며 서버에서는 streaming I/O failure로 기록한다.
+
+클라이언트가 연결을 끊거나 요청을 취소한 경우에는 `ClientCancelled`로 기록하고 파일 서버/streaming 장애와 구분한다.
 
 `fileId` 처리 오류는 다음 원인을 구분한다.
 
@@ -181,6 +208,8 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 - 502 `FileServerProtocolError`
 - 503 `ReferenceDataUnavailable`
 - 500 `InternalError`
+
+`ClientCancelled`는 서버가 새 HTTP 오류 응답을 반환하는 코드가 아니라, 클라이언트가 이미 연결을 종료/취소한 요청의 운영상 종료 분류다.
 
 세부 error body 규격은 구현 계획에서 일관된 공통 형식으로 확정한다.
 
