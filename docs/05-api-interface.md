@@ -56,6 +56,8 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 `continuationToken`은 발급된 원래 조회조건의 다음 페이지를 가리킨다. 토큰을 사용하면서 `equipmentId`, `logType`, `from/to`, `subtype`, attributes 등 결과 집합을 바꾸는 조회조건을 변경하면 `InvalidRequest`를 반환한다. 다른 조건으로 조회하려면 continuation token 없이 첫 페이지부터 새로 조회한다.
 
+탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
+
 ### Current Configuration 조회
 
 ```http
@@ -186,9 +188,10 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 - 0개 일치: `FileNotFound`
 - 1개 일치: 다운로드
 - 2개 이상 정상 파일이 사용자 조건에 일치: `MultipleFilesMatched` (409)
-- 기준정보의 `cardinality=Single`인데 실제 탐색 결과가 2개 이상: `FileDefinitionConflict` (500)
+- 기준정보의 `cardinality=Single`인데 하나의 논리 생성 슬롯에서 실제 탐색 결과가 2개 이상: `FileDefinitionConflict` (500)
+- 후보 파일이 필수 metadata 규칙으로 해석되지 않음: `FileDefinitionConflict` (500)
 
-`MultipleFilesMatched`는 정상 파일 집합에 사용자 조건이 여러 건 일치한 경우에만 사용한다. 정의상 Single인데 여러 파일이 발견된 상태와 혼용하지 않는다.
+`MultipleFilesMatched`는 정상 파일 집합에 사용자 조건이 여러 건 일치한 경우에만 사용한다. 정의상 Single인데 여러 파일이 발견되거나 정의된 후보를 해석하지 못한 상태와 혼용하지 않는다.
 
 여러 파일을 자동 ZIP으로 묶는 기능은 MVP에서 제공하지 않는다.
 
