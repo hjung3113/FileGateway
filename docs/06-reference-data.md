@@ -92,6 +92,21 @@ MVP Configuration 정의에는 `subtype`/동적 `attributes` 규칙을 추가하
 
 FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 
+## 설비별 제공 파일 종류 조회
+
+외부 `GET /api/v1/equipments/{equipmentId}/file-types`는 별도의 물리 파일 catalog를 만들지 않고 **검증 완료된 기준정보 snapshot에서 해당 설비의 정의를 투영**해 반환한다.
+
+- Log: 해당 `equipmentId`의 `EquipmentLogDefinition`들에서 `logType + generationType` 추출
+- Configuration: 해당 `equipmentId`의 `EquipmentConfigurationDefinition`들에서 `configurationType` 추출
+- FTP 디렉터리/파일 존재 여부를 확인하지 않음
+- serverId/host/rootPath/discoveryRule/metadataRule/currentRule/historyRule 같은 내부 정보는 API에 노출하지 않음
+- 유효한 설비에 정의가 하나도 없으면 빈 목록으로 반환 가능
+- 기존 계약으로 표현 가능한 새 Log/Configuration 종류가 기준정보에 추가되면 정상 cache refresh 후 자동으로 조회 결과에 포함
+
+설비사/설비 종류별로 제공 가능한 파일이 다른 것은 **`equipmentId`에 최종적으로 연결된 정의 집합의 차이**로 표현한다. DB 내부에서 설비사 공통 정의를 정규화하거나 재사용하는 방식은 DB/SP 구현 세부사항이며, FileGateway 코드에 설비사별 분기를 만들지 않는다.
+
+현재 기준정보 snapshot에 필요한 전체 정의가 이미 포함된다면 별도 전용 테이블은 필요하지 않다. Stored Procedure 계약이 분리되어 있다면 설비별 제공 정의를 읽을 수 있도록 SP 조회 계약만 보완하고 DB 물리 구조는 애플리케이션 계약으로 고정하지 않는다.
+
 ## 파일명 비교 규칙
 
 MVP Windows/IIS FTP 환경에서 파일명 관련 비교는 case-insensitive다.
