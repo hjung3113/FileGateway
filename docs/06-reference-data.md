@@ -103,6 +103,8 @@ MVP Windows/IIS FTP 환경에서 파일명 관련 비교는 case-insensitive다.
 
 실제 원격 파일 casing은 API 응답에 그대로 보존한다. `subtype`/`attributes` 비교는 이 규칙과 무관하게 기존대로 case-sensitive다. 향후 case-sensitive 저장소를 도입할 때 파일명 비교 계약을 재검토한다.
 
+동일한 탐색 범위에서 case-insensitive 기준으로 같은 파일명인 서로 다른 원격 항목이 둘 이상 발견되면 임의 dedupe하지 않고 `FileDefinitionConflict`로 처리한다. 예: `PM1.cfg`와 `pm1.cfg`가 동시에 존재하는 경우다.
+
 ## 경로 안전성 invariant
 
 기준정보에서 계산되는 모든 파일/디렉터리 경로는 다음 조건을 만족해야 한다.
@@ -124,6 +126,8 @@ MVP Windows/IIS FTP 환경에서 파일명 관련 비교는 case-insensitive다.
 - 기준정보는 정상이나 실제 대상 파일이 없으면 `FileNotFound`
 
 Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하지 않는다. 같은 `equipmentId + configurationType + fileName` 논리 파일의 다운로드 시점 현재 내용을 가리킨다.
+
+Configuration Snapshot `fileId`를 재해석할 때는 해당 Snapshot Set의 완료 marker 존재 여부도 다시 확인한다. marker가 사라졌다면 실제 Snapshot File이 남아 있어도 완료 상태로 제공하지 않고 `FileNotFound`로 처리한다.
 
 기준정보 변경과 실제 파일 삭제를 같은 원인으로 취급하지 않는다.
 
@@ -152,6 +156,12 @@ raw API Key를 Stored Procedure에 전달하지 않는다.
 
 기준정보 갱신은 **새 기준정보 전체를 검증한 뒤 한 번에 atomic 교체**한다. 일부 정의만 새 값으로 적용하는 혼합 상태는 만들지 않는다.
 
+lazy refresh는 프로세스당 하나만 실행하는 **single-flight** 방식으로 동기화한다.
+
+- last-known-good cache가 있으면 refresh가 진행 중인 동안 다른 요청은 기존 cache로 계속 처리한다.
+- 최초 로딩이라 usable cache가 없으면 동시 요청들은 동일한 최초 refresh 결과를 공유한다.
+- TTL 만료 시 요청마다 별도 Stored Procedure refresh를 발생시키지 않는다.
+
 갱신 시도 결과:
 
 - 새 기준정보 전체 검증 성공 → cache 전체를 새 기준정보로 atomic 교체
@@ -166,22 +176,30 @@ stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation �
 
 ## 필수 검증
 
-SP 결과 전체에 대해 cache 교체 전에 다음을 검증한다.
+SP 결과 전체에 대해 cache 교체 전에 **정의의 구조·문법·invariant만** 검증한다. 이 단계에서 FTP 서버에 접속해 실제 디렉터리, 파일, marker 존재 여부를 확인하지 않는다. 원격 저장소의 실재 상태는 실제 조회/metadata/download 요청 시 확인한다.
+
+검증 항목:
 
 - 설비/서버 매핑 존재 여부
 - 로그/Configuration 정의 존재 여부
 - `equipmentId + logType` 중복 정의 여부
 - 중복/충돌 매핑
-- 잘못된 root/path template
-- 정규화 후 `rootPath` 밖으로 탈출하는 경로 여부
+- root/path template의 구조와 정규화 가능 여부
+- 정규화 후 `rootPath` 밖으로 탈출 가능한 정의 여부
 - `filePattern`이 지원되는 glob 문법인지
 - 무제한 recursive scan을 요구하는 정의가 아닌지
 - MetadataRule 입력 정규화와 지원 mode가 유효한지
-- Current rule이 유효한 현재 Configuration File 집합을 해석할 수 있는지
-- History rule이 유효한 날짜별 Snapshot File 집합, 논리 시각, marker 파일명/위치를 해석할 수 있는지
+- Current rule의 구조/패턴이 유효한지
+- History rule의 날짜별 경로, 논리 시각, marker 파일명/위치 정의가 유효한지
 - 지원하지 않는 generation/metadata mode
 - 유효하지 않은 regex/template/mapping
 
-실제 로그 탐색 시 `cardinality=Single`인데 하나의 논리 생성 슬롯에서 여러 파일이 발견되거나 후보 파일의 필수 metadata 해석에 실패하면 `FileDefinitionConflict`로 분류한다.
+실제 원격 탐색에서는 다음을 별도로 판정한다.
+
+- 계산된 디렉터리가 존재하지 않음 → 해당 슬롯의 정상 결과 0개
+- `cardinality=Single`인데 하나의 논리 생성 슬롯에서 여러 파일 발견 → `FileDefinitionConflict`
+- case-insensitive 기준 동일 파일명이 둘 이상 발견 → `FileDefinitionConflict`
+- 후보 파일의 필수 metadata 해석 실패 → `FileDefinitionConflict`
+- 파일 서버 연결/인증/프로토콜 장애 → 파일 서버 오류
 
 기준정보 오류와 실제 파일 서버 장애는 별도 원인으로 유지한다.
