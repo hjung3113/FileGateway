@@ -13,7 +13,7 @@ _Avoid_: `equipment`, 설비명(식별자 의미로 사용할 때)
 _Avoid_: Hourly/Daily/Continuous를 로그 종류라고 부르는 표현
 
 **Generation Type (`generationType`)**:
-로그 파일의 생성 주기 또는 생명주기를 나타내는 분류다. 현재 값은 `Hourly | Daily | Continuous`다.
+로그 파일의 생성 주기 또는 생명주기를 나타내는 분류다. 현재 값은 `Hourly | Daily | Continuous`다. Hourly/Daily는 시간 범위를 사용하고 Continuous는 현재 파일 집합을 조회하며 `from`/`to`를 허용하지 않는다.
 _Avoid_: `logType`, 로그 종류
 
 **Configuration File**:
@@ -29,11 +29,11 @@ _Avoid_: 개별 파일마다 configurationType/subtype을 생성, 파일명을 c
 _Avoid_: `equipmentId + configurationType`이 항상 파일 하나를 식별한다고 가정
 
 **Current Configuration File**:
-`Current Configuration Set` 안의 개별 현재 파일이다. 논리 identity는 `equipmentId + configurationType + fileName`이며 파일 내용은 시간에 따라 바뀔 수 있다. 같은 identity의 `fileId`는 특정 바이트 버전을 고정하지 않고 다운로드 시점의 현재 내용을 가리킨다. `fileName`이 바뀌면 다른 논리 파일로 취급한다.
+`Current Configuration Set` 안의 개별 현재 파일이다. 논리 identity는 `equipmentId + configurationType + fileName`이며 파일 내용은 시간에 따라 바뀔 수 있다. 같은 identity의 `fileId`는 특정 바이트 버전을 고정하지 않고 다운로드 시점의 현재 내용을 가리킨다. `fileName`은 MVP에서 case-insensitive 비교하므로 casing만 바뀐 이름은 같은 논리 파일이며, 그 외 이름 변경은 다른 논리 파일이다.
 _Avoid_: 현재 파일을 불변 snapshot으로 간주, PM1/PM2를 별도 subtype으로 모델링
 
 **Configuration Snapshot Set**:
-별도 시스템이 특정 시점에 `Current Configuration Set`의 파일들을 그대로 복사해 보관한 히스토리 파일 집합이다. 현재 운영 계획에서는 자정에 날짜 폴더를 만들고 Current 파일 집합을 복사하며 Current 원본은 그대로 유지한다. 같은 Snapshot Set의 파일들은 동일한 `snapshotTimestamp`를 공유한다.
+별도 시스템이 특정 시점에 `Current Configuration Set`의 파일들을 그대로 복사해 보관한 히스토리 파일 집합이다. 현재 운영 계획에서는 자정에 날짜 폴더를 만들고 Current 파일 집합을 복사하며 Current 원본은 그대로 유지한다. 같은 Snapshot Set의 파일들은 동일한 `snapshotTimestamp`를 공유한다. History 생산자가 만든 완료 marker 파일이 존재해야 FileGateway 조회 대상이 된다.
 _Avoid_: Snapshot을 항상 단일 파일 하나라고 가정
 
 **Configuration Snapshot File**:
@@ -44,16 +44,24 @@ _Avoid_: FileGateway가 생성하는 configuration backup, 생성 완료 후 내
 Configuration Snapshot Set이 생성된 논리 시각이다. 현재 운영 계획에서는 날짜 폴더에 대응하는 자정 시각이며, 파일명/경로 규칙에서 추출하고 FTP modified time과 동일시하지 않는다.
 _Avoid_: FTP modified time
 
+**History Completion Marker**:
+Configuration History 생산자가 Snapshot Set 복사 완료 후 생성하는 marker 파일이다. marker 이름/위치는 기준정보의 `historyRule`이 정의하며 FileGateway는 **존재 여부만 확인**하고 marker 내용은 읽거나 해석하지 않는다.
+_Avoid_: marker 내용을 업무 metadata로 해석, FileGateway가 marker를 생성
+
 **Logical Timestamp (`timestamp`)**:
 파일명/경로의 메타데이터 규칙에서 추출한, 해당 로그 파일이 논리적으로 나타내는 시각이다. FTP 파일의 수정 시각이나 서버 파일시스템 시각을 의미하지 않는다. 현재 Site의 운영 시간대인 `Asia/Seoul`로 해석하고 API에서는 UTC offset이 포함된 ISO-8601 값으로 표현한다.
 _Avoid_: modified time, FTP modification time을 `timestamp`와 동일시하는 표현
 
 **Time Range (`from`, `to`)**:
-시간 기반 조회에 적용하는 반개구간 `[from, to)`이다. `from`은 포함하고 `to`는 제외한다.
-_Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현
+Hourly/Daily 및 Configuration History의 시간 기반 조회에 적용하는 반개구간 `[from, to)`이다. `from`은 포함하고 `to`는 제외한다. Continuous 로그에는 적용하지 않는다.
+_Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현, Continuous에 시간 범위를 적용
+
+**File Name Comparison**:
+MVP Windows/IIS FTP 환경에서 `fileName` 관련 비교에 사용하는 case-insensitive 규칙이다. `filePattern` matching, logical identity, 정렬, pagination cursor에 동일하게 적용하며 실제 파일명의 casing은 응답에 그대로 보존한다. `subtype`/`attributes` 비교는 이 규칙과 무관하게 case-sensitive다.
+_Avoid_: 위치마다 다른 파일명 대소문자 규칙
 
 **Logical File Identity**:
-물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot File은 `equipmentId + configurationType + snapshotTimestamp + fileName`, Current Configuration File은 `equipmentId + configurationType + fileName`을 사용한다.
+물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot File은 `equipmentId + configurationType + snapshotTimestamp + fileName`, Current Configuration File은 `equipmentId + configurationType + fileName`을 사용한다. 모든 identity의 `fileName` 구성요소는 MVP에서 case-insensitive 비교한다.
 _Avoid_: FTP host/path를 파일 identity로 취급
 
 **Resource Kind (`resourceKind`)**:
@@ -65,12 +73,16 @@ _Avoid_: resourceKind를 외부 API 분기 파라미터로 사용
 _Avoid_: query token, physical path identifier
 
 **Continuation Token (`continuationToken`)**:
-목록 조회의 다음 페이지를 가리키는 유효기간이 있는 opaque stateless cursor다. 서버에 이전 결과 전체를 저장하지 않고 원래 결과 집합을 결정한 조회조건과 마지막 반환 위치를 보존한다. Log는 `timestamp + fileName`, Configuration History는 `snapshotTimestamp + fileName`을 cursor로 사용한다. `limit`은 페이지 크기이므로 결과 집합 조건에 포함하지 않는다.
+목록 조회의 다음 페이지를 가리키는 유효기간이 있는 opaque stateless cursor다. 서버에 이전 결과 전체를 저장하지 않고 원래 결과 집합을 결정한 조회조건과 마지막 반환 위치를 보존한다. Hourly/Daily Log는 `timestamp + fileName`, Continuous Log는 `fileName`, Configuration History는 `snapshotTimestamp + fileName`을 cursor로 사용한다. cursor의 `fileName` 비교는 case-insensitive다. `limit`은 페이지 크기이므로 결과 집합 조건에 포함하지 않는다.
 _Avoid_: offset/page 번호, 서버 세션에 전체 결과를 저장하는 pagination token
 
 **Token Codec**:
 `fileId`와 `continuationToken`의 서명/검증, opaque encoding/decoding, TTL 처리를 담당하는 공통 기계적 계약이다. Log/Configuration identity나 pagination 의미는 해석하지 않는다.
 _Avoid_: 공통 token 계층에 Log/Configuration 업무 규칙을 넣는 것
+
+**Reference Data Snapshot**:
+Stored Procedure에서 읽어 전체 검증을 통과한 하나의 일관된 기준정보 집합이다. refresh 시 새 snapshot 전체 검증 성공 후 cache를 atomic 교체하며, 검증 실패 시 일부만 적용하지 않는다.
+_Avoid_: 검증되지 않은 일부 정의만 기존 cache와 혼합
 
 **Subtype (`subtype`)**:
 하나의 `logType` 내부에서 API 사용자가 자주 조회하는 대표 하위 분류 하나다. 같은 의미의 값을 `attributes`에 중복 저장하지 않는다. MVP Configuration 모델에는 사용하지 않는다.
