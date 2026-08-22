@@ -85,6 +85,16 @@ WPF Desktop / Web Backend(BFF) / Other Server or Service
 
 MVP는 ASP.NET Core/.NET을 Windows Server + IIS에서 운영하며, 실제 파일 접근은 `IFileAccess` 뒤의 FTP/FTPS Adapter가 담당합니다.
 
+## 주요 기술 선택
+
+- FTP/FTPS Adapter: **FluentFTP**를 `FileGateway.Infrastructure` 내부 구현으로 사용
+- MSSQL 접근: **Microsoft.Data.SqlClient** 기본 사용
+- 통합테스트 인프라: **Testcontainers for .NET** 활용
+- Dapper: SP 결과 매핑이 복잡해질 때만 도입 검토
+- Polly: 실제 transient retry/circuit-breaker 요구가 생길 때만 도입 검토
+
+외부 라이브러리는 Core/도메인 계약에 노출하지 않고 Infrastructure/Test 경계에 우선 격리합니다. 구체 패키지 버전은 구현 시점에 지원 .NET 버전과 유지보수 상태를 확인해 고정합니다.
+
 ## 설계 원칙
 
 - 물리 서버 주소/경로를 외부 API에 노출하지 않음
