@@ -80,10 +80,14 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - timezone 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 - API에서는 UTC offset이 포함된 ISO-8601 값으로 표현한다.
 - `from`/`to`는 `[from, to)`로 해석해 `from`은 포함하고 `to`는 제외한다.
-- 시간 조건이 없으면 로그는 최근 24시간을 기본 조회 범위로 사용한다.
+- 로그에서 `from`/`to`가 모두 없으면 최근 24시간을 조회한다.
+- 로그에서 `from`만 있으면 `[from, from + 2일)`을 조회한다.
+- 로그에서 `to`만 있는 형태는 지원하지 않고 `InvalidRequest`로 처리한다.
+- 로그에서 `from`/`to`가 모두 있으면 지정한 `[from, to)`를 조회한다.
+- 로그 시간 조회에는 설정 가능한 최대 조회 기간을 두며, 구체적인 기간 값은 운영 설정에서 정한다. 최대 기간을 넘는 요청은 `InvalidRequest`다.
 - Continuous 로그는 위 시간 범위와 별도로 현재 파일을 포함한다.
 - Current Configuration은 시간 필터 대상이 아니다.
-- Configuration History의 기본 시간 범위는 API 설계에서 별도 확정한다.
+- Configuration History는 `from`과 `to`를 모두 필수로 요구한다.
 - 단일 파일을 요구하는 직접 다운로드 조건이 여러 파일과 일치하면 임의 선택하지 않고 충돌 오류 반환
 
 ## 8. fileId 의미
