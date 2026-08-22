@@ -16,6 +16,7 @@ FileGateway가 담당한다.
 - 기준정보를 이용한 물리 서버/경로 탐색
 - Configuration logical identity와 pagination 의미 관리
 - 논리 `fileId` 발급/해석
+- History 생산자가 제공한 완료 조건을 확인해 완료된 Snapshot Set만 조회 대상으로 삼기
 
 FileGateway가 담당하지 않는다.
 
@@ -23,6 +24,7 @@ FileGateway가 담당하지 않는다.
 - Current Configuration 변경
 - Configuration Snapshot 생성
 - snapshot 복사/보관/삭제 정책
+- Current 파일의 생산 중 원자성/내용 일관성 보장
 
 히스토리 파일은 별도 시스템이 파일 서버에 저장한 결과를 FileGateway가 읽기 전용으로 제공한다.
 
@@ -63,7 +65,7 @@ EquipmentConfigurationDefinition
 ```
 
 - `currentRule`: 현재 Configuration File 집합의 위치/후보 패턴을 해석하는 규칙
-- `historyRule`: 날짜별 히스토리 디렉터리/파일 패턴과 `snapshotTimestamp`를 해석하는 규칙
+- `historyRule`: 날짜별 히스토리 디렉터리/파일 패턴, `snapshotTimestamp`, Snapshot Set 완료 조건을 해석하는 규칙
 
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
@@ -80,6 +82,7 @@ Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 
 - `fileName`이 바뀌면 다른 논리 Current Configuration File로 취급한다.
 - 목록/정보 조회 후 각 파일 내용이 변경될 수 있다.
 - Current File의 `fileId`는 특정 바이트 버전을 고정하지 않고 동일 논리 identity의 다운로드 시점 현재 내용을 가리킨다.
+- FileGateway는 Current 파일이 생산 중 어떤 방식으로 쓰이거나 교체되는지 판정·보정하지 않는다.
 - 과거 특정 버전이 필요하면 History의 개별 Snapshot File `fileId`를 사용한다.
 
 ### Current 직접 다운로드
@@ -103,6 +106,9 @@ Current 조회와 같은 Resolver 규칙을 사용한다.
 - 한 날짜/시점의 복사 결과는 하나의 `Configuration Snapshot Set`이며 그 안에 PM1, PM2, PM3, PM4처럼 여러 파일이 존재할 수 있다.
 - 같은 Snapshot Set의 모든 파일은 동일한 `snapshotTimestamp`를 공유한다.
 - 현재 운영 계획에서 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`이며 날짜 폴더/경로 규칙에서 해석한다.
+- History 생산자는 Snapshot Set 복사 완료를 판정할 수 있는 완료 조건/marker를 제공한다.
+- FileGateway는 완료 조건이 확인된 Snapshot Set만 조회 대상으로 삼고 복사 중인 부분 Snapshot Set은 노출하지 않는다.
+- 완료 marker 자체는 Configuration File 결과에 포함하지 않는다.
 - 생성이 완료된 Snapshot File은 불변이다. 기존 파일을 수정하지 않고 다음 snapshot에서 새 파일로 반영한다.
 - FTP modified time을 snapshot 시각으로 사용하지 않는다.
 - timezone 없는 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
@@ -143,7 +149,7 @@ Configurations는 Current/Snapshot `fileId`와 Configuration History pagination�
 - Current와 History는 API에서 명시적으로 구분한다.
 - Current를 History 결과에 암묵적으로 포함하지 않는다.
 - Current는 `equipmentId + configurationType`으로 현재 파일 집합을 결정한다.
-- History는 `equipmentId + configurationType + [from, to)`로 Snapshot File 집합을 조회한다.
+- History는 `equipmentId + configurationType + [from, to)`로 **완료된** Snapshot File 집합을 조회한다.
 - History 결과 item은 `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`를 가진다.
 - History 목록의 결과가 없으면 `200 OK`와 빈 배열을 반환한다.
 - History 목록은 `limit + continuationToken` 페이지네이션을 사용한다.
