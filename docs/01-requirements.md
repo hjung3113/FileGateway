@@ -46,6 +46,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 개별 Configuration File을 별도 `subtype`이나 `configurationType`으로 세분화하지 않음
 - 실제 물리 경로는 외부 계약의 식별자로 사용하지 않음
 - Current와 History를 명시적으로 구분해 조회
+- History 생산자가 제공한 완료 조건/marker가 확인된 Snapshot Set만 조회 대상으로 사용
 
 ## 5. 로그 생성 유형 (`generationType`)
 
@@ -77,6 +78,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - Current 직접 다운로드에서 0개 일치는 `FileNotFound`, 1개는 다운로드, 여러 개는 `MultipleFilesMatched`로 처리한다.
 - 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사해 Configuration Snapshot Set을 생성하며 Current 원본은 그대로 유지한다.
 - 같은 Snapshot Set의 파일들은 동일한 `snapshotTimestamp`를 공유하고, History API는 개별 Snapshot File 목록을 반환한다.
+- 복사 중인 부분 Snapshot Set은 노출하지 않고 History 생산자가 제공한 완료 조건/marker가 확인된 Snapshot Set만 제공한다.
 - FileGateway는 Current/History 파일을 **읽기 전용으로 제공**하며 히스토리 생성·복사·보관 책임을 갖지 않는다.
 
 ## 7. 시간 조회 규칙
@@ -123,6 +125,9 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 
 - 설비 직접 접근/로그 수집/가공
 - Configuration History 생성/복사/보관
+- Current Configuration 또는 Hourly/Daily 로그의 생산 방식 제어
+- 생산 중 파일의 원자적 교체, 잠금, 내용 일관성 보장
+- FileGateway 자체 snapshot 복사/버전 고정
 - Linux 실제 배포/검증
 - SMB/SFTP Adapter 구현
 - Site별 다중 credential 관리
