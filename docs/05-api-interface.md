@@ -9,6 +9,7 @@
 - 논리 `fileId` 기반 접근
 - 로그와 Configuration은 별도 feature API로 구분
 - 각 feature의 목록과 조건 기반 직접 접근은 동일 Resolver 규칙을 사용
+- 클라이언트가 raw 물리 경로를 전달하지 않음
 
 ## API v1
 
@@ -40,7 +41,7 @@ GET /api/v1/logs
 - `from`, `to` 모두 있음 → 지정한 `[from, to)`
 - `from >= to` → `InvalidRequest`
 
-시간 기반 로그 조회에는 설정 가능한 최대 조회 기간을 적용한다. 구체적인 기간 값은 운영 설정으로 두며 초과 요청은 `InvalidRequest`다.
+시간 기반 로그 조회에는 설정 가능한 `Logs.MaxQueryRange`를 적용하며 초과 요청은 `InvalidRequest`다. `from` 단독 요청이 2일 범위를 의미하므로 `Logs.MaxQueryRange`는 최소 2일 이상이어야 한다.
 
 Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 `timestamp`는 `null`이며 현재 시각이나 FTP modified time으로 대체하지 않는다.
 
@@ -62,7 +63,18 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 시간 기반 로그 목록의 기본 정렬은 `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`다. `equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
 
-목록 결과가 없으면 `200 OK`와 빈 배열을 반환한다.
+페이지네이션 목록 응답은 다음 envelope를 사용한다.
+
+```json
+{
+  "items": [],
+  "continuationToken": null
+}
+```
+
+- `items`: 현재 페이지의 파일 목록
+- `continuationToken`: 다음 페이지가 있으면 opaque token, 마지막 페이지면 `null`
+- 결과가 없으면 `200 OK`, `items=[]`, `continuationToken=null`
 
 목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다. `limit`의 기본값과 최댓값은 운영 설정으로 두며 최대값 초과 시 `InvalidRequest`다.
 
@@ -76,7 +88,7 @@ Log continuation token은 서버에 이전 FTP 결과 전체를 저장하지 않
 
 탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
 
-조건 기반 존재 여부 전용 HEAD endpoint는 추가하지 않는다. 조건 조회는 목록 API를 사용하고, 특정 `fileId`를 얻은 뒤 존재 확인이 필요하면 공통 `HEAD /api/v1/files/{fileId}`를 사용한다.
+조건 기반 존재 여부 전용 HEAD endpoint는 추가하지 않는다. 조건 기반 존재 확인은 목록 조회를 사용하고, 특정 `fileId`의 현재 상태/존재 확인은 공통 `GET /api/v1/files/{fileId}`를 사용한다.
 
 ### Current Configuration 조회
 
@@ -89,9 +101,10 @@ GET /api/v1/configurations/current?equipmentId=...&configurationType=...
 - 개별 파일을 `subtype`/`attributes`로 세분화하지 않음
 - 시간 필터를 사용하지 않음
 - Current를 History 결과에 포함하지 않음
-- 결과는 개별 Current Configuration File들의 배열
+- 결과는 개별 Current Configuration File들의 **단순 배열**
 - 결과가 없으면 `200 OK`와 빈 배열
 - Current는 `limit`/`continuationToken` 없이 현재 파일 전체를 한 번에 반환
+- 기본 정렬은 `fileName ASC`
 
 Current item의 핵심 필드:
 
@@ -135,6 +148,7 @@ GET /api/v1/configurations/history
 - snapshot 논리 시각 기준 `[from, to)` 조회
 - `from >= to`면 `InvalidRequest`
 - `from`/`to`가 없으면 임의 기본 기간 또는 전체 History로 대체하지 않고 `InvalidRequest`
+- `Configurations.HistoryMaxQueryRange`를 초과하면 `InvalidRequest`
 - 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사하며 Current 원본은 그대로 유지
 - 같은 날짜/시점에 복사된 Snapshot File들은 동일한 `snapshotTimestamp`를 공유
 - 현재 운영 계획에서 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`
@@ -143,8 +157,9 @@ GET /api/v1/configurations/history
 - 생성 완료된 Snapshot File은 불변으로 취급
 - History는 Snapshot Set을 중첩 객체로 반환하지 않고 개별 Snapshot File 목록으로 반환
 - History item의 핵심 필드: `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`
-- 결과가 없으면 `200 OK`와 빈 배열
 - 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 `fileName ASC`
+- History 목록은 Log와 동일한 `{ items, continuationToken }` pagination envelope 사용
+- 결과가 없으면 `200 OK`, `items=[]`, `continuationToken=null`
 - History 목록은 `limit + opaque continuationToken`으로 페이지네이션
 - `limit`의 기본값/최댓값은 운영 설정으로 두며 최대값 초과 시 `InvalidRequest`
 - History의 continuation token도 원래 `equipmentId + configurationType + from/to` 조회조건에 종속되며 조건 변경 시 `InvalidRequest`
@@ -169,10 +184,11 @@ Configuration History 전용 조건 기반 직접 다운로드 endpoint는 MVP�
 
 ```http
 GET /api/v1/files/{fileId}
-HEAD /api/v1/files/{fileId}
 ```
 
-GET과 HEAD 모두 다음 순서로 실제 대상 상태를 검증한다.
+MVP에서는 `/api/v1/files/{fileId}`에 HEAD endpoint를 두지 않는다. GET metadata가 이미 실제 원격 stat/존재 확인과 파일 크기 조회를 수행하므로 별도 HEAD 계약을 만들지 않는다.
+
+GET은 다음 순서로 실제 대상 상태를 검증한다.
 
 1. `fileId` 검증
 2. 토큰 내부 `resourceKind`에 따라 Logs 또는 Configurations의 identity resolver로 위임
@@ -189,9 +205,7 @@ GET JSON의 핵심 필드는 다음 최소 공통 정보만 둔다.
 
 `logType`, `timestamp`, `subtype`, `attributes`, `configurationType`, `snapshotTimestamp` 같은 업무 metadata는 각각 Logs/Configurations API가 소유한다.
 
-- GET: 현재 파일의 최소 공통 metadata를 JSON으로 반환
-- HEAD: GET과 같은 검증을 수행하되 body 없이 현재 `Content-Length`를 반환
-- metadata의 `size`는 해당 조회 시점의 관측값이며 이후 변경 가능한 파일의 크기를 고정하지 않음
+`size`는 해당 GET 조회 시점의 실제 원격 파일 크기 관측값이며 이후 변경 가능한 파일의 크기를 고정하지 않는다.
 
 ### fileId 다운로드
 
@@ -248,7 +262,7 @@ FileGateway는 **저장소에서 읽을 수 있는 파일을 제공하는 역할
 다운로드 응답의 기본 헤더는 다음 원칙을 따른다.
 
 - `Content-Type: application/octet-stream`
-- `Content-Disposition: attachment`에 논리 `fileName` 사용
+- `Content-Disposition: attachment`에 header-safe하게 처리한 논리 `fileName` 사용
 - 물리 서버명/경로는 헤더에 노출하지 않음
 
 스트리밍 시작 전 원격 stream open/FTP 처리에 실패하면 아직 일반 HTTP 오류 응답이 가능하므로 기존 오류 매핑에 따라 `FileServerUnavailable` 또는 `FileServerProtocolError` 등 JSON 오류를 반환한다.
@@ -282,6 +296,14 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 `MultipleFilesMatched`는 정상 파일 집합에 사용자 조건이 여러 건 일치한 경우에만 사용한다. 정의상 Single인데 여러 파일이 발견되거나 정의된 후보를 해석하지 못한 상태와 혼용하지 않는다.
 
 여러 파일을 자동 ZIP으로 묶는 기능은 MVP에서 제공하지 않는다.
+
+## 경로/헤더 안전성
+
+- 모든 실제 파일 접근 경로는 기준정보의 해당 서버 `rootPath` 아래로 정규화되어야 한다.
+- `..`, 절대 경로, rooted path 등을 통해 root 밖으로 나가는 기준정보는 실제 접근에 사용하지 않는다.
+- 클라이언트 입력으로 raw 물리 경로를 구성하지 않는다.
+- `Content-Disposition`의 파일명은 HTTP header-safe하게 처리한다.
+- FTP host/path 및 내부 기준정보는 성공/오류 응답 모두에서 노출하지 않는다.
 
 ## 공통 오류 응답
 
