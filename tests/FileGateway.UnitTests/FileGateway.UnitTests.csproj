@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\FileGateway.Api\FileGateway.Api.csproj" />
+    <ProjectReference Include="..\..\src\FileGateway.Core\FileGateway.Core.csproj" />
     <ProjectReference Include="..\..\src\FileGateway.Logs\FileGateway.Logs.csproj" />
     <ProjectReference Include="..\..\src\FileGateway.Configurations\FileGateway.Configurations.csproj" />
     <ProjectReference Include="..\..\src\FileGateway.Infrastructure\FileGateway.Infrastructure.csproj" />
