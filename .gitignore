@@ -2,3 +2,7 @@
 .superpowers/sdd/
 .worktrees/
 worktrees/
+bin/
+obj/
+TestResults/
+.vs/
