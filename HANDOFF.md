@@ -6,12 +6,12 @@
 
 - 설계 확정: `docs/00-glossary.md`~`10-testing-and-deployment.md` + 통합 스냅샷 `docs/superpowers/specs/2026-08-22-filegateway-design.md`
 - 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개, PR 리뷰 13건(사용자 7 + Codex inline 6) 반영 완료
-- 코드: 없음. 솔루션/프로젝트 미생성, `db/` 스크립트 미생성
-- 브랜치: `main` 최신, 원격 동기화 완료
+- 코드: Foundation(Task 0~5) 완료 — 5프로젝트 scaffold, Core 계약(RemotePath/GlobPattern/IFileAccess/ExactLengthStream/ITokenCodec), DataProtection token codec, FluentFTP Adapter(예외 안전 lease, 오류 매핑). 테스트 42/42(단위 33 + FTP 통합 9), 빌드 경고 0. `db/` 스크립트는 Task 7 예정
+- 브랜치: `implement/mvp` (main `58d2339` 분기, task별 커밋) — Foundation PR 생성됨. Task 6+는 PR merge 후 재개
 
 ## 다음 작업: 계획 실행
 
-`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. 시작 전 실행 방식 확정:
+`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~5 완료**(리뷰 게이트 통과, SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`). Task 6부터 재개:
 
 - **Subagent-Driven** — Task별 fresh subagent + Task 간 리뷰. `superpowers:subagent-driven-development` 스킬 필수
 - **Inline** — 이 세션에서 체크포인트별 일괄 실행. `superpowers:executing-plans` 스킬 필수
@@ -38,8 +38,8 @@
 
 | Phase | Tasks | 상태 |
 |---|---|---|
-| 문서 동기화 | 0 | 미시작 |
-| Foundation (Core/FTP/token) | 1–5 | 미시작 |
+| 문서 동기화 | 0 | ✅ 완료 (`ea6fd4b`) |
+| Foundation (Core/FTP/token) | 1–5 | ✅ 완료 (리뷰 통과, PR) |
 | 기준정보 (SP/cache) | 6–7 | 미시작 |
 | Logs | 8–11 | 미시작 |
 | Configurations | 12–13 | 미시작 |
@@ -49,6 +49,6 @@
 
 ## 환경 (2026-08-23 확인)
 
-- .NET 10 SDK **미설치** — Task 1 전 설치 필요 (macOS: `brew install --cask dotnet-sdk`, 대상 프레임워크 `net10.0`)
+- .NET 10 SDK **설치 완료** — 10.0.301 (`~/.dotnet`, `/opt/homebrew/bin/dotnet` 심볼릭 링크)
 - Docker 29.2.1 구동 중 — Testcontainers(MSSQL) 통합테스트 사용 가능
 - 도입 패키지는 계획 Task 1/5/7 고정: FluentFTP, Microsoft.Data.SqlClient, Testcontainers.MsSql, FubarDev.FtpServer(테스트 전용) 외 금지
