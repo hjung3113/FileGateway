@@ -11,6 +11,31 @@
 - 각 feature의 목록과 조건 기반 직접 접근은 동일 Resolver 규칙을 사용
 - 클라이언트가 raw 물리 경로를 전달하지 않음
 
+## 인증
+
+MVP API Key는 HTTP header로만 전달한다.
+
+```http
+X-Api-Key: <key>
+```
+
+- query string 또는 URL 경로로 API Key를 전달하지 않는다.
+- header 누락과 잘못된 key는 모두 `401 InvalidApiKey`로 처리한다.
+- API Key 원문은 로그에 남기지 않는다.
+
+## 파일명 비교 규칙
+
+MVP Windows/IIS FTP 환경에서는 `fileName` 관련 비교를 case-insensitive로 수행하고 실제 원격 파일명의 casing은 응답에 그대로 보존한다.
+
+적용 대상:
+
+- `filePattern` glob matching
+- Log/Current Configuration/Configuration Snapshot logical identity의 `fileName`
+- `fileName ASC` 정렬
+- continuation cursor의 `fileName`
+
+대소문자만 다른 파일명은 같은 논리 파일명으로 취급한다. `subtype`/`attributes` 비교는 기존대로 case-sensitive다. 향후 case-sensitive 저장소 지원 시 이 계약을 재검토한다.
+
 ## API v1
 
 ### 로그 목록
@@ -23,7 +48,7 @@ GET /api/v1/logs
 
 - `equipmentId` (필수)
 - `logType` (필수)
-- `from`, `to` (선택)
+- `from`, `to` (generationType에 따라 사용)
 - `subtype` (선택)
 - `attr.<name>=<value>` (선택)
 - `limit` (선택)
@@ -31,9 +56,9 @@ GET /api/v1/logs
 
 `equipmentId + logType`은 정확히 하나의 로그 정의를 식별한다. 한 요청에서 한 설비의 여러 `logType`을 동시에 탐색하지 않는다.
 
-`from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준 반개구간 `[from, to)`다. `from`은 포함하고 `to`는 제외한다.
+#### Hourly / Daily 시간 범위
 
-시간 범위 입력 규칙:
+`from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준 반개구간 `[from, to)`다. `from`은 포함하고 `to`는 제외한다.
 
 - `from`, `to` 모두 없음 → 최근 24시간
 - `from`만 있음 → `[from, from + 2일)`
@@ -43,7 +68,15 @@ GET /api/v1/logs
 
 시간 기반 로그 조회에는 설정 가능한 `Logs.MaxQueryRange`를 적용하며 초과 요청은 `InvalidRequest`다. `from` 단독 요청이 2일 범위를 의미하므로 `Logs.MaxQueryRange`는 최소 2일 이상이어야 한다.
 
-Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 `timestamp`는 `null`이며 현재 시각이나 FTP modified time으로 대체하지 않는다.
+#### Continuous
+
+Continuous는 시간 범위를 사용하지 않고 현재 파일을 조회한다.
+
+- `from` 또는 `to`가 포함되면 `InvalidRequest`
+- Hourly/Daily의 최근 24시간 기본값을 적용하지 않음
+- 명확한 논리 시각이 없으면 `timestamp=null`
+
+Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 현재 시각이나 FTP modified time으로 대체하지 않는다.
 
 `subtype` 및 `attr.<name>` 값은 정확한 문자열 일치(case-sensitive)로 비교한다.
 
@@ -63,8 +96,8 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 로그 목록 정렬은 `generationType`별로 고정한다.
 
-- Hourly/Daily: `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`
-- Continuous: `fileName ASC`
+- Hourly/Daily: `timestamp DESC`, 동일 timestamp에서는 case-insensitive `fileName ASC`
+- Continuous: case-insensitive `fileName ASC`
 
 `equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
 
@@ -93,6 +126,7 @@ Log continuation token은 서버에 이전 FTP 결과 전체를 저장하지 않
 
 - Hourly/Daily cursor: `timestamp + fileName`
 - Continuous cursor: `fileName`
+- cursor의 `fileName` 비교는 case-insensitive
 
 탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
 
@@ -112,7 +146,7 @@ GET /api/v1/configurations/current?equipmentId=...&configurationType=...
 - 결과는 개별 Current Configuration File들의 **단순 배열**
 - 결과가 없으면 `200 OK`와 빈 배열
 - Current는 `limit`/`continuationToken` 없이 현재 파일 전체를 한 번에 반환
-- 기본 정렬은 `fileName ASC`
+- 기본 정렬은 case-insensitive `fileName ASC`
 
 Current item의 핵심 필드:
 
@@ -122,7 +156,7 @@ Current item의 핵심 필드:
 - `configurationType`
 - `size`
 
-Current Configuration File의 logical identity는 `equipmentId + configurationType + fileName`이다. `fileName`이 바뀌면 다른 논리 파일로 취급한다.
+Current Configuration File의 logical identity는 `equipmentId + configurationType + fileName`이며 `fileName`은 case-insensitive 비교한다. 파일명이 대소문자만 바뀐 것은 같은 논리 파일이다.
 
 ### Current Configuration 직접 다운로드
 
@@ -160,12 +194,14 @@ GET /api/v1/configurations/history
 - 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사하며 Current 원본은 그대로 유지
 - 같은 날짜/시점에 복사된 Snapshot File들은 동일한 `snapshotTimestamp`를 공유
 - 현재 운영 계획에서 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`
-- History 생산자가 완료 조건/marker를 제공하며, 완료가 확인된 Snapshot Set만 조회 결과에 포함
-- 복사 중인 부분 Snapshot Set은 노출하지 않음
+- History 생산자는 복사 완료 시 marker 파일을 생성
+- marker 이름/위치는 `historyRule` 기준정보로 설정
+- FileGateway는 marker **존재 여부만 확인**하고 내용은 읽거나 해석하지 않음
+- marker가 존재하는 Snapshot Set만 조회 결과에 포함하고 복사 중인 부분 Snapshot Set은 노출하지 않음
 - 생성 완료된 Snapshot File은 불변으로 취급
 - History는 Snapshot Set을 중첩 객체로 반환하지 않고 개별 Snapshot File 목록으로 반환
 - History item의 핵심 필드: `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`
-- 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 `fileName ASC`
+- 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 case-insensitive `fileName ASC`
 - History 목록은 Log와 동일한 `{ items, continuationToken }` pagination envelope 사용
 - 결과가 없으면 `200 OK`, `items=[]`, `continuationToken=null`
 - History 목록은 `limit + opaque continuationToken`으로 페이지네이션
@@ -175,7 +211,7 @@ GET /api/v1/configurations/history
 - 페이지 사이에 원격 History 파일이 추가/삭제되면 결과 변화가 가능하며 완전한 snapshot은 보장하지 않음
 - Current Configuration은 결과에 포함하지 않음
 
-Configuration History continuation token도 stateless cursor이며 원래 조회조건과 마지막 반환 위치인 `snapshotTimestamp + fileName`을 보존한다.
+Configuration History continuation token도 stateless cursor이며 원래 조회조건과 마지막 반환 위치인 `snapshotTimestamp + fileName`을 보존한다. cursor의 `fileName` 비교는 case-insensitive다.
 
 Configuration History 전용 조건 기반 직접 다운로드 endpoint는 MVP에서 만들지 않는다. 원하는 Snapshot File의 `fileId`를 얻은 뒤 공통 `/api/v1/files/{fileId}/download`를 사용한다.
 
@@ -251,11 +287,11 @@ Current Configuration File:
   equipmentId + configurationType + fileName
 ```
 
-공통 token 계층은 identity의 업무 의미를 해석하지 않는다. Logs와 Configurations가 각 identity 생성/재해석을 소유한다.
+모든 identity의 `fileName` 구성요소는 MVP에서 case-insensitive 비교한다. 공통 token 계층은 identity의 업무 의미를 해석하지 않는다. Logs와 Configurations가 각 identity 생성/재해석을 소유한다.
 
 `subtype`/`attributes`는 파일을 다시 식별하기 위한 핵심 identity로 사용하지 않는다.
 
-Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하지 않는다. 같은 논리 identity의 파일 내용이 변경돼도 다운로드 시점의 현재 내용을 제공한다. 파일명이 바뀌면 다른 논리 파일이므로 기존 `fileId`로 새 이름의 파일을 가리키지 않는다.
+Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하지 않는다. 같은 논리 identity의 파일 내용이 변경돼도 다운로드 시점의 현재 내용을 제공한다. 파일명이 대소문자 외의 부분에서 바뀌면 다른 논리 파일이므로 기존 `fileId`로 새 이름의 파일을 가리키지 않는다.
 
 다운로드 응답은 스트림 시작 직전에 실제 파일 크기를 확인하고 그 값을 `Content-Length`로 사용한다.
 
@@ -293,7 +329,7 @@ FileGateway는 **저장소에서 읽을 수 있는 파일을 제공하는 역할
 GET /api/v1/logs/download?equipmentId=...&logType=...&...
 ```
 
-내부적으로 목록과 동일 Resolver를 실행한다.
+내부적으로 목록과 동일 Resolver를 실행한다. Continuous `logType`에 `from` 또는 `to`가 포함되면 목록과 동일하게 `InvalidRequest`다.
 
 - 0개 일치: `FileNotFound`
 - 1개 일치: 다운로드
