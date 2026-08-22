@@ -1,0 +1,54 @@
+# HANDOFF
+
+새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
+
+## 현재 상태 (2026-08-23)
+
+- 설계 확정: `docs/00-glossary.md`~`10-testing-and-deployment.md` + 통합 스냅샷 `docs/superpowers/specs/2026-08-22-filegateway-design.md`
+- 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개, PR 리뷰 13건(사용자 7 + Codex inline 6) 반영 완료
+- 코드: 없음. 솔루션/프로젝트 미생성, `db/` 스크립트 미생성
+- 브랜치: `main` 최신, 원격 동기화 완료
+
+## 다음 작업: 계획 실행
+
+`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. 시작 전 실행 방식 확정:
+
+- **Subagent-Driven** — Task별 fresh subagent + Task 간 리뷰. `superpowers:subagent-driven-development` 스킬 필수
+- **Inline** — 이 세션에서 체크포인트별 일괄 실행. `superpowers:executing-plans` 스킬 필수
+
+완료 기준: 각 Task는 계획의 체크박스 스텝 전부 통과 + 커밋. Task 20 통과 = **구현 완료**. **MVP 완료 = Task 21 수동 배포 검증까지**(자동화 게이트가 대체하지 않음).
+
+## 조건별 필독 문서
+
+| 조건 | 문서 |
+|---|---|
+| 항상 (자동 로드) | `AGENTS.md` — 프로젝트 규칙의 기준. 특히 YAGNI/변경범위 최소화/검증 후 완료 |
+| 설계 확인·변경 전 | `docs/INDEX.md` → 안내받은 역할별 문서 |
+| 구현 작업 전 | 계획의 **확정 결정 사항 18항목 + Global Constraints** — 구현 중 변경 금지 계약 |
+| 용어 생성·해석 전 | `docs/00-glossary.md` 정식 용어 |
+
+## 실행 규칙 (요점)
+
+1. **Task 0(설계문서 동기화) 없이 구현 Task를 시작하지 않는다** — 계획이 확정한 계약을 역할별 문서에 반영하는 선행 조건이다.
+2. 계획의 결정 사항 변경이 필요하면 계획 + 해당 역할별 문서를 함께 수정하고 별도 커밋/PR로 남긴다. 구현 도중 임의 해석 금지.
+3. 진행 상태는 계획 파일의 `- [ ]` 체크박스에 표시하고, 아래 체크포인트 표도 함께 갱신한다.
+4. 테스트 실패/설계와의 충돌 발견 시: 충돌이면 구현을 멈추고 문서를 먼저 정리한다(AGENTS.md 원칙).
+
+## 진행 체크포인트
+
+| Phase | Tasks | 상태 |
+|---|---|---|
+| 문서 동기화 | 0 | 미시작 |
+| Foundation (Core/FTP/token) | 1–5 | 미시작 |
+| 기준정보 (SP/cache) | 6–7 | 미시작 |
+| Logs | 8–11 | 미시작 |
+| Configurations | 12–13 | 미시작 |
+| Api | 14–18 | 미시작 |
+| 검증/배포 준비 | 19–20 | 미시작 |
+| MVP 수동 게이트 | 21 | 미시작 |
+
+## 환경 (2026-08-23 확인)
+
+- .NET 10 SDK **미설치** — Task 1 전 설치 필요 (macOS: `brew install --cask dotnet-sdk`, 대상 프레임워크 `net10.0`)
+- Docker 29.2.1 구동 중 — Testcontainers(MSSQL) 통합테스트 사용 가능
+- 도입 패키지는 계획 Task 1/5/7 고정: FluentFTP, Microsoft.Data.SqlClient, Testcontainers.MsSql, FubarDev.FtpServer(테스트 전용) 외 금지
