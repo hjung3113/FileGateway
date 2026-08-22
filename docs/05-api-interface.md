@@ -138,6 +138,8 @@ GET /api/v1/configurations/history
 - 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사하며 Current 원본은 그대로 유지
 - 같은 날짜/시점에 복사된 Snapshot File들은 동일한 `snapshotTimestamp`를 공유
 - 현재 운영 계획에서 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`
+- History 생산자가 완료 조건/marker를 제공하며, 완료가 확인된 Snapshot Set만 조회 결과에 포함
+- 복사 중인 부분 Snapshot Set은 노출하지 않음
 - 생성 완료된 Snapshot File은 불변으로 취급
 - History는 Snapshot Set을 중첩 객체로 반환하지 않고 개별 Snapshot File 목록으로 반환
 - History item의 핵심 필드: `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`
@@ -241,6 +243,8 @@ Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하�
 
 Continuous 로그는 다운로드 중 파일이 커져도 시작 크기 이후의 추가 내용은 보내지 않는다. 반대로 truncate/rotation으로 `Content-Length`만큼 읽지 못하면 정상 완료가 아니라 streaming I/O 실패다. 새 파일로 이어 붙이거나 자동 재시도하지 않는다.
 
+FileGateway는 **저장소에서 읽을 수 있는 파일을 제공하는 역할만** 가진다. Current Configuration 및 Hourly/Daily 로그가 생산 중 어떤 방식으로 갱신되는지, 파일 교체가 원자적인지, 읽는 동안 내용 일관성이 보장되는지는 생산 시스템의 책임이다. FileGateway는 이를 위해 별도 snapshot 복사, 잠금, 버전 고정 또는 생산 완료 판정을 추가하지 않는다. 외부 변경으로 스트림 길이 불일치/I/O 실패가 발생하면 일반 streaming failure 규칙을 적용한다.
+
 다운로드 응답의 기본 헤더는 다음 원칙을 따른다.
 
 - `Content-Type: application/octet-stream`
@@ -279,6 +283,27 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 
 여러 파일을 자동 ZIP으로 묶는 기능은 MVP에서 제공하지 않는다.
 
+## 공통 오류 응답
+
+HTTP 오류 body는 ASP.NET Core Problem Details 계열의 공통 JSON 형식을 사용하고, 클라이언트가 안정적으로 분기할 수 있는 `code`와 운영 추적용 `traceId`를 포함한다.
+
+예시:
+
+```json
+{
+  "type": "about:blank",
+  "title": "File not found",
+  "status": 404,
+  "code": "FileNotFound",
+  "traceId": "..."
+}
+```
+
+- `code`는 아래 정의된 안정적인 machine-readable 오류 코드다.
+- `title`/`detail`은 클라이언트 안전한 일반 설명만 제공한다.
+- FTP host/path, credential, 실제 기준정보 값, Stored Procedure/DB 진단, stack trace 등 내부 정보는 응답에 포함하지 않는다.
+- 상세 원인은 `traceId`로 연계되는 서버 로그에서 확인한다.
+
 ## 대표 오류
 
 - 400 `InvalidRequest`
@@ -297,8 +322,6 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 - 500 `InternalError`
 
 `ClientCancelled`는 서버가 새 HTTP 오류 응답을 반환하는 코드가 아니라, 클라이언트가 이미 연결을 종료/취소한 요청의 운영상 종료 분류다.
-
-세부 error body 규격은 구현 계획에서 일관된 공통 형식으로 확정한다.
 
 ## API 안정성
 
