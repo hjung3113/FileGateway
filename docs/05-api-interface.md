@@ -118,10 +118,33 @@ GET /api/v1/files/{fileId}/download
 - 일반 조회조건을 저장한 query token이 아님
 - 유효기간 24시간
 - 토큰에 물리 FTP host/path를 넣지 않음
-- 로그/Configuration Snapshot `fileId`는 특정 논리 파일 하나를 가리킴
-- Current Configuration `fileId`는 특정 `equipmentId + configurationType`의 현재 파일 슬롯을 가리킴
-- Current Configuration은 토큰 발급 후 내용이 바뀌어도 다운로드 시점의 현재 내용을 제공
-- 대상 논리 파일 또는 Current 슬롯이 더 이상 존재하지 않으면 `FileNotFound`
+- 다운로드 시 현재 기준정보를 다시 조회하여 논리 identity의 현재 물리 위치를 해석
+- 물리 서버/경로가 변경돼도 같은 논리 파일이 새 위치에 존재하면 기존 `fileId`로 정상 접근
+
+논리 identity는 개념적으로 다음 값을 사용한다.
+
+```text
+Log:
+  equipmentId + logType + timestamp + fileName
+
+Configuration History:
+  equipmentId + configurationType + snapshotTimestamp + fileName
+
+Current Configuration:
+  equipmentId + configurationType + current
+```
+
+`subtype`/`attributes`는 파일을 다시 식별하기 위한 핵심 identity로 사용하지 않는다.
+
+Current Configuration `fileId`는 특정 물리 버전이 아니라 현재 파일 슬롯을 가리키므로 토큰 발급 후 내용이 바뀌어도 다운로드 시점의 현재 내용을 제공한다.
+
+`fileId` 처리 오류는 다음 원인을 구분한다.
+
+- 형식 오류 또는 서명 검증 실패 → `InvalidFileId` (400)
+- TTL 24시간 경과 → `FileIdExpired` (410)
+- 로그 기준정보가 삭제되어 재해석 불가 → `LogDefinitionNotFound` (404)
+- Configuration 기준정보가 삭제되어 재해석 불가 → `ConfigurationDefinitionNotFound` (404)
+- 기준정보는 정상이나 대상 논리 파일/Current 슬롯이 실제로 없음 → `FileNotFound` (404)
 
 ### 로그 조건 기반 직접 다운로드
 
@@ -134,25 +157,28 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 - 0개 일치: `FileNotFound`
 - 1개 일치: 다운로드
 - 2개 이상 정상 파일이 사용자 조건에 일치: `MultipleFilesMatched` (409)
-- 기준정보의 `cardinality=Single`인데 실제 탐색 결과가 2개 이상인 경우는 `MultipleFilesMatched`가 아니라 시스템 정의/파일 상태 불일치로 취급
+- 기준정보의 `cardinality=Single`인데 실제 탐색 결과가 2개 이상: `FileDefinitionConflict` (500)
+
+`MultipleFilesMatched`는 정상 파일 집합에 사용자 조건이 여러 건 일치한 경우에만 사용한다. 정의상 Single인데 여러 파일이 발견된 상태와 혼용하지 않는다.
 
 여러 파일을 자동 ZIP으로 묶는 기능은 MVP에서 제공하지 않는다.
 
 ## 대표 오류
 
 - 400 `InvalidRequest`
+- 400 `InvalidFileId`
 - 401 `InvalidApiKey`
 - 404 `EquipmentNotFound`
 - 404 `LogDefinitionNotFound`
 - 404 `ConfigurationDefinitionNotFound`
 - 404 `FileNotFound`
 - 409 `MultipleFilesMatched`
+- 410 `FileIdExpired`
+- 500 `FileDefinitionConflict`
 - 502 `FileServerUnavailable`
 - 502 `FileServerProtocolError`
 - 503 `ReferenceDataUnavailable`
 - 500 `InternalError`
-
-`cardinality=Single` invariant 위반에 사용할 외부 오류 코드는 오류 semantics 라운드에서 별도 확정한다.
 
 세부 error body 규격은 구현 계획에서 일관된 공통 형식으로 확정한다.
 
