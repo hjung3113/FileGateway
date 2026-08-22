@@ -24,6 +24,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - FileGateway는 MSSQL 기준정보를 사용해 실제 서버와 탐색 규칙을 해석한다.
 - 분산 파일 서버들의 MVP 접근 방식과 기본 root 구조는 동일하다.
 - 클라이언트는 raw 물리 경로를 전달할 수 없으며, 모든 실제 파일 접근은 기준정보의 서버 `rootPath` 경계 안에서만 허용한다.
+- MVP 파일명 비교는 Windows/IIS FTP 환경에 맞춰 case-insensitive로 수행하고 원래 casing은 응답에 보존한다.
 
 ## 4. MVP 기능
 
@@ -47,7 +48,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 개별 Configuration File을 별도 `subtype`이나 `configurationType`으로 세분화하지 않음
 - 실제 물리 경로는 외부 계약의 식별자로 사용하지 않음
 - Current와 History를 명시적으로 구분해 조회
-- History 생산자가 제공한 완료 조건/marker가 확인된 Snapshot Set만 조회 대상으로 사용
+- History 생산자가 생성한 완료 marker 파일이 존재하는 Snapshot Set만 조회 대상으로 사용
 
 ## 5. 로그 생성 유형 (`generationType`)
 
@@ -65,7 +66,9 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 
 ### Continuous
 
-- 날짜/시간 필터와 무관하게 현재 파일을 목록에 포함
+- 시간 범위를 사용하지 않고 현재 파일을 조회
+- `from` 또는 `to`가 들어오면 `InvalidRequest`
+- Hourly/Daily의 최근 24시간 기본값을 적용하지 않음
 - 다운로드 시작 시점의 파일 크기까지만 전송
 
 ## 6. Configuration File
@@ -74,12 +77,13 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 로그가 아니므로 `logType` 또는 `generationType`의 한 종류로 취급하지 않는다.
 - `configurationType`으로 업무 의미를 구분하며 실제 파일명과 분리한다.
 - 특정 `equipmentId + configurationType`은 현재 사용 중인 Configuration File **집합**을 식별하며 파일이 여러 개일 수 있다.
-- Current 조회는 전체 현재 파일 집합을 `fileName ASC` 배열로 반환하고 pagination하지 않는다.
-- Current File의 논리 identity는 `equipmentId + configurationType + fileName`이다.
+- Current 조회는 전체 현재 파일 집합을 case-insensitive `fileName ASC` 배열로 반환하고 pagination하지 않는다.
+- Current File의 논리 identity는 `equipmentId + configurationType + fileName`이며 `fileName`은 case-insensitive 비교한다.
 - Current 직접 다운로드에서 0개 일치는 `FileNotFound`, 1개는 다운로드, 여러 개는 `MultipleFilesMatched`로 처리한다.
 - 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사해 Configuration Snapshot Set을 생성하며 Current 원본은 그대로 유지한다.
 - 같은 Snapshot Set의 파일들은 동일한 `snapshotTimestamp`를 공유하고, History API는 개별 Snapshot File 목록을 반환한다.
-- 복사 중인 부분 Snapshot Set은 노출하지 않고 History 생산자가 제공한 완료 조건/marker가 확인된 Snapshot Set만 제공한다.
+- History 생산자는 복사 완료 시 marker 파일을 생성한다. FileGateway는 marker 존재 여부만 확인하고 내용은 해석하지 않는다.
+- marker가 없는 부분 Snapshot Set은 노출하지 않는다.
 - FileGateway는 Current/History 파일을 **읽기 전용으로 제공**하며 히스토리 생성·복사·보관 책임을 갖지 않는다.
 
 ## 7. 시간 조회 규칙
@@ -88,14 +92,14 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - Configuration Snapshot의 시간은 snapshot 생성 논리 시각이며 파일명/경로 규칙에서 추출한다.
 - timezone 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 - API에서는 UTC offset이 포함된 ISO-8601 값으로 표현한다.
-- `from`/`to`는 `[from, to)`로 해석해 `from`은 포함하고 `to`는 제외한다.
-- 로그에서 `from`/`to`가 모두 없으면 최근 24시간을 조회한다.
-- 로그에서 `from`만 있으면 `[from, from + 2일)`을 조회한다.
-- 로그에서 `to`만 있는 형태는 지원하지 않고 `InvalidRequest`로 처리한다.
-- 로그에서 `from`/`to`가 모두 있으면 지정한 `[from, to)`를 조회한다.
+- Hourly/Daily의 `from`/`to`는 `[from, to)`로 해석해 `from`은 포함하고 `to`는 제외한다.
+- Hourly/Daily에서 `from`/`to`가 모두 없으면 최근 24시간을 조회한다.
+- Hourly/Daily에서 `from`만 있으면 `[from, from + 2일)`을 조회한다.
+- Hourly/Daily에서 `to`만 있는 형태는 지원하지 않고 `InvalidRequest`로 처리한다.
+- Hourly/Daily에서 `from`/`to`가 모두 있으면 지정한 `[from, to)`를 조회한다.
 - `from >= to`는 `InvalidRequest`다.
 - 로그 시간 조회에는 설정 가능한 `Logs.MaxQueryRange`를 두며 최대 기간 초과 요청은 `InvalidRequest`다. `from` 단독 요청이 2일 범위를 의미하므로 이 설정은 최소 2일 이상이어야 한다.
-- Continuous 로그는 위 시간 범위와 별도로 현재 파일을 포함한다.
+- Continuous 로그는 `from`/`to`를 허용하지 않는다.
 - Current Configuration은 시간 필터 대상이 아니다.
 - Configuration History는 `from`과 `to`를 모두 필수로 요구한다.
 - Configuration History에는 로그와 독립적인 `Configurations.HistoryMaxQueryRange`를 두고 초과 요청은 `InvalidRequest`로 처리한다.
@@ -106,8 +110,9 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 로그 `fileId`는 `equipmentId + logType + timestamp + fileName`의 논리 파일을 가리킨다.
 - Configuration Snapshot File의 `fileId`는 `equipmentId + configurationType + snapshotTimestamp + fileName`의 논리 파일을 가리킨다.
 - Current Configuration File의 `fileId`는 `equipmentId + configurationType + fileName`의 현재 논리 파일을 가리킨다.
+- 위 logical identity의 `fileName` 구성요소는 MVP에서 case-insensitive 비교한다.
 - Current Configuration File은 목록 조회 후 내용이 변경될 수 있으며 같은 `fileId`로 이후 다운로드하면 다운로드 시점의 현재 내용을 제공한다.
-- Current File의 `fileName`이 바뀌면 다른 논리 파일로 취급한다.
+- Current File의 파일명이 대소문자만 바뀐 것은 같은 논리 파일로 취급한다. 그 외 이름 변경은 다른 논리 파일이다.
 - 특정 과거 버전이 필요하면 Configuration Snapshot File의 `fileId`를 사용한다.
 
 ## 9. 기술/운영 MVP 결정
@@ -116,10 +121,15 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 운영 OS: Windows Server
 - 호스팅: IIS
 - 외부 통신: HTTPS
-- 인증: API Key
+- 인증: `X-Api-Key` HTTP header
+- API Key query string 전달 금지
+- API Key 누락/오류: `401 InvalidApiKey`
 - 파일 서버 접근: FTP/FTPS 가능 구조, 실제 IIS FTP SSL 설정은 배포 전 확인
 - 기준정보: MSSQL Stored Procedure
 - 기준정보 캐시: 프로세스 메모리
+- 새 기준정보는 전체 검증 성공 후 atomic cache 교체
+- 갱신/검증 실패 시 last-known-good cache가 있으면 전체를 계속 사용
+- 최초 로딩부터 usable 기준정보가 없으면 `ReferenceDataUnavailable`
 - 주요 파일 크기: 대부분 100MB 이하 기준
 - 규모: 파일 서버 수십~수백 대, 동시 다운로드 수십 건 수준 고려
 
