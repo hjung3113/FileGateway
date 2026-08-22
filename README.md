@@ -1,10 +1,24 @@
 # FileGateway
 
-분산 파일 서버에 이미 저장된 **설비 로그와 Configuration File**을 클라이언트에 조회·다운로드 형태로 제공하는 읽기 전용 File Gateway입니다.
+분산 파일 서버에 이미 저장된 **설비 로그와 Configuration File**을 여러 애플리케이션/시스템에 조회·다운로드 형태로 제공하는 읽기 전용 File Gateway입니다.
 
-클라이언트는 실제 파일 서버 주소나 물리 경로를 알 필요 없이 `equipmentId`와 논리 조회 조건만 사용합니다. FileGateway는 MSSQL 기준정보를 통해 대상 서버와 파일 탐색 규칙을 해석하고 FTP/FTPS로 파일을 읽어 제공합니다.
+API 소비자는 실제 파일 서버 주소나 물리 경로를 알 필요 없이 `equipmentId`와 논리 조회 조건만 사용합니다. FileGateway는 MSSQL 기준정보를 통해 대상 서버와 파일 탐색 규칙을 해석하고 FTP/FTPS로 파일을 읽어 제공합니다.
 
 > 설비 직접 접속, 로그 수집/가공, Configuration History 생성·복사·보관은 별도 시스템 책임이며 FileGateway 범위가 아닙니다.
+
+## 현재 상태
+
+**설계 확정 단계이며 구현은 아직 시작하지 않았습니다.**
+
+구현/변경 작업은 [`docs/INDEX.md`](docs/INDEX.md)를 시작점으로 역할별 설계 문서를 확인합니다.
+
+## API 소비자
+
+- 사용자용 WPF 데스크톱 애플리케이션
+- Web Backend / BFF
+- 파일을 받아가야 하는 다른 서버/서비스
+
+호출 구현은 .NET, Python 등 일반적인 HTTP 클라이언트 환경을 사용할 수 있습니다. 브라우저가 FileGateway API Key를 직접 보유하는 구조는 전제로 하지 않습니다.
 
 ## 주요 기능
 
@@ -45,22 +59,22 @@ GET /api/v1/files/{fileId}/download
 ## 구조
 
 ```text
-Clients (.NET / Python / WPF / Web Backend / Other Server)
-                              |
-                           HTTPS
-                              |
-                       FileGateway.Api
-                        /            \
-              FileGateway.Logs   FileGateway.Configurations
-                        \            /
-                         FileGateway.Core
-                          ^          ^
-                          |          |
-                     MSSQL/cache   FTP/FTPS
-                          \          /
-                    FileGateway.Infrastructure
-                              |
-                    Distributed File Servers
+WPF Desktop / Web Backend(BFF) / Other Server or Service
+                         |
+                       HTTPS
+                         |
+                  FileGateway.Api
+                   /            \
+         FileGateway.Logs   FileGateway.Configurations
+                   \            /
+                    FileGateway.Core
+                     ^          ^
+                     |          |
+                MSSQL/cache   FTP/FTPS
+                     \          /
+               FileGateway.Infrastructure
+                         |
+               Distributed File Servers
 ```
 
 - `FileGateway.Api`: HTTP API, 인증, 요청 검증, 감사로그, Health Check
@@ -74,7 +88,7 @@ MVP는 ASP.NET Core/.NET을 Windows Server + IIS에서 운영하며, 실제 파�
 ## 설계 원칙
 
 - 물리 서버 주소/경로를 외부 API에 노출하지 않음
-- 클라이언트 입력으로 raw 파일 경로를 구성하지 않음
+- API 소비자 입력으로 raw 파일 경로를 구성하지 않음
 - 파일 전체 메모리 적재가 아닌 streaming download
 - 목록 조회와 직접 다운로드가 동일 Resolver 규칙 사용
 - 논리 시간 슬롯과 물리 디렉터리를 1:1로 가정하지 않음
@@ -95,6 +109,8 @@ MVP는 ASP.NET Core/.NET을 Windows Server + IIS에서 운영하며, 실제 파�
 - [`04b-configuration-provider.md`](docs/04b-configuration-provider.md) — Configuration Provider
 - [`05-api-interface.md`](docs/05-api-interface.md) — 외부 API 계약
 - [`06-reference-data.md`](docs/06-reference-data.md) — MSSQL 기준정보/cache
+- [`07-extension-and-risks.md`](docs/07-extension-and-risks.md) — 확장성과 주요 리스크
+- [`08-agent-tooling.md`](docs/08-agent-tooling.md) — Agent/Skill 운영
 - [`09-security-and-operations.md`](docs/09-security-and-operations.md) — 인증/보안/운영
 - [`10-testing-and-deployment.md`](docs/10-testing-and-deployment.md) — 테스트/배포
 
