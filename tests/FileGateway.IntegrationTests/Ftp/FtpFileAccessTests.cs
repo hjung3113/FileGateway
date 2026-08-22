@@ -103,6 +103,10 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
         var plain = FtpOptions.ToFtpConfig(new FtpOptions());
         Assert.Equal(FtpEncryptionMode.None, plain.EncryptionMode);
         Assert.False(plain.ValidateAnyCertificate);
+        Assert.Equal(15_000, plain.ConnectTimeout);
+        Assert.Equal(60_000, plain.ReadTimeout);
+        Assert.Equal(15_000, plain.DataConnectionConnectTimeout);
+        Assert.Equal(60_000, plain.DataConnectionReadTimeout);
 
         var ftps = FtpOptions.ToFtpConfig(new FtpOptions
             { Security = FtpSecurity.ExplicitTls, AcceptUntrustedCertificates = true });

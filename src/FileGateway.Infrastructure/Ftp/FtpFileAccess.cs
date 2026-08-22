@@ -58,7 +58,7 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
         }
         catch (Exception ex)
         {
-            if (client is not null) await client.DisposeAsync();
+            if (client is not null) { try { await client.DisposeAsync(); } catch { /* 원본 오류 유지 */ } }
             await lease.DisposeAsync();
             if (ex is FileAccessException or OperationCanceledException) throw;
             throw Classify(ex); // 연결/명령 구분 없이 동일 매핑
@@ -138,8 +138,9 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
             => await inner.ReadAsync(buffer, ct);
         public override async ValueTask DisposeAsync()
         {
-            await inner.DisposeAsync();
-            await client.DisposeAsync();
+            // 해제 실패가 permit 누수로 이어지지 않게 각 단계를 best-effort로 처리한다.
+            try { await inner.DisposeAsync(); } catch { /* best-effort teardown */ }
+            try { await client.DisposeAsync(); } catch { /* best-effort teardown */ }
             await lease.DisposeAsync();
         }
         public override void Flush() => throw new NotSupportedException();
