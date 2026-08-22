@@ -78,6 +78,7 @@ Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 
 - 결과가 없으면 `200 OK`와 빈 배열을 반환한다.
 - Current 목록은 보통 작은 현재 파일 집합이므로 `limit`/`continuationToken`을 사용하지 않고 전체를 한 번에 반환한다.
 - Current item의 핵심 필드는 `fileId`, `fileName`, `equipmentId`, `configurationType`, `size`다.
+- Current 목록 정렬은 `fileName ASC`로 고정해 FTP 서버의 원시 목록 순서에 의존하지 않는다.
 - Current Configuration File의 논리 identity는 `equipmentId + configurationType + fileName`이다.
 - `fileName`이 바뀌면 다른 논리 Current Configuration File로 취급한다.
 - 목록/정보 조회 후 각 파일 내용이 변경될 수 있다.
@@ -114,6 +115,7 @@ Current 조회와 같은 Resolver 규칙을 사용한다.
 - timezone 없는 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 - 시간 범위는 `[from, to)` 규칙을 사용한다.
 - History 조회에서는 `from`과 `to`를 모두 필수로 요구한다. 전체 히스토리 또는 임의 기본 기간을 암묵적으로 조회하지 않는다.
+- History 조회에는 설정 가능한 `Configurations.HistoryMaxQueryRange`를 적용하고 초과 요청은 `InvalidRequest`로 처리한다.
 - History API는 Snapshot Set을 별도 중첩 객체로 만들지 않고 개별 Snapshot File을 반환하며, 같은 시점의 파일들은 동일한 `snapshotTimestamp`로 구분할 수 있다.
 - Snapshot File용 `fileId`는 `equipmentId + configurationType + snapshotTimestamp + fileName`의 논리 identity로 특정 파일 하나를 가리킨다.
 - `subtype`/`attributes`는 MVP Configuration 모델에 두지 않는다.
@@ -148,12 +150,13 @@ Configurations는 Current/Snapshot `fileId`와 Configuration History pagination�
 
 - Current와 History는 API에서 명시적으로 구분한다.
 - Current를 History 결과에 암묵적으로 포함하지 않는다.
-- Current는 `equipmentId + configurationType`으로 현재 파일 집합을 결정한다.
+- Current는 `equipmentId + configurationType`으로 현재 파일 집합을 결정하고 `fileName ASC`로 정렬한다.
 - History는 `equipmentId + configurationType + [from, to)`로 **완료된** Snapshot File 집합을 조회한다.
 - History 결과 item은 `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`를 가진다.
-- History 목록의 결과가 없으면 `200 OK`와 빈 배열을 반환한다.
+- History 목록은 pagination envelope의 `items`로 결과를 반환하며 결과가 없으면 `items=[]`, `continuationToken=null`이다.
 - History 목록은 `limit + continuationToken` 페이지네이션을 사용한다.
 - `limit`의 기본값/최댓값은 운영 설정으로 두며 최대값을 넘는 요청은 `InvalidRequest`다.
+- `Configurations.HistoryMaxQueryRange`를 초과하는 조회는 `InvalidRequest`다.
 - History 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 `fileName ASC`다.
 - 페이지네이션은 원격 파일 집합의 완전한 snapshot을 보장하지 않는다. 조회 중 파일이 추가/삭제되면 후속 페이지 결과가 달라질 수 있다.
 - Configuration History 전용 조건 기반 직접 다운로드 endpoint는 두지 않는다. History 목록에서 `fileId`를 받은 뒤 공통 `/files/{fileId}/download`를 사용한다.
