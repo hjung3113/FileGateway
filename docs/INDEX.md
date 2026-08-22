@@ -2,14 +2,17 @@
 
 설계/구현 작업을 시작할 때 이 문서를 먼저 읽는다. 전체 문서를 순서대로 읽기보다 **현재 작업 상황에 해당하는 문서**를 선택한다.
 
+용어를 해석하거나 새 이름을 만들기 전에는 [00 용어집](00-glossary.md)의 정식 용어를 우선 확인한다.
+
 ## 상황별 문서 선택
 
 | 이런 작업을 할 때 | 먼저 볼 문서 | 함께 볼 문서 |
 |---|---|---|
+| 프로젝트 용어/도메인 명칭 확인 또는 변경 | [00 용어집](00-glossary.md) | 해당 역할별 설계 문서 |
 | 프로젝트 목적, MVP 범위, 제외 범위 확인 | [01 요구사항](01-requirements.md) | [07 확장/리스크](07-extension-and-risks.md) |
 | 프로젝트/계층 구조 변경 | [02 전체 아키텍처](02-architecture.md) | [03 Server Access Core](03-server-access-core.md), [04 Log Provider](04-log-provider.md) |
 | FTP/FTPS 파일 접근, 목록/Stat/Stream 구현 | [03 Server Access Core](03-server-access-core.md) | [09 보안/운영](09-security-and-operations.md) |
-| 로그 탐색, Event/Configuration, 날짜/속성 필터 구현 | [04 Log Provider](04-log-provider.md) | [06 DB/기준정보](06-reference-data.md) |
+| 로그 탐색, 날짜/속성 필터 구현 | [04 Log Provider](04-log-provider.md) | [06 DB/기준정보](06-reference-data.md) |
 | HTTP endpoint, fileId, pagination, 다운로드 계약 변경 | [05 API 인터페이스](05-api-interface.md) | [09 보안/운영](09-security-and-operations.md) |
 | MSSQL SP 결과나 탐색/파싱 규칙 변경 | [06 DB/기준정보](06-reference-data.md) | [04 Log Provider](04-log-provider.md) |
 | 향후 Linux/Site/credential/다른 프로토콜 확장 판단 | [07 확장/리스크](07-extension-and-risks.md) | [02 전체 아키텍처](02-architecture.md) |
@@ -20,6 +23,7 @@
 
 ## 문서 역할
 
+0. `00-glossary.md` — 프로젝트 정식 용어와 피해야 할 혼용 표현
 1. `01-requirements.md` — 무엇을 만들고 무엇을 만들지 않는가
 2. `02-architecture.md` — 계층과 의존성 경계
 3. `03-server-access-core.md` — 프로토콜 비종속 파일 접근 계약과 FTP/FTPS 구현 경계
@@ -33,6 +37,7 @@
 
 ## 문서 우선순위
 
+- 정식 용어는 `00-glossary.md`를 기준으로 한다.
 - 역할별 문서가 현재 구현 기준이다.
 - `docs/superpowers/specs/...`는 설계 확정 시점의 통합 스냅샷이다.
 - 문서 간 충돌이 발견되면 구현 전에 충돌을 해소하고 관련 문서를 함께 수정한다.
