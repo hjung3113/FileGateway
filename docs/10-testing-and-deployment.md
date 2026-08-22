@@ -21,12 +21,14 @@
 - attribute filter의 case-sensitive 일치
 - `cardinality`의 슬롯 단위 검증
 - 후보 파일 metadata 파싱 실패 → `FileDefinitionConflict`
-- `fileId` 서명/만료/논리 identity
-- continuation token의 조회조건 종속성
+- `fileId` 서명/만료/논리 identity/resourceKind
+- signing key rotation 중 이전 key로 발급된 유효 `fileId` 검증
+- continuation token의 조회조건 종속성/TTL/stateless cursor
 - continuation token 유지 중 `limit` 변경 허용
 - direct download multiple-match 판단
 - Current Configuration과 History 분리
 - Configuration History 정렬
+- History 완료 조건/marker 판정
 
 `IFileAccess` fake/stub으로 Resolver를 독립 테스트한다.
 
@@ -40,7 +42,10 @@
 - Continuous 파일의 시작 시점 크기 제한
 - Continuous 다운로드 중 growth/truncate 처리
 - Current Configuration 변경 파일 조회/다운로드
-- 불변 Configuration Snapshot History 조회
+- 완료 marker가 없는 Configuration Snapshot Set 제외
+- 완료 marker가 확인된 불변 Configuration Snapshot History 조회
+
+Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적 replace 여부, 생산 중 내용 일관성은 FileGateway 테스트 책임에 포함하지 않는다. FileGateway는 이미 저장소에 보이는 파일을 읽는 동작과 외부 변경으로 발생한 I/O 실패 처리를 검증한다.
 
 가능하면 운영과 유사한 IIS FTP 테스트 환경에서 Passive port 동작도 확인한다.
 
@@ -56,7 +61,8 @@
 - 파일 정보/HEAD의 실제 원격 stat 수행
 - fileId 다운로드
 - 조건 기반 직접 다운로드
-- 대표 오류 코드
+- Problem Details 기반 공통 오류 body와 안정적인 `code`, `traceId`
+- 오류 응답에 FTP host/path, stack trace 등 내부정보 비노출
 - streaming/cancel 및 `ClientCancelled` 분류
 - 다운로드 `Content-Length`, `Content-Type`, `Content-Disposition`
 - 물리 host/path 비노출
@@ -77,8 +83,8 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 
 - 공통 비민감 설정: `appsettings.json`
 - 환경별 비민감 설정: `appsettings.<Environment>.json`
-- API Key/FTP credential/DB credential: Secret/환경변수 등 별도 공급
-- timeout/cache TTL/concurrency limit/로그 최대 조회 기간: 운영 설정 가능
+- API Key/FTP credential/DB credential/token signing key: Secret/환경변수 등 별도 공급
+- timeout/cache TTL/concurrency limit/로그 최대 조회 기간/continuationToken TTL: 운영 설정 가능
 
 ## 배포 전 필수 확인
 
@@ -89,6 +95,8 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 - IIS FTP SSL 설정(FTP vs FTPS)
 - Passive 데이터 포트 범위/방화벽
 - 실제 파일 목록/다운로드
+- Configuration History 완료 marker/조건 동작
+- token signing key rotation 시 기존 fileId TTL 유지
 - 로그/Secret에 민감정보 비노출
 
 ## MVP 완료 기준
