@@ -38,9 +38,11 @@ Equipment + Configuration Type
 │  ├─ Current File B
 │  └─ Current File ...
 └─ Configuration Snapshot History
-   ├─ Snapshot File @ T1
-   ├─ Snapshot File @ T1
-   ├─ Snapshot File @ T2
+   ├─ Snapshot Set @ T1
+   │  ├─ Snapshot File A
+   │  ├─ Snapshot File B
+   │  └─ ...
+   ├─ Snapshot Set @ T2
    └─ ...
 ```
 
@@ -60,7 +62,7 @@ EquipmentConfigurationDefinition
 ```
 
 - `currentRule`: 현재 Configuration File 집합의 위치/후보 패턴을 해석하는 규칙
-- `historyRule`: 히스토리 디렉터리/파일 패턴과 snapshot 시각 추출 규칙
+- `historyRule`: 날짜별 히스토리 디렉터리/파일 패턴과 `snapshotTimestamp`를 해석하는 규칙
 
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
@@ -71,19 +73,22 @@ Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 
 - 개별 파일을 `subtype`/`attributes`로 세분화하지 않는다.
 - 목록/정보 조회 후 각 파일 내용이 변경될 수 있다.
 - Current 파일용 `fileId`는 개별 현재 파일 하나를 가리켜야 하며, 그 장기 논리 identity 규칙은 별도 설계 결정으로 확정한다.
-- 과거 특정 버전이 필요하면 History snapshot의 `fileId`를 사용한다.
+- 과거 특정 버전이 필요하면 History의 개별 Snapshot File `fileId`를 사용한다.
 
 ## Configuration Snapshot History
 
-- 별도 시스템이 생성해 파일 서버에 저장한 과거 설정파일이다.
-- 생성이 완료된 snapshot은 불변이다. 기존 snapshot을 수정하지 않고 새 snapshot을 생성한다.
-- 같은 `equipmentId + configurationType + snapshotTimestamp`에도 여러 snapshot 파일이 존재할 수 있다.
-- snapshot의 논리 시각은 파일명/경로 규칙에서 추출한다.
+- 별도 시스템이 자정에 날짜 폴더를 만들고 해당 시점의 Current Configuration Set을 그대로 복사한다.
+- snapshot 생성 후에도 Current 원본 파일은 그대로 유지된다.
+- 한 날짜/시점의 복사 결과는 하나의 `Configuration Snapshot Set`이며 그 안에 PM1, PM2, PM3, PM4처럼 여러 파일이 존재할 수 있다.
+- 같은 Snapshot Set의 모든 파일은 동일한 `snapshotTimestamp`를 공유한다.
+- 현재 운영 계획에서 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`이며 날짜 폴더/경로 규칙에서 해석한다.
+- 생성이 완료된 Snapshot File은 불변이다. 기존 파일을 수정하지 않고 다음 snapshot에서 새 파일로 반영한다.
 - FTP modified time을 snapshot 시각으로 사용하지 않는다.
 - timezone 없는 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 - 시간 범위는 `[from, to)` 규칙을 사용한다.
 - History 조회에서는 `from`과 `to`를 모두 필수로 요구한다. 전체 히스토리 또는 임의 기본 기간을 암묵적으로 조회하지 않는다.
-- snapshot용 `fileId`는 특정 논리 snapshot 파일 하나를 가리킨다.
+- History API는 Snapshot Set을 별도 중첩 객체로 만들지 않고 개별 Snapshot File을 반환하며, 같은 시점의 파일들은 동일한 `snapshotTimestamp`로 구분할 수 있다.
+- Snapshot File용 `fileId`는 `equipmentId + configurationType + snapshotTimestamp + fileName`의 논리 identity로 특정 파일 하나를 가리킨다.
 - `subtype`/`attributes`는 MVP Configuration 모델에 두지 않는다.
 
 ## 조회 원칙
@@ -91,7 +96,11 @@ Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 
 - Current와 History는 API에서 명시적으로 구분한다.
 - Current를 History 결과에 암묵적으로 포함하지 않는다.
 - Current는 `equipmentId + configurationType`으로 현재 파일 집합을 결정한다.
-- History는 `equipmentId + configurationType + [from, to)`로 snapshot 파일 집합을 조회한다.
+- History는 `equipmentId + configurationType + [from, to)`로 Snapshot File 집합을 조회한다.
+- History 결과 item은 `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`를 가진다.
+- History 목록의 결과가 없으면 `200 OK`와 빈 배열을 반환한다.
 - History 목록은 `limit + continuationToken` 페이지네이션을 사용한다.
+- `limit`의 기본값/최댓값은 운영 설정으로 두며 최대값을 넘는 요청은 `InvalidRequest`다.
 - History 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 `fileName ASC`다.
 - 페이지네이션은 원격 파일 집합의 완전한 snapshot을 보장하지 않는다. 조회 중 파일이 추가/삭제되면 후속 페이지 결과가 달라질 수 있다.
+- Configuration History 전용 조건 기반 직접 다운로드 endpoint는 두지 않는다. History 목록에서 `fileId`를 받은 뒤 공통 `/files/{fileId}/download`를 사용한다.
