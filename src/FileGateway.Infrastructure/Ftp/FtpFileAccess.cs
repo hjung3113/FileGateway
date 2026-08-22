@@ -86,12 +86,17 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
 
     private static FileAccessException Classify(Exception ex)
     {
-        // 연결 거부가 FtpException(SocketException inner)로 감싸져 나오므로 예외 체인을 함께 본다.
+        // 연결 거부가 FtpException(SocketException inner) 또는 IOException으로 감싸져 나올 수 있어
+        // 전송 계열 오류를 I/O 폴백보다 먼저 전체 예외 체인에서 찾는다.
         for (var e = (Exception?)ex; e is not null; e = e.InnerException)
         {
             if (e is FtpAuthenticationException) return new(FileAccessError.AuthenticationFailed, "ftp auth failed", ex);
             if (e is SocketException) return new(FileAccessError.ConnectionFailed, "ftp connection failed", ex);
             if (e is TimeoutException) return new(FileAccessError.Timeout, "ftp timeout", ex);
+        }
+
+        for (var e = (Exception?)ex; e is not null; e = e.InnerException)
+        {
             if (e is IOException) return new(FileAccessError.IoFailure, "ftp I/O failure", ex);
         }
         return ex is FtpException

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Net.Sockets;
 using FileGateway.Core.Files;
 using FileGateway.Infrastructure.Ftp;
 using FluentFTP;
@@ -30,6 +31,17 @@ public sealed class FtpFileAccessContractTests
         Assert.Equal(21, InvokeResolveHostPort(method!, new FtpOptions()));
         Assert.Equal(2021, InvokeResolveHostPort(method!, new FtpOptions
             { Security = FtpSecurity.ImplicitTls, HostPortOverride = 2021 }));
+    }
+
+    [Fact]
+    public void Classify_prefers_socket_failure_inside_io_exception()
+    {
+        var socket = new SocketException((int)SocketError.ConnectionReset);
+        var wrapped = new IOException("stream reset", socket);
+
+        var ex = InvokeClassify(wrapped);
+
+        Assert.Equal(FileAccessError.ConnectionFailed, ex.Error);
     }
 
     [Fact]
@@ -65,6 +77,15 @@ public sealed class FtpFileAccessContractTests
     private static int InvokeResolveHostPort(MethodInfo method, FtpOptions options)
         => (int)(method.Invoke(null, [options])
             ?? throw new InvalidOperationException("ResolveHostPort returned no value."));
+
+    private static FileAccessException InvokeClassify(Exception exception)
+    {
+        var method = typeof(FtpFileAccess).GetMethod(
+            "Classify", BindingFlags.Static | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Classify was not found.");
+        return (FileAccessException)(method.Invoke(null, [exception])
+            ?? throw new InvalidOperationException("Classify returned no value."));
+    }
 
     private static async Task<Stream> CreateOwnedStreamAsync(Stream inner)
     {
