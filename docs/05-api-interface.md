@@ -38,6 +38,7 @@ GET /api/v1/logs
 - `from`만 있음 → `[from, from + 2일)`
 - `to`만 있음 → `InvalidRequest`
 - `from`, `to` 모두 있음 → 지정한 `[from, to)`
+- `from >= to` → `InvalidRequest`
 
 시간 기반 로그 조회에는 설정 가능한 최대 조회 기간을 적용한다. 구체적인 기간 값은 운영 설정으로 두며 초과 요청은 `InvalidRequest`다.
 
@@ -61,7 +62,9 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 시간 기반 로그 목록의 기본 정렬은 `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`다. `equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
 
-목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
+목록 결과가 없으면 `200 OK`와 빈 배열을 반환한다.
+
+목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다. `limit`의 기본값과 최댓값은 운영 설정으로 두며 최대값 초과 시 `InvalidRequest`다.
 
 `continuationToken`은 발급된 원래 조회조건의 다음 페이지를 가리킨다. 토큰을 사용하면서 `equipmentId`, `logType`, `from/to`, `subtype`, attributes 등 **결과 집합을 바꾸는 조회조건**을 변경하면 `InvalidRequest`를 반환한다. 다른 조건으로 조회하려면 continuation token 없이 첫 페이지부터 새로 조회한다.
 
@@ -71,6 +74,8 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
 
+조건 기반 존재 여부 전용 HEAD endpoint는 추가하지 않는다. 조건 조회는 목록 API를 사용하고, 특정 `fileId`를 얻은 뒤 존재 확인이 필요하면 공통 `HEAD /api/v1/files/{fileId}`를 사용한다.
+
 ### Current Configuration 조회
 
 ```http
@@ -78,10 +83,12 @@ GET /api/v1/configurations/current?equipmentId=...&configurationType=...
 ```
 
 - `equipmentId`, `configurationType` 모두 필수
-- 하나의 Current Configuration 논리 슬롯을 조회
+- 동일 `equipmentId + configurationType` 아래 PM1/PM2/PM3/PM4처럼 여러 Current Configuration File이 존재할 수 있음
+- 개별 파일을 `subtype`/`attributes`로 세분화하지 않음
 - 시간 필터를 사용하지 않음
-- `subtype`/`attributes`는 MVP에서 사용하지 않음
 - Current를 History 결과에 포함하지 않음
+
+Current 응답 형식, Current File의 개별 logical identity, Current 직접 다운로드의 다중 파일 처리, Current pagination 여부는 Q70~Q72/Q74에서 확정한다.
 
 ### Current Configuration 직접 다운로드
 
@@ -89,9 +96,7 @@ GET /api/v1/configurations/current?equipmentId=...&configurationType=...
 GET /api/v1/configurations/current/download?equipmentId=...&configurationType=...
 ```
 
-- 목록/metadata 조회를 선행하지 않고 현재 설정파일을 직접 다운로드
-- 조회와 동일한 Current Resolver 규칙 사용
-- 다운로드 시점의 현재 파일 내용을 제공
+동일 `configurationType`에 여러 Current 파일이 존재할 수 있음이 확인되어, 이 endpoint의 0/1/N 처리 규칙은 Q72에서 재확정한다.
 
 ### Configuration History 목록
 
@@ -109,14 +114,24 @@ GET /api/v1/configurations/history
 - `continuationToken` (선택)
 
 - snapshot 논리 시각 기준 `[from, to)` 조회
+- `from >= to`면 `InvalidRequest`
 - `from`/`to`가 없으면 임의 기본 기간 또는 전체 History로 대체하지 않고 `InvalidRequest`
-- 생성 완료된 snapshot은 불변으로 취급
+- 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사하며 Current 원본은 그대로 유지
+- 같은 날짜/시점에 복사된 Snapshot File들은 동일한 `snapshotTimestamp`를 공유
+- 현재 운영 계획에서 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`
+- 생성 완료된 Snapshot File은 불변으로 취급
+- History는 Snapshot Set을 중첩 객체로 반환하지 않고 개별 Snapshot File 목록으로 반환
+- History item의 핵심 필드: `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`
+- 결과가 없으면 `200 OK`와 빈 배열
 - 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 `fileName ASC`
 - History 목록은 `limit + opaque continuationToken`으로 페이지네이션
+- `limit`의 기본값/최댓값은 운영 설정으로 두며 최대값 초과 시 `InvalidRequest`
 - History의 continuation token도 원래 `equipmentId + configurationType + from/to` 조회조건에 종속되며 조건 변경 시 `InvalidRequest`
 - `limit`은 페이지마다 변경 가능
 - 페이지 사이에 원격 History 파일이 추가/삭제되면 결과 변화가 가능하며 완전한 snapshot은 보장하지 않음
 - Current Configuration은 결과에 포함하지 않음
+
+Configuration History 전용 조건 기반 직접 다운로드 endpoint는 MVP에서 만들지 않는다. 원하는 Snapshot File의 `fileId`를 얻은 뒤 공통 `/api/v1/files/{fileId}/download`를 사용한다.
 
 ### 파일 정보
 
@@ -158,28 +173,25 @@ GET /api/v1/files/{fileId}/download
 - 다운로드 시 현재 기준정보를 다시 조회하여 논리 identity의 현재 물리 위치를 해석
 - 물리 서버/경로가 변경돼도 같은 논리 파일이 새 위치에 존재하면 기존 `fileId`로 정상 접근
 
-논리 identity는 개념적으로 다음 값을 사용한다.
+논리 identity는 현재 확정된 범위에서 다음 값을 사용한다.
 
 ```text
 Log:
   equipmentId + logType + timestamp + fileName
 
-Configuration History:
+Configuration Snapshot File:
   equipmentId + configurationType + snapshotTimestamp + fileName
-
-Current Configuration:
-  equipmentId + configurationType + current
 ```
+
+Current Configuration File은 하나의 `configurationType` 아래 여러 파일이 가능하므로 개별 identity 규칙을 Q71에서 확정한다.
 
 `subtype`/`attributes`는 파일을 다시 식별하기 위한 핵심 identity로 사용하지 않는다.
 
-Current Configuration `fileId`는 특정 물리 버전이 아니라 현재 파일 슬롯을 가리키므로 토큰 발급 후 내용이 바뀌어도 다운로드 시점의 현재 내용을 제공한다.
-
 다운로드 응답은 스트림 시작 직전에 실제 파일 크기를 확인하고 그 값을 `Content-Length`로 사용한다.
 
-- 일반 로그 / Configuration Snapshot: 해당 파일의 시작 직전 크기
+- 일반 로그 / Configuration Snapshot File: 해당 파일의 시작 직전 크기
 - Continuous 로그: 다운로드 시작 시점 크기를 전송 상한으로 고정
-- Current Configuration: 다운로드 시작 시점의 현재 파일 크기
+- Current Configuration File: 다운로드 시작 시점의 현재 파일 크기
 
 Continuous 로그는 다운로드 중 파일이 커져도 시작 크기 이후의 추가 내용은 보내지 않는다. 반대로 truncate/rotation으로 `Content-Length`만큼 읽지 못하면 정상 완료가 아니라 streaming I/O 실패다. 새 파일로 이어 붙이거나 자동 재시도하지 않는다.
 
@@ -201,7 +213,7 @@ Continuous 로그는 다운로드 중 파일이 커져도 시작 크기 이후�
 - TTL 24시간 경과 → `FileIdExpired` (410)
 - 로그 기준정보가 삭제되어 재해석 불가 → `LogDefinitionNotFound` (404)
 - Configuration 기준정보가 삭제되어 재해석 불가 → `ConfigurationDefinitionNotFound` (404)
-- 기준정보는 정상이나 대상 논리 파일/Current 슬롯이 실제로 없음 → `FileNotFound` (404)
+- 기준정보는 정상이나 대상 논리 파일이 실제로 없음 → `FileNotFound` (404)
 
 ### 로그 조건 기반 직접 다운로드
 
