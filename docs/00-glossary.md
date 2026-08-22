@@ -24,16 +24,28 @@ _Avoid_: Configuration 로그, Configuration 계열 로그
 설비 설정파일을 업무 의미에 따라 구분하는 안정적인 논리 분류다. 실제 파일명과 분리하며 파일명 규칙 변경이 외부 계약 변경으로 이어지지 않게 한다.
 _Avoid_: 파일명을 configuration type으로 직접 사용
 
+**Current Configuration**:
+특정 `equipmentId + configurationType`에 대해 설비가 현재 사용하는 설정파일을 가리키는 논리 슬롯이다. 내용은 시간에 따라 바뀔 수 있으며 FileGateway가 버전을 고정하거나 히스토리를 생성하지 않는다.
+_Avoid_: 현재 파일을 불변 snapshot으로 간주하는 표현
+
+**Configuration Snapshot**:
+별도 시스템이 파일 서버에 저장한 과거 Configuration File의 시점별 히스토리 파일이다. FileGateway는 생성·보관 책임 없이 이미 저장된 snapshot을 조회·다운로드만 한다.
+_Avoid_: FileGateway가 생성하는 configuration backup
+
+**Configuration Snapshot Timestamp**:
+Configuration Snapshot이 생성된 논리 시각이다. 파일명/경로 규칙에서 추출하며 FTP modified time과 동일시하지 않는다.
+_Avoid_: FTP modified time
+
 **Logical Timestamp (`timestamp`)**:
 파일명/경로의 메타데이터 규칙에서 추출한, 해당 로그 파일이 논리적으로 나타내는 시각이다. FTP 파일의 수정 시각이나 서버 파일시스템 시각을 의미하지 않는다. 현재 Site의 운영 시간대인 `Asia/Seoul`로 해석하고 API에서는 UTC offset이 포함된 ISO-8601 값으로 표현한다.
 _Avoid_: modified time, FTP modification time을 `timestamp`와 동일시하는 표현
 
 **Time Range (`from`, `to`)**:
-로그의 논리 `timestamp`에 적용하는 반개구간 `[from, to)`이다. `from`은 포함하고 `to`는 제외한다.
+시간 기반 조회에 적용하는 반개구간 `[from, to)`이다. `from`은 포함하고 `to`는 제외한다.
 _Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현
 
 **File ID (`fileId`)**:
-특정 논리 파일 하나를 가리키는 유효기간이 있는 opaque 참조다. 일반 조회조건 자체를 나타내는 토큰이 아니며, 물리 서버가 재배치되어도 같은 논리 파일을 다시 해석할 수 있어야 한다.
+하나의 논리 파일 참조를 가리키는 유효기간이 있는 opaque 참조다. 로그와 Configuration Snapshot에서는 특정 파일을 가리키고, Current Configuration에서는 특정 `equipmentId + configurationType`의 현재 파일 슬롯을 가리킨다. 일반 조회조건 자체를 나타내는 토큰이 아니며 물리 서버/경로를 직접 식별하지 않는다.
 _Avoid_: query token, physical path identifier
 
 **Subtype (`subtype`)**:
@@ -41,5 +53,5 @@ _Avoid_: query token, physical path identifier
 _Avoid_: 임의의 모든 메타데이터를 subtype으로 승격
 
 **Attributes (`attributes`)**:
-`subtype` 외에 파일에서 추출하거나 기준정보로 부여하는 가변 key-value 메타데이터다.
+`subtype` 외에 로그 파일에서 추출하거나 기준정보로 부여하는 가변 key-value 메타데이터다. Configuration File에도 동일 개념을 적용할지는 별도 설계 결정으로 확정한다.
 _Avoid_: subtype과 같은 의미의 값을 중복 저장
