@@ -38,6 +38,49 @@ MVP Windows/IIS FTP 환경에서는 `fileName` 관련 비교를 case-insensitive
 
 ## API v1
 
+### 설비별 제공 파일 종류 조회
+
+```http
+GET /api/v1/equipments/{equipmentId}/file-types
+```
+
+해당 설비에서 FileGateway를 통해 제공 가능한 파일 종류를 반환한다. 실제 FTP 파일/폴더를 스캔하는 API가 아니라 **MSSQL에서 읽어 검증 완료된 기준정보 snapshot**을 조회한다.
+
+응답 예:
+
+```json
+{
+  "equipmentId": "EQ-001",
+  "logs": [
+    {
+      "logType": "EventLog",
+      "generationType": "Hourly"
+    },
+    {
+      "logType": "TraceLog",
+      "generationType": "Continuous"
+    }
+  ],
+  "configurations": [
+    {
+      "configurationType": "PM"
+    }
+  ]
+}
+```
+
+계약:
+
+- `equipmentId`가 존재하지 않으면 `404 EquipmentNotFound`
+- 유효한 설비지만 제공 정의가 없으면 `200 OK`와 빈 `logs`/`configurations` 배열
+- Log는 `logType`과 해당 조회 의미를 알 수 있는 `generationType`만 노출
+- Configuration은 `configurationType`만 노출
+- `serverId`, host/rootPath, pathTemplate, filePattern, metadataRule, marker 등 내부 기준정보는 노출하지 않음
+- FTP의 현재 파일 존재 여부는 의미하지 않으며, **해당 설비에 대해 제공하도록 정의된 파일 종류**를 의미
+- 설비사/설비 종류별 제공 파일 차이는 `equipmentId`별 기준정보 차이로 반영하며 vendor 전용 query parameter나 코드 분기를 추가하지 않음
+- 기존 Log/Configuration 계약으로 표현 가능한 새 종류가 DB에 추가되면 기준정보 cache refresh 후 코드 수정 없이 이 조회 결과에 반영
+- pagination하지 않으며 각 배열은 타입 이름 기준 안정적인 오름차순으로 반환
+
 ### 로그 목록
 
 ```http
