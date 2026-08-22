@@ -16,7 +16,7 @@ MVP는 HTTPS + API Key를 사용한다.
 - Secret/환경변수 또는 배포 환경의 안전한 설정 공급 방식 사용
 - 다른 Site에서 계정이 달라질 경우 credential profile 모델을 후속 검토
 
-## 물리 정보 보호
+## 물리 정보 보호 / 경로 경계
 
 외부에 노출하지 않는다.
 
@@ -26,6 +26,15 @@ MVP는 HTTPS + API Key를 사용한다.
 - DB 내부 키/테이블 구조
 
 클라이언트가 raw path를 전달하는 endpoint는 만들지 않는다.
+
+`ServerDefinition.rootPath`를 파일 접근의 보안 경계로 사용한다.
+
+- 모든 path template/rule 해석 결과를 정규화한 뒤 root 아래인지 검증한다.
+- `..`, 절대 경로, rooted path 등으로 root 밖을 접근하지 못하게 한다.
+- Log, Current Configuration, Configuration History, History 완료 marker 모두 같은 경계를 적용한다.
+- 경계 위반 기준정보는 실제 파일 서버 접근에 사용하지 않는다.
+
+다운로드 `Content-Disposition`에 사용하는 논리 `fileName`은 HTTP header-safe하게 처리한다. 파일명이 응답 헤더 구조를 깨거나 임의 헤더를 삽입할 수 없어야 하며 물리 경로는 포함하지 않는다.
 
 ## 토큰 보안
 
@@ -95,7 +104,8 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 
 ## 다운로드/스트리밍 운영
 
-- metadata/HEAD의 파일 크기는 조회 시점 관측값이다.
+- metadata의 파일 크기는 조회 시점 관측값이다.
+- 공통 `GET /api/v1/files/{fileId}` metadata 조회도 실제 원격 stat을 수행한다.
 - 다운로드는 스트림 시작 직전에 확인한 파일 크기를 `Content-Length`로 사용한다.
 - Continuous 로그와 Current Configuration처럼 변경 가능한 파일도 시작 시점 크기를 해당 응답의 전송 기준으로 사용한다.
 - Continuous 파일이 다운로드 중 커지는 것은 오류가 아니며 시작 시점 크기까지만 전송한다.
@@ -103,7 +113,7 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 - 스트리밍 시작 전 FTP 오류는 일반 HTTP 오류 응답으로 반환할 수 있다.
 - 스트리밍 시작 후 FTP/I/O 오류는 이미 시작된 응답을 성공 처리하거나 JSON 오류로 바꾸지 않고 스트림/연결을 중단한다.
 - 클라이언트 연결 종료/요청 취소는 `ClientCancelled`로 분류하고 파일 서버 장애나 streaming I/O failure와 구분한다.
-- 다운로드 기본 Content-Type은 `application/octet-stream`이며 논리 `fileName`을 attachment 파일명으로 사용한다.
+- 다운로드 기본 Content-Type은 `application/octet-stream`이며 header-safe한 논리 `fileName`을 attachment 파일명으로 사용한다.
 
 FileGateway는 이미 저장소에 보이는 파일을 읽어 제공하는 시스템이다. Current Configuration 및 Hourly/Daily 로그의 생산 방식, 원자적 replace 여부, 쓰기 중 읽기 일관성은 생산 시스템 책임이며 FileGateway는 이를 위해 snapshot 복사, 파일 잠금, 버전 고정 또는 별도 생산 완료 판정을 수행하지 않는다. 외부 변경으로 읽기 길이 불일치나 I/O 실패가 발생하면 일반 streaming failure로 처리한다.
 
