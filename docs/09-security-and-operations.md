@@ -61,6 +61,15 @@ MVP는 HTTPS + API Key를 사용한다.
 
 API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는다.
 
+## 기준정보 장애 운영
+
+- 기준정보 캐시 TTL은 강제 폐기 시간이 아니라 갱신 재시도 기준이다.
+- TTL 경과 후 요청 시 lazy refresh를 수행한다.
+- 갱신 실패 시 마지막 정상 캐시가 있으면 stale 상태로 계속 사용한다.
+- 프로세스 시작 후 정상 기준정보를 한 번도 읽지 못해 캐시가 없으면 파일 요청은 `ReferenceDataUnavailable`(503)을 반환한다.
+- stale 캐시 사용 여부와 마지막 정상 갱신 시각을 로그/메트릭으로 관측 가능하게 한다.
+- MVP에서는 별도 background refresh worker를 두지 않는다.
+
 ## 장애/timeout
 
 - FTP 연결/명령/stream timeout은 설정 가능
@@ -68,6 +77,8 @@ API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는
 - 클라이언트 취소를 원격 작업에 전달
 - 특정 파일 서버 장애를 전체 FileGateway 장애로 확대하지 않음
 - 동시 다운로드 수는 설정으로 제한 가능하게 설계
+- Continuous 로그 다운로드 중 truncate/rotation으로 시작 시점 크기까지 읽지 못하면 streaming I/O 실패로 기록한다.
+- Continuous 파일이 다운로드 중 커지는 것은 오류가 아니며 시작 시점 크기까지만 전송한다.
 
 구체적인 timeout/동시성 숫자는 실제 네트워크 테스트 후 운영 설정으로 확정한다.
 
@@ -78,8 +89,10 @@ API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는
 /health/ready
 ```
 
-- `live`: 프로세스 생존 여부
-- `ready`: 기본 설정과 핵심 의존성 상태
+- `live`: 프로세스 생존 여부다. 기준정보 DB 장애만으로 실패시키지 않는다.
+- `ready`: 요청을 처리할 최소 기준정보를 확보했는지 포함해 핵심 의존성 상태를 판단한다.
+- 프로세스 시작 후 기준정보를 한 번도 확보하지 못했고 DB도 사용할 수 없으면 `live`는 정상, `ready`는 실패다.
+- 마지막 정상 기준정보 캐시가 존재하는 상태에서 DB가 일시 장애인 경우 stale 캐시로 요청 처리가 가능하므로 `ready`를 즉시 실패시키지 않는다.
 - ready 요청마다 수십~수백 FTP 서버 전체를 순회하지 않는다.
 - 개별 파일 서버 상태는 실제 요청 시 평가한다.
 
@@ -90,6 +103,7 @@ API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는
 - 인증 실패
 - invalid/expired fileId
 - 기준정보 없음/DB 장애
+- stale 기준정보 사용
 - 파일 정의 충돌(`FileDefinitionConflict`)
 - 파일 서버 연결/인증/프로토콜 오류
 - 경로 없음
