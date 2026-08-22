@@ -20,6 +20,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 
 - 클라이언트는 **`equipmentId` + 논리 조회 조건**을 사용한다.
 - `equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자이며 하나의 FileGateway 배포 범위 안에서 유일하다.
+- 클라이언트는 `equipmentId`로 해당 설비에서 FileGateway를 통해 제공 가능한 파일 종류(`logType`, `configurationType`)를 먼저 조회할 수 있다.
 - 실제 파일 서버명/IP, FTP 경로, DB 구조는 알 필요가 없다.
 - FileGateway는 MSSQL 기준정보를 사용해 실제 서버와 탐색 규칙을 해석한다.
 - 분산 파일 서버들의 MVP 접근 방식과 기본 root 구조는 동일하다.
@@ -27,6 +28,15 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - MVP 파일명 비교는 Windows/IIS FTP 환경에 맞춰 case-insensitive로 수행하고 원래 casing은 응답에 보존한다.
 
 ## 4. MVP 기능
+
+### 제공 파일 종류 조회
+
+- `equipmentId` 기준으로 해당 설비에서 제공 가능한 파일 종류 조회
+- Log는 DB 기준정보에 등록된 `logType`과 `generationType` 제공
+- Configuration은 DB 기준정보에 등록된 `configurationType` 제공
+- 파일 종류 조회는 실제 FTP 파일/폴더 존재 여부를 스캔하지 않고 **검증 완료된 기준정보**만 사용
+- 설비사/설비 종류에 따라 제공 파일이 다를 수 있으며, 차이는 `equipmentId`별 기준정보로 표현
+- 기존 Log/Configuration 계약 안에서 새 종류가 DB에 추가되면 코드 분기 추가 없이 조회 결과에 반영
 
 ### 로그
 
