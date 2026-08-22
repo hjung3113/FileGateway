@@ -29,12 +29,19 @@ MVP는 HTTPS + API Key를 사용한다.
 
 ## fileId
 
-- 특정 논리 파일 하나를 가리키는 서명된 opaque token
+- 논리 파일 identity를 가리키는 서명된 opaque token
 - 일반 조회조건 자체를 나타내는 query token이 아님
 - TTL 24시간
-- 논리 식별정보만 포함
 - 물리 host/path는 포함하지 않음
-- 다운로드 시 기준정보를 다시 조회해 같은 논리 파일의 현재 위치를 해석
+- 접근 시 현재 기준정보로 물리 위치를 다시 해석
+- 물리 서버/경로 변경 자체는 기존 fileId를 무효화하지 않음
+
+오류를 다음처럼 구분한다.
+
+- 변조/서명 실패/형식 오류: `InvalidFileId`
+- TTL 경과: `FileIdExpired`
+- 기준정보 정의 삭제: 해당 `*DefinitionNotFound`
+- 기준정보는 정상이나 실제 파일 없음: `FileNotFound`
 
 ## 감사 로그
 
@@ -46,6 +53,7 @@ MVP는 HTTPS + API Key를 사용한다.
 - endpoint
 - equipmentId
 - logType(로그 요청인 경우)
+- configurationType(Configuration 요청인 경우)
 - fileId(가능한 경우)
 - fileName/fileSize(다운로드 시)
 - 성공/실패와 오류 분류
@@ -80,7 +88,9 @@ API Key/FTP credential/물리 경로/요청 본문 전체는 기록하지 않는
 다음 원인을 구분해 로깅/메트릭이 가능해야 한다.
 
 - 인증 실패
+- invalid/expired fileId
 - 기준정보 없음/DB 장애
+- 파일 정의 충돌(`FileDefinitionConflict`)
 - 파일 서버 연결/인증/프로토콜 오류
 - 경로 없음
 - 파일 없음
