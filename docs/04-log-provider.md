@@ -145,6 +145,8 @@ Logs는 Log `fileId`와 Log pagination의 **도메인 의미**를 소유한다. 
 - 다운로드 중 파일이 줄어 시작 크기까지 읽지 못하면 정상 완료가 아니라 streaming I/O 실패다.
 - truncate/rotation 시 새 파일로 이어 붙이거나 자동 재시도하지 않는다.
 
+`generationType`은 조회/탐색 의미를 나타내며, Hourly/Daily 파일이 생산 중 언제 완성되는지 또는 파일 교체가 원자적인지를 FileGateway가 판정하는 계약은 아니다. FileGateway는 저장소에 보이는 파일을 읽어 제공하며 생산 방식과 쓰기 중 내용 일관성은 생산 시스템 책임으로 둔다.
+
 ## 필터 및 시간 범위
 
 - equipmentId
