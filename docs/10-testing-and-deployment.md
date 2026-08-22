@@ -6,10 +6,14 @@
 
 외부 서버 없이 검증한다.
 
+- `filePattern` glob 해석 (`*`, `?`) 및 FTP 서버 wildcard 의미에 비종속
+- MetadataRule용 relative path의 `/` 구분자 정규화
 - path/file Template 해석
 - Regex named-group 해석
 - timestamp/subtype/attributes 매핑
 - Hourly/Daily/Continuous 필터
+- 조회 범위로 필요한 디렉터리만 계산하고 무제한 recursive scan하지 않음
+- 동일 디렉터리가 여러 슬롯에서 계산될 때 중복 탐색 제거
 - 로그 시간 범위 규칙
   - `from`/`to` 없음 → 최근 24시간
   - `from`만 있음 → `[from, from + 2일)`
@@ -19,6 +23,10 @@
   - `Logs.MaxQueryRange`가 2일 미만이면 설정 검증 실패
 - Daily timestamp의 Site local `00:00` 처리
 - Continuous timestamp가 없는 경우 `null` 처리
+- Hourly/Daily 정렬 `timestamp DESC + fileName ASC`
+- Hourly/Daily cursor `timestamp + fileName`
+- Continuous 정렬 `fileName ASC`
+- Continuous cursor `fileName`
 - attribute filter의 case-sensitive 일치
 - `cardinality`의 슬롯 단위 검증
 - 후보 파일 metadata 파싱 실패 → `FileDefinitionConflict`
@@ -43,6 +51,7 @@
 - 시작 후 기준정보 미확보 상태의 `ReferenceDataUnavailable`
 - FTP 목록/Stat/OpenRead
 - FTP timeout/인증/경로 오류
+- FTP 서버 wildcard 기능에 의존하지 않고 목록 후 glob 후보 판정
 - root 밖 경로/`..` traversal 정의의 원격 접근 차단
 - Continuous 파일의 시작 시점 크기 제한
 - Continuous 다운로드 중 growth/truncate 처리
@@ -60,6 +69,7 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 - 로그 목록/페이지네이션
 - Log 목록 응답이 `{ items, continuationToken }` envelope인지 검증
 - 빈 Log 결과가 `items=[]`, `continuationToken=null`인지 검증
+- Hourly/Daily와 Continuous의 정렬/cursor 규칙이 각각 적용되는지 검증
 - Configuration Current/History API 분리
 - Current 응답이 단순 배열이며 `fileName ASC`인지 검증
 - History `from`/`to` 필수 검증
