@@ -65,12 +65,14 @@ EquipmentConfigurationDefinition
 - historyRule
 ```
 
-- `currentRule`: Current Configuration 파일 하나의 논리 위치를 해석하는 규칙
-- `historyRule`: History 디렉터리/파일 패턴 및 snapshot 논리 시각을 추출하는 규칙
+- `currentRule`: Current Configuration File 집합의 위치와 후보 파일 패턴을 해석하는 규칙
+- `historyRule`: 날짜별 History 디렉터리/파일 패턴 및 Snapshot Set의 `snapshotTimestamp`를 해석하는 규칙
+
+하나의 `equipmentId + configurationType` 아래 PM1/PM2/PM3/PM4처럼 여러 Current Configuration File이 존재할 수 있다. 이 파일들을 별도 `configurationType`, `subtype`, `attributes`로 세분화하지 않는다.
+
+History는 별도 시스템이 자정에 날짜 폴더를 만들고 Current 파일 집합을 그대로 복사한 결과다. 같은 날짜 폴더의 Snapshot File들은 동일한 `snapshotTimestamp`를 공유하며 현재 운영 계획에서는 Site local `00:00`으로 해석한다. FTP modified time은 snapshot 시각으로 사용하지 않는다.
 
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
-
-Configuration Snapshot의 논리 시각은 파일명/경로 규칙에서 추출하고 FTP modified time과 구분한다. 생성 완료된 snapshot은 불변으로 취급한다.
 
 MVP Configuration 정의에는 `subtype`/동적 `attributes` 규칙을 추가하지 않는다.
 
@@ -83,7 +85,9 @@ FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 - 서버/경로가 바뀌어도 같은 논리 파일이 새 위치에 있으면 정상 접근
 - 로그 정의가 삭제돼 재해석할 수 없으면 `LogDefinitionNotFound`
 - Configuration 정의가 삭제돼 재해석할 수 없으면 `ConfigurationDefinitionNotFound`
-- 기준정보는 정상이나 실제 대상 파일/Current 슬롯이 없으면 `FileNotFound`
+- 기준정보는 정상이나 실제 대상 파일이 없으면 `FileNotFound`
+
+Configuration Snapshot File의 logical identity는 `equipmentId + configurationType + snapshotTimestamp + fileName`이다. Current Configuration File의 개별 logical identity 규칙은 Current API 결정과 함께 별도 확정한다.
 
 기준정보 변경과 실제 파일 삭제를 같은 원인으로 취급하지 않는다.
 
@@ -128,11 +132,11 @@ SP 결과 수신 시:
 - `equipmentId + logType` 중복 정의 여부
 - 중복/충돌 매핑
 - 잘못된 root/path template
-- Current rule이 하나의 Current Configuration 슬롯을 결정하는지
-- History rule이 유효한 snapshot 집합과 논리 시각을 해석할 수 있는지
+- Current rule이 유효한 현재 Configuration File 집합을 해석할 수 있는지
+- History rule이 유효한 날짜별 Snapshot File 집합과 논리 시각을 해석할 수 있는지
 - 지원하지 않는 generation/metadata mode
 - 유효하지 않은 regex/template/mapping
 
-실제 탐색 시 `cardinality=Single`인데 하나의 논리 생성 슬롯에서 여러 파일이 발견되거나 후보 파일의 필수 metadata 해석에 실패하면 `FileDefinitionConflict`로 분류한다.
+실제 로그 탐색 시 `cardinality=Single`인데 하나의 논리 생성 슬롯에서 여러 파일이 발견되거나 후보 파일의 필수 metadata 해석에 실패하면 `FileDefinitionConflict`로 분류한다.
 
 기준정보 오류와 실제 파일 서버 장애는 별도 원인으로 유지한다.
