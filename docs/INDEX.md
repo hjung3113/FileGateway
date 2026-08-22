@@ -11,6 +11,7 @@
 | 프로젝트 용어/도메인 명칭 확인 또는 변경 | [00 용어집](00-glossary.md) | 해당 역할별 설계 문서 |
 | 프로젝트 목적, MVP 범위, 제외 범위 확인 | [01 요구사항](01-requirements.md) | [07 확장/리스크](07-extension-and-risks.md) |
 | 프로젝트/계층 구조 변경 | [02 전체 아키텍처](02-architecture.md) | [03 Server Access Core](03-server-access-core.md), [04.1 Log Provider](04a-log-provider.md), [04.2 Configuration Provider](04b-configuration-provider.md) |
+| 오픈소스/외부 라이브러리 도입·교체 | [02 전체 아키텍처](02-architecture.md) | FTP/FTPS는 [03 Server Access Core](03-server-access-core.md), 테스트 도구는 [10 테스트/배포](10-testing-and-deployment.md) |
 | FTP/FTPS 파일 접근, 목록/Stat/Stream 구현 | [03 Server Access Core](03-server-access-core.md) | [09 보안/운영](09-security-and-operations.md) |
 | 로그 탐색, 시간/속성 필터, discovery 규칙 구현 | [04.1 Log Provider](04a-log-provider.md) | [06 DB/기준정보](06-reference-data.md), [05 API 인터페이스](05-api-interface.md) |
 | Current Configuration/History 탐색 구현 | [04.2 Configuration Provider](04b-configuration-provider.md) | [06 DB/기준정보](06-reference-data.md), [05 API 인터페이스](05-api-interface.md) |
@@ -27,7 +28,7 @@
 
 0. `00-glossary.md` — 프로젝트 정식 용어와 피해야 할 혼용 표현
 1. `01-requirements.md` — 무엇을 만들고 무엇을 만들지 않는가
-2. `02-architecture.md` — 계층과 의존성 경계
+2. `02-architecture.md` — 계층, 의존성 경계, 오픈소스/외부 라이브러리 원칙
 3. `03-server-access-core.md` — 프로토콜 비종속 파일 접근 계약과 FTP/FTPS 구현 경계
 4. **Feature Providers** — 파일 종류별 업무 규칙
    - 4.1 `04a-log-provider.md` — 로그 도메인, Resolver, discovery/metadata/filter 규칙
@@ -37,7 +38,7 @@
 7. `07-extension-and-risks.md` — MVP 밖 확장과 남은 리스크
 8. `08-agent-tooling.md` — 개발 Agent/Skill 운영
 9. `09-security-and-operations.md` — 인증/Secret/token/감사/장애/Health 운영 정책
-10. `10-testing-and-deployment.md` — 테스트 계층, IIS 배포, 완료 검증
+10. `10-testing-and-deployment.md` — 테스트 계층, Testcontainers 활용, IIS 배포, 완료 검증
 
 ## 문서 우선순위
 
