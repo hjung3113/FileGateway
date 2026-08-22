@@ -17,6 +17,8 @@
 
 `equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자이며 하나의 FileGateway 배포 범위 안에서 유일하다.
 
+`rootPath`는 해당 서버에서 FileGateway가 접근할 수 있는 물리 경로의 보안 경계다. 모든 discovery/current/history 규칙의 최종 정규화 경로는 반드시 이 root 아래에 있어야 한다.
+
 ### 로그 정의
 
 - logType
@@ -84,6 +86,16 @@ MVP Configuration 정의에는 `subtype`/동적 `attributes` 규칙을 추가하
 
 FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 
+## 경로 안전성 invariant
+
+기준정보에서 계산되는 모든 파일/디렉터리 경로는 다음 조건을 만족해야 한다.
+
+- 최종 정규화 경로는 해당 `ServerDefinition.rootPath` 아래에 있어야 한다.
+- `..`, 절대 경로, rooted path 등으로 `rootPath` 밖으로 탈출할 수 없어야 한다.
+- Log `pathTemplate`, Configuration `currentRule`/`historyRule`, History 완료 marker 경로 모두 같은 경계를 적용한다.
+- 클라이언트 요청값을 raw 물리 경로 세그먼트로 사용하지 않는다.
+- 경계 위반 정의는 실제 원격 접근에 사용하지 않고 기준정보 오류로 취급한다.
+
 ## fileId 재해석과 기준정보 변경
 
 `fileId`는 물리 host/path를 저장하지 않고 논리 identity를 보존한다. 접근 시 현재 기준정보를 사용해 물리 위치를 다시 해석한다.
@@ -139,6 +151,7 @@ SP 결과 수신 시:
 - `equipmentId + logType` 중복 정의 여부
 - 중복/충돌 매핑
 - 잘못된 root/path template
+- 정규화 후 `rootPath` 밖으로 탈출하는 경로 여부
 - Current rule이 유효한 현재 Configuration File 집합을 해석할 수 있는지
 - History rule이 유효한 날짜별 Snapshot File 집합, 논리 시각, 완료 조건을 해석할 수 있는지
 - 지원하지 않는 generation/metadata mode
