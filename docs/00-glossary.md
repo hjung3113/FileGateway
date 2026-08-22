@@ -32,12 +32,16 @@ _Avoid_: `equipmentId + configurationType`이 항상 파일 하나를 식별한�
 `Current Configuration Set` 안의 개별 현재 파일이다. 내용은 시간에 따라 바뀔 수 있으며 FileGateway가 snapshot으로 고정하지 않는다. 개별 파일의 장기 논리 identity 규칙은 별도 설계 결정으로 확정한다.
 _Avoid_: 현재 파일을 불변 snapshot으로 간주
 
-**Configuration Snapshot**:
-별도 시스템이 파일 서버에 저장한 과거 Configuration File의 시점별 히스토리 파일이다. 생성이 완료된 snapshot은 불변이며 수정 대신 새 snapshot을 생성한다. FileGateway는 생성·보관 책임 없이 이미 저장된 snapshot을 조회·다운로드만 한다.
-_Avoid_: FileGateway가 생성하는 configuration backup, 생성 완료 후 내용이 바뀌는 snapshot
+**Configuration Snapshot Set**:
+별도 시스템이 특정 시점에 `Current Configuration Set`의 파일들을 그대로 복사해 보관한 히스토리 파일 집합이다. 현재 운영 계획에서는 자정에 날짜 폴더를 만들고 Current 파일 집합을 복사하며 Current 원본은 그대로 유지한다. 같은 Snapshot Set의 파일들은 동일한 `snapshotTimestamp`를 공유한다.
+_Avoid_: Snapshot을 항상 단일 파일 하나라고 가정
 
-**Configuration Snapshot Timestamp**:
-Configuration Snapshot이 생성된 논리 시각이다. 파일명/경로 규칙에서 추출하며 FTP modified time과 동일시하지 않는다.
+**Configuration Snapshot File**:
+`Configuration Snapshot Set` 안의 개별 히스토리 파일이다. 생성이 완료된 뒤에는 불변이며 수정이 필요하면 다음 snapshot에서 새 파일로 반영한다. FileGateway는 생성·보관 책임 없이 이미 저장된 파일을 조회·다운로드만 한다.
+_Avoid_: FileGateway가 생성하는 configuration backup, 생성 완료 후 내용이 바뀌는 snapshot 파일
+
+**Configuration Snapshot Timestamp (`snapshotTimestamp`)**:
+Configuration Snapshot Set이 생성된 논리 시각이다. 현재 운영 계획에서는 날짜 폴더에 대응하는 자정 시각이며, 파일명/경로 규칙에서 추출하고 FTP modified time과 동일시하지 않는다.
 _Avoid_: FTP modified time
 
 **Logical Timestamp (`timestamp`)**:
@@ -49,7 +53,7 @@ _Avoid_: modified time, FTP modification time을 `timestamp`와 동일시하는 
 _Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현
 
 **Logical File Identity**:
-물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot은 `equipmentId + configurationType + snapshotTimestamp + fileName`을 사용한다. Current Configuration File은 하나의 Configuration Type 아래 여러 파일이 가능하므로 개별 identity 규칙을 별도 확정한다.
+물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot File은 `equipmentId + configurationType + snapshotTimestamp + fileName`을 사용한다. Current Configuration File은 하나의 Configuration Type 아래 여러 파일이 가능하므로 개별 identity 규칙을 별도 확정한다.
 _Avoid_: FTP host/path를 파일 identity로 취급
 
 **File ID (`fileId`)**:
