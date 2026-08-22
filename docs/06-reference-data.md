@@ -34,7 +34,7 @@ MVP에서 하나의 로그 정의는 하나의 discovery rule만 가진다. 현�
 
 `pathTemplate`은 조회조건과 논리 생성 슬롯으로 탐색할 논리 디렉터리를 계산한다. `filePattern`은 해당 디렉터리에서 후보 **파일명**을 선택하는 glob matcher다. 예: `*.zip`, `Event_*.log`, `PM?.cfg`. `timestamp`/`subtype`/`attributes` 추출은 metadata rule이 담당한다.
 
-`filePattern`은 정규식으로 사용하지 않는다. FTP 서버 자체 wildcard 구현에도 의존하지 않고 FileGateway가 받은 디렉터리 목록에 동일한 glob 의미를 적용한다.
+`filePattern`은 정규식으로 사용하지 않는다. FTP 서버 자체 wildcard 구현에도 의존하지 않고 FileGateway가 받은 디렉터리 목록에 동일한 glob 의미를 적용한다. MVP Windows/IIS FTP 환경에서는 파일명 glob 비교를 case-insensitive로 수행하고 실제 casing은 응답에 보존한다.
 
 MVP에서는 root부터 하위 전체를 훑는 무제한 recursive scan을 허용하지 않는다. `pathTemplate`이 Hourly/Daily 조회 범위 또는 Continuous 현재 슬롯에서 필요한 디렉터리를 직접 계산해야 한다. 여러 슬롯이 같은 디렉터리를 계산하면 중복 목록 조회하지 않는다.
 
@@ -74,23 +74,34 @@ EquipmentConfigurationDefinition
 ```
 
 - `currentRule`: Current Configuration File 집합의 위치와 후보 파일 패턴을 해석하는 규칙
-- `historyRule`: 날짜별 History 디렉터리/파일 패턴, Snapshot Set의 `snapshotTimestamp`, 완료 조건/marker를 해석하는 규칙
+- `historyRule`: 날짜별 History 디렉터리/파일 패턴, Snapshot Set의 `snapshotTimestamp`, 완료 marker 파일명/위치를 해석하는 규칙
 
 하나의 `equipmentId + configurationType` 아래 PM1/PM2/PM3/PM4처럼 여러 Current Configuration File이 존재할 수 있다. 이 파일들을 별도 `configurationType`, `subtype`, `attributes`로 세분화하지 않는다.
 
-Current Configuration File의 logical identity는 `equipmentId + configurationType + fileName`이다. `fileName`이 바뀌면 다른 논리 파일로 취급한다.
+Current Configuration File의 logical identity는 `equipmentId + configurationType + fileName`이다. MVP에서 `fileName` 구성요소는 case-insensitive로 비교하며 casing만 다른 이름은 같은 논리 파일로 취급한다.
 
 History는 별도 시스템이 자정에 날짜 폴더를 만들고 Current 파일 집합을 그대로 복사한 결과다. 같은 날짜 폴더의 Snapshot File들은 동일한 `snapshotTimestamp`를 공유하며 현재 운영 계획에서는 Site local `00:00`으로 해석한다. FTP modified time은 snapshot 시각으로 사용하지 않는다.
 
-History 생산자는 Snapshot Set 복사 완료를 판정할 수 있는 완료 조건/marker를 제공한다. `historyRule`은 이 완료 조건을 해석할 수 있어야 하며 FileGateway는 완료가 확인되지 않은 날짜 폴더를 History 결과에 포함하지 않는다. 완료 marker 자체는 Configuration File 후보로 반환하지 않는다.
+History 생산자는 Snapshot Set 복사 완료 시 marker 파일을 생성한다. marker 파일명/위치는 `historyRule`에 있으며 FileGateway는 **marker 존재 여부만 확인**한다. marker 내용은 읽거나 해석하지 않는다. marker가 없는 날짜 폴더는 History 결과에 포함하지 않으며 marker 자체도 Configuration File 후보로 반환하지 않는다.
 
-Configuration Snapshot File의 logical identity는 `equipmentId + configurationType + snapshotTimestamp + fileName`이다.
+Configuration Snapshot File의 logical identity는 `equipmentId + configurationType + snapshotTimestamp + fileName`이다. `fileName` 구성요소는 case-insensitive로 비교한다.
 
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
 MVP Configuration 정의에는 `subtype`/동적 `attributes` 규칙을 추가하지 않는다.
 
 FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
+
+## 파일명 비교 규칙
+
+MVP Windows/IIS FTP 환경에서 파일명 관련 비교는 case-insensitive다.
+
+- `filePattern` 및 Configuration 후보 파일명 matching
+- Log/Current/Snapshot logical identity의 `fileName`
+- `fileName ASC` 정렬
+- continuation cursor의 `fileName`
+
+실제 원격 파일 casing은 API 응답에 그대로 보존한다. `subtype`/`attributes` 비교는 이 규칙과 무관하게 기존대로 case-sensitive다. 향후 case-sensitive 저장소를 도입할 때 파일명 비교 계약을 재검토한다.
 
 ## 경로 안전성 invariant
 
@@ -112,7 +123,7 @@ FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 - Configuration 정의가 삭제돼 재해석할 수 없으면 `ConfigurationDefinitionNotFound`
 - 기준정보는 정상이나 실제 대상 파일이 없으면 `FileNotFound`
 
-Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하지 않는다. 같은 `equipmentId + configurationType + fileName` 파일의 다운로드 시점 현재 내용을 가리킨다.
+Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하지 않는다. 같은 `equipmentId + configurationType + fileName` 논리 파일의 다운로드 시점 현재 내용을 가리킨다.
 
 기준정보 변경과 실제 파일 삭제를 같은 원인으로 취급하지 않는다.
 
@@ -139,19 +150,23 @@ raw API Key를 Stored Procedure에 전달하지 않는다.
 - TTL 경과 후 실제 요청이 들어오면 lazy refresh로 Stored Procedure 갱신을 시도한다.
 - MVP에서는 별도 background refresh worker를 두지 않는다.
 
-DB/SP 갱신 시도 결과:
+기준정보 갱신은 **새 기준정보 전체를 검증한 뒤 한 번에 atomic 교체**한다. 일부 정의만 새 값으로 적용하는 혼합 상태는 만들지 않는다.
 
-- 갱신 성공 → 새 기준정보로 캐시 교체
-- 갱신 실패 + 이전 정상 캐시 존재 → 마지막 정상 캐시를 stale 상태로 계속 사용
-- 프로세스 시작 후 정상 기준정보를 한 번도 얻지 못했고 캐시도 없음 → `ReferenceDataUnavailable`
+갱신 시도 결과:
 
-stale 캐시 사용 여부와 마지막 정상 갱신 시각은 운영 로그/메트릭에서 관측 가능해야 한다.
+- 새 기준정보 전체 검증 성공 → cache 전체를 새 기준정보로 atomic 교체
+- 조회 실패 또는 검증 실패 + 이전 정상 cache 존재 → 새 데이터를 적용하지 않고 마지막 정상 cache 전체를 stale 상태로 계속 사용
+- 최초 로딩에서 조회/검증 실패하여 정상 cache가 없음 → `ReferenceDataUnavailable`
+
+하나의 잘못된 정의가 있으면 해당 refresh 전체를 거부한다. MVP에서는 부분 갱신 가용성보다 기준정보 집합의 일관성을 우선한다.
+
+stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation 실패 원인은 운영 로그/메트릭에서 관측 가능해야 한다.
 
 로컬 영속 fallback/분산 cache는 MVP에서 제외한다.
 
 ## 필수 검증
 
-SP 결과 수신 시:
+SP 결과 전체에 대해 cache 교체 전에 다음을 검증한다.
 
 - 설비/서버 매핑 존재 여부
 - 로그/Configuration 정의 존재 여부
@@ -163,7 +178,7 @@ SP 결과 수신 시:
 - 무제한 recursive scan을 요구하는 정의가 아닌지
 - MetadataRule 입력 정규화와 지원 mode가 유효한지
 - Current rule이 유효한 현재 Configuration File 집합을 해석할 수 있는지
-- History rule이 유효한 날짜별 Snapshot File 집합, 논리 시각, 완료 조건을 해석할 수 있는지
+- History rule이 유효한 날짜별 Snapshot File 집합, 논리 시각, marker 파일명/위치를 해석할 수 있는지
 - 지원하지 않는 generation/metadata mode
 - 유효하지 않은 regex/template/mapping
 
