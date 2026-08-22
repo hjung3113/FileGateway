@@ -30,7 +30,9 @@ Resolver의 기본 반환은 항상 **파일 집합**이다. 시간당 한 파�
 - discoveryRule
 - metadataRule
 
-하나의 FileGateway 배포 범위에서 `equipmentId + logType`은 정확히 하나의 `EquipmentLogDefinition`을 식별한다. 같은 logType에 여러 물리 파일 패턴이 실제로 필요한지는 별도 설계 결정으로 남기고, MVP에서는 요구가 확인되기 전까지 `discoveryRule` 하나를 전제로 한다.
+하나의 FileGateway 배포 범위에서 `equipmentId + logType`은 정확히 하나의 `EquipmentLogDefinition`을 식별한다.
+
+MVP에서 하나의 로그 정의는 **하나의 `discoveryRule`만 가진다**. 현재 동일 `logType` 조회에서 서로 다른 디렉터리 구조나 파일명 규칙을 동시에 검색해야 하는 사례가 없으므로 `discoveryRules[]` 같은 다중 rule 구조는 만들지 않는다. 같은 생성 슬롯에서 여러 파일이 생기는 경우는 `cardinality=Multiple`로 표현한다.
 
 `logType`은 업무적으로 어떤 종류의 로그인지를 나타내며, `generationType`은 파일 생성 주기/생명주기를 나타낸다. 두 개념을 혼용하지 않는다.
 
