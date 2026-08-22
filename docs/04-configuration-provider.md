@@ -86,3 +86,5 @@ Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 
 - Current는 `equipmentId + configurationType`으로 하나의 논리 슬롯을 결정한다.
 - History는 `equipmentId + configurationType + [from, to)`로 snapshot 집합을 조회한다.
 - History 목록은 `limit + continuationToken` 페이지네이션을 사용한다.
+- History 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 `fileName ASC`다.
+- 페이지네이션은 원격 파일 집합의 완전한 snapshot을 보장하지 않는다. 조회 중 파일이 추가/삭제되면 후속 페이지 결과가 달라질 수 있다.
