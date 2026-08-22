@@ -66,13 +66,15 @@ EquipmentConfigurationDefinition
 ```
 
 - `currentRule`: Current Configuration File 집합의 위치와 후보 파일 패턴을 해석하는 규칙
-- `historyRule`: 날짜별 History 디렉터리/파일 패턴 및 Snapshot Set의 `snapshotTimestamp`를 해석하는 규칙
+- `historyRule`: 날짜별 History 디렉터리/파일 패턴, Snapshot Set의 `snapshotTimestamp`, 완료 조건/marker를 해석하는 규칙
 
 하나의 `equipmentId + configurationType` 아래 PM1/PM2/PM3/PM4처럼 여러 Current Configuration File이 존재할 수 있다. 이 파일들을 별도 `configurationType`, `subtype`, `attributes`로 세분화하지 않는다.
 
 Current Configuration File의 logical identity는 `equipmentId + configurationType + fileName`이다. `fileName`이 바뀌면 다른 논리 파일로 취급한다.
 
 History는 별도 시스템이 자정에 날짜 폴더를 만들고 Current 파일 집합을 그대로 복사한 결과다. 같은 날짜 폴더의 Snapshot File들은 동일한 `snapshotTimestamp`를 공유하며 현재 운영 계획에서는 Site local `00:00`으로 해석한다. FTP modified time은 snapshot 시각으로 사용하지 않는다.
+
+History 생산자는 Snapshot Set 복사 완료를 판정할 수 있는 완료 조건/marker를 제공한다. `historyRule`은 이 완료 조건을 해석할 수 있어야 하며 FileGateway는 완료가 확인되지 않은 날짜 폴더를 History 결과에 포함하지 않는다. 완료 marker 자체는 Configuration File 후보로 반환하지 않는다.
 
 Configuration Snapshot File의 logical identity는 `equipmentId + configurationType + snapshotTimestamp + fileName`이다.
 
@@ -102,6 +104,7 @@ Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하�
 - 로그 및 Configuration 종류별 실제 탐색/파일명 규칙은 서로 다를 수 있음
 - DB/SP는 확장 가능하며 탐색/파싱 규칙을 기준정보로 관리
 - FileGateway는 Configuration History를 생성/보관하지 않고 별도 시스템이 저장한 파일을 읽기 전용으로 제공
+- Current/Hourly/Daily 파일의 생산 방식과 쓰기 중 내용 일관성은 기준정보로 해결하지 않으며 생산 시스템 책임으로 둠
 
 ## 호출자 확장 포인트
 
@@ -137,7 +140,7 @@ SP 결과 수신 시:
 - 중복/충돌 매핑
 - 잘못된 root/path template
 - Current rule이 유효한 현재 Configuration File 집합을 해석할 수 있는지
-- History rule이 유효한 날짜별 Snapshot File 집합과 논리 시각을 해석할 수 있는지
+- History rule이 유효한 날짜별 Snapshot File 집합, 논리 시각, 완료 조건을 해석할 수 있는지
 - 지원하지 않는 generation/metadata mode
 - 유효하지 않은 regex/template/mapping
 
