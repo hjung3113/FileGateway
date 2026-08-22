@@ -30,7 +30,7 @@ Resolver의 기본 반환은 항상 **파일 집합**이다. 시간당 한 파�
 - discoveryRule
 - metadataRule
 
-하나의 FileGateway 배포 범위에서 `equipmentId + logType`은 정확히 하나의 `EquipmentLogDefinition`을 식별한다. 같은 logType에 여러 물리 파일 패턴이 필요하면 별도 로그 정의를 중복 생성하지 않고 해당 정의 내부의 탐색 규칙으로 표현한다.
+하나의 FileGateway 배포 범위에서 `equipmentId + logType`은 정확히 하나의 `EquipmentLogDefinition`을 식별한다. 같은 logType에 여러 물리 파일 패턴이 실제로 필요한지는 별도 설계 결정으로 남기고, MVP에서는 요구가 확인되기 전까지 `discoveryRule` 하나를 전제로 한다.
 
 `logType`은 업무적으로 어떤 종류의 로그인지를 나타내며, `generationType`은 파일 생성 주기/생명주기를 나타낸다. 두 개념을 혼용하지 않는다.
 
@@ -48,15 +48,31 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 - filePattern
 - cardinality: `Single | Multiple`
 
-`cardinality`는 기준정보 검증/의도 표현용이며 Resolver 반환형을 바꾸지 않는다.
+역할은 다음처럼 분리한다.
 
-`cardinality=Single`인데 실제 탐색 결과가 2개 이상이면 정상적인 다중 결과가 아니라 기준정보/파일 상태가 정의와 충돌한 시스템 invariant 위반이다. 사용자 조회조건이 정상적인 여러 파일에 일치한 경우의 `MultipleFilesMatched`와 구분한다.
+- `pathTemplate`: 탐색할 논리 디렉터리 경로 계산
+- `filePattern`: 해당 디렉터리 안에서 후보 파일 선택
+- 파일의 `timestamp`/`subtype`/`attributes` 추출은 `MetadataRule` 책임
+
+`cardinality`는 전체 조회 결과 개수가 아니라 **논리 생성 슬롯당 파일 개수**를 나타내는 invariant다.
+
+- Hourly: 각 시간 슬롯마다 적용
+- Daily: 각 날짜 슬롯마다 적용
+- Continuous: 현재 슬롯에 적용
+- `Single`: 슬롯당 최대 1개
+- `Multiple`: 같은 슬롯에 여러 파일 허용
+
+`cardinality=Single`인데 하나의 슬롯에서 실제 탐색 결과가 2개 이상이면 정상적인 다중 결과가 아니라 기준정보/파일 상태가 정의와 충돌한 시스템 invariant 위반이다. 사용자 조회조건이 정상적인 여러 파일에 일치한 경우의 `MultipleFilesMatched`와 구분한다.
 
 ### MetadataRule
 
 - mode: `Template | Regex`
 - pattern
 - mappings: 추출 값 → `timestamp`, `subtype`, `attribute.<key>`
+
+MetadataRule은 물리 FTP root를 제외한 **논리 relative path + fileName 전체**를 대상으로 해석할 수 있다. metadata가 디렉터리명에 포함된 경우에도 파일명에만 한정하지 않는다.
+
+`filePattern`에 후보로 일치한 파일이 필수 metadata를 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`로 처리한다. 정의가 예상한 파일을 해석하지 못한 상태를 정상 결과로 숨기지 않는다.
 
 `timestamp`는 파일명/경로 규칙에서 추출한 **로그의 논리 시각**이다. FTP modified time이나 파일시스템 수정 시각과 동일한 개념으로 사용하지 않는다.
 
@@ -128,4 +144,4 @@ Continuous 로그에 파일명/경로로부터 명확한 논리 시각을 추출
 1. `timestamp DESC`
 2. 동일 `timestamp`에서는 `fileName ASC`
 
-최신 논리 시각의 파일부터 반환하고 `fileName`을 동일 시각 내 안정적인 tie-breaker로 사용한다. `timestamp=null`인 Continuous 파일의 목록 내 위치는 API 응답 계약 라운드에서 별도 확정한다.
+최신 논리 시각의 파일부터 반환하고 `fileName`을 동일 시각 내 안정적인 tie-breaker로 사용한다. `equipmentId + logType`은 하나의 `generationType`만 가지므로 시간 기반 로그와 `timestamp=null`인 Continuous 로그를 같은 목록 정의 안에서 혼합하지 않는다.
