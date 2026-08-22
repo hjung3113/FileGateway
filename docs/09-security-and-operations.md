@@ -29,11 +29,12 @@ MVP는 HTTPS + API Key를 사용한다.
 
 ## fileId
 
-- 서명된 opaque token
+- 특정 논리 파일 하나를 가리키는 서명된 opaque token
+- 일반 조회조건 자체를 나타내는 query token이 아님
 - TTL 24시간
 - 논리 식별정보만 포함
 - 물리 host/path는 포함하지 않음
-- 다운로드 시 기준정보를 다시 조회
+- 다운로드 시 기준정보를 다시 조회해 같은 논리 파일의 현재 위치를 해석
 
 ## 감사 로그
 
@@ -43,8 +44,8 @@ MVP는 HTTPS + API Key를 사용한다.
 - callerId/API Key 식별자
 - client IP
 - endpoint
-- equipment
-- logType
+- equipmentId
+- logType(로그 요청인 경우)
 - fileId(가능한 경우)
 - fileName/fileSize(다운로드 시)
 - 성공/실패와 오류 분류
