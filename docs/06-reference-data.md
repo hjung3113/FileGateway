@@ -62,6 +62,17 @@ MVP Configuration 정의에는 `subtype`/동적 `attributes` 규칙을 추가하
 
 FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 
+## fileId 재해석과 기준정보 변경
+
+`fileId`는 물리 host/path를 저장하지 않고 논리 identity를 보존한다. 접근 시 현재 기준정보를 사용해 물리 위치를 다시 해석한다.
+
+- 서버/경로가 바뀌어도 같은 논리 파일이 새 위치에 있으면 정상 접근
+- 로그 정의가 삭제돼 재해석할 수 없으면 `LogDefinitionNotFound`
+- Configuration 정의가 삭제돼 재해석할 수 없으면 `ConfigurationDefinitionNotFound`
+- 기준정보는 정상이나 실제 대상 파일/Current 슬롯이 없으면 `FileNotFound`
+
+기준정보 변경과 실제 파일 삭제를 같은 원인으로 취급하지 않는다.
+
 ## MVP 전제
 
 - 분산 서버의 기본 FTP root 구조 동일
@@ -103,6 +114,6 @@ SP 결과 수신 시:
 - 지원하지 않는 generation/metadata mode
 - 유효하지 않은 regex/template/mapping
 
-실제 탐색 시 `cardinality=Single`인데 여러 파일이 발견되는 경우도 별도 invariant 위반으로 유지한다.
+실제 탐색 시 `cardinality=Single`인데 여러 파일이 발견되는 경우는 `FileDefinitionConflict`로 분류한다.
 
 기준정보 오류와 실제 파일 서버 장애는 별도 원인으로 유지한다.
