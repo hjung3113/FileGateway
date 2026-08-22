@@ -9,6 +9,10 @@
     <ProjectReference Include="..\FileGateway.Configurations\FileGateway.Configurations.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="FluentFTP" Version="54.2.0" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
