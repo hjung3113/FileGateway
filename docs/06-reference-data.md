@@ -34,17 +34,25 @@
 
 Configuration은 로그 정의와 별도로 관리한다.
 
-최소 논리 식별자는:
+개념적으로 하나의 Configuration 정의는 다음 논리 정보를 가진다.
 
+```text
+EquipmentConfigurationDefinition
 - equipmentId
 - configurationType
 - serverId
+- currentRule
+- historyRule
+```
 
-이다.
+- `currentRule`: Current Configuration 파일 하나의 논리 위치를 해석하는 규칙
+- `historyRule`: History 디렉터리/파일 패턴 및 snapshot 논리 시각을 추출하는 규칙
 
-기준정보는 Current Configuration과 Configuration Snapshot History의 실제 저장 위치/탐색 규칙을 해석할 수 있어야 한다. 구체적인 rule 필드는 설계 인터뷰에서 확정한다.
+Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
-Configuration Snapshot의 논리 시각은 파일명/경로 규칙에서 추출하고 FTP modified time과 구분한다.
+Configuration Snapshot의 논리 시각은 파일명/경로 규칙에서 추출하고 FTP modified time과 구분한다. 생성 완료된 snapshot은 불변으로 취급한다.
+
+MVP Configuration 정의에는 `subtype`/동적 `attributes` 규칙을 추가하지 않는다.
 
 FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 
@@ -83,6 +91,8 @@ SP 결과 수신 시:
 - 로그/Configuration 정의 존재 여부
 - 중복/충돌 매핑
 - 잘못된 root/path template
+- Current rule이 하나의 Current Configuration 슬롯을 결정하는지
+- History rule이 유효한 snapshot 집합과 논리 시각을 해석할 수 있는지
 - 지원하지 않는 generation/metadata mode
 - 유효하지 않은 regex/template/mapping
 
