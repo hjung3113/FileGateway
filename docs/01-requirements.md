@@ -23,6 +23,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 실제 파일 서버명/IP, FTP 경로, DB 구조는 알 필요가 없다.
 - FileGateway는 MSSQL 기준정보를 사용해 실제 서버와 탐색 규칙을 해석한다.
 - 분산 파일 서버들의 MVP 접근 방식과 기본 root 구조는 동일하다.
+- 클라이언트는 raw 물리 경로를 전달할 수 없으며, 모든 실제 파일 접근은 기준정보의 서버 `rootPath` 경계 안에서만 허용한다.
 
 ## 4. MVP 기능
 
@@ -73,7 +74,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 로그가 아니므로 `logType` 또는 `generationType`의 한 종류로 취급하지 않는다.
 - `configurationType`으로 업무 의미를 구분하며 실제 파일명과 분리한다.
 - 특정 `equipmentId + configurationType`은 현재 사용 중인 Configuration File **집합**을 식별하며 파일이 여러 개일 수 있다.
-- Current 조회는 전체 현재 파일 집합을 배열로 반환하고 pagination하지 않는다.
+- Current 조회는 전체 현재 파일 집합을 `fileName ASC` 배열로 반환하고 pagination하지 않는다.
 - Current File의 논리 identity는 `equipmentId + configurationType + fileName`이다.
 - Current 직접 다운로드에서 0개 일치는 `FileNotFound`, 1개는 다운로드, 여러 개는 `MultipleFilesMatched`로 처리한다.
 - 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사해 Configuration Snapshot Set을 생성하며 Current 원본은 그대로 유지한다.
@@ -93,10 +94,11 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 로그에서 `to`만 있는 형태는 지원하지 않고 `InvalidRequest`로 처리한다.
 - 로그에서 `from`/`to`가 모두 있으면 지정한 `[from, to)`를 조회한다.
 - `from >= to`는 `InvalidRequest`다.
-- 로그 시간 조회에는 설정 가능한 최대 조회 기간을 두며, 구체적인 기간 값은 운영 설정에서 정한다. 최대 기간을 넘는 요청은 `InvalidRequest`다.
+- 로그 시간 조회에는 설정 가능한 `Logs.MaxQueryRange`를 두며 최대 기간 초과 요청은 `InvalidRequest`다. `from` 단독 요청이 2일 범위를 의미하므로 이 설정은 최소 2일 이상이어야 한다.
 - Continuous 로그는 위 시간 범위와 별도로 현재 파일을 포함한다.
 - Current Configuration은 시간 필터 대상이 아니다.
 - Configuration History는 `from`과 `to`를 모두 필수로 요구한다.
+- Configuration History에는 로그와 독립적인 `Configurations.HistoryMaxQueryRange`를 두고 초과 요청은 `InvalidRequest`로 처리한다.
 - 단일 파일을 요구하는 직접 다운로드 조건이 여러 파일과 일치하면 임의 선택하지 않고 충돌 오류 반환
 
 ## 8. fileId 의미
