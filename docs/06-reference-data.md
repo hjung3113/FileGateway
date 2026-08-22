@@ -16,7 +16,7 @@
 - host 또는 서버 연결에 필요한 비민감 식별정보
 - rootPath
 
-`equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자다.
+`equipmentId`는 표시명과 구분되는 안정적인 논리 설비 식별자이며 하나의 FileGateway 배포 범위 안에서 유일하다.
 
 ### 로그 탐색 규칙
 
@@ -33,7 +33,7 @@
 - pattern
 - 추출 group/token → timestamp/subtype/attribute 매핑
 
-`timestamp`는 파일명/경로 규칙에서 추출한 로그의 논리 시각이다. FTP modified time과 구분한다.
+`timestamp`는 파일명/경로 규칙에서 추출한 로그의 논리 시각이다. FTP modified time과 구분한다. Timezone 정보가 없으면 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 
 FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 
@@ -44,7 +44,7 @@ FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 - 로그 종류별 실제 탐색/파일명 규칙은 서로 다를 수 있음
 - DB/SP는 확장 가능하며 탐색/파싱 규칙을 기준정보로 관리
 
-`Configuration File`은 로그가 아니므로 로그 기준정보 모델에 암묵적으로 포함하지 않는다. Configuration 기준정보 구조는 해당 Provider/API 경계가 확정된 뒤 정의한다.
+`Configuration File`은 로그가 아니며 MVP 제공 대상이다. `configurationType`을 실제 파일명과 분리된 업무 분류로 사용한다. Configuration 기준정보의 구체적 구조는 해당 Provider/API 경계가 확정된 뒤 정의한다.
 
 ## 호출자 확장 포인트
 
