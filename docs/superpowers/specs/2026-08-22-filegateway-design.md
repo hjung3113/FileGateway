@@ -57,6 +57,19 @@ FileGateway.Infrastructure
 
 별도 Application 프로젝트나 범용 File Provider/Pagination Provider는 MVP에 추가하지 않는다. 설비별 제공 파일 종류 조회 때문에 범용 File Type Provider도 추가하지 않는다.
 
+### 오픈소스 / 외부 라이브러리
+
+- FTP/FTPS Adapter는 **FluentFTP**를 `FileGateway.Infrastructure` 내부 구현으로 사용한다.
+- MSSQL Stored Procedure 접근은 **Microsoft.Data.SqlClient**를 기본으로 한다.
+- 자동 통합테스트 환경에는 **Testcontainers for .NET** 사용을 우선 검토한다.
+- **Dapper**는 SP 결과 매핑이 반복·복잡해질 때만 도입한다.
+- **Polly**는 실제 transient retry/circuit-breaker 요구가 확인될 때만 도입한다.
+- MediatR, AutoMapper, 별도 validation/logging abstraction 등은 현재 요구만으로 선제 도입하지 않는다.
+
+외부 라이브러리는 가능한 한 Infrastructure/Test 경계에 격리하고 Core/Logs/Configurations 계약에 라이브러리 타입을 노출하지 않는다. 패키지 버전은 구현 시점의 지원 .NET 버전, 라이선스, 유지보수 상태를 확인해 고정한다.
+
+Testcontainers는 자동화된 통합테스트 보조 수단이며 실제 Windows Server + IIS + 운영 유사 FTP/FTPS 검증을 대체하지 않는다.
+
 ## 4. 공통 식별/시간 규칙
 
 ### Equipment
