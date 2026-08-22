@@ -43,8 +43,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 파일 서버에 보관된 히스토리 설정파일 조회/다운로드
 - `equipmentId + configurationType` 기반 논리 조회
 - 실제 파일명/물리 경로는 외부 계약의 식별자로 사용하지 않음
-
-Configuration Provider와 외부 API의 구체적 경계는 설계 인터뷰에서 별도 확정한다.
+- Current와 History를 명시적으로 구분해 조회
 
 ## 5. 로그 생성 유형 (`generationType`)
 
@@ -70,21 +69,31 @@ Configuration Provider와 외부 API의 구체적 경계는 설계 인터뷰에�
 - 설비가 실제 동작에 사용하는 파라미터 값들이 저장된 설정 파일이다.
 - 로그가 아니므로 `logType` 또는 `generationType`의 한 종류로 취급하지 않는다.
 - `configurationType`으로 업무 의미를 구분하며 실제 파일명과 분리한다.
-- 현재 설정파일과 파일 서버에 보관된 히스토리 설정파일 모두 제공 대상이다.
-- 한 설비에 서로 다른 역할의 설정파일 여러 개가 동시에 존재할 수 있다.
+- 특정 `equipmentId + configurationType`에는 현재 사용 중인 Current Configuration이 하나 존재한다.
+- 별도 시스템이 과거 설정을 Configuration Snapshot으로 파일 서버에 저장한다.
+- FileGateway는 Current/History 파일을 **읽기 전용으로 제공**하며 히스토리 생성·복사·보관 책임을 갖지 않는다.
 
 ## 7. 시간 조회 규칙
 
 - 로그의 `timestamp`는 파일명/경로 규칙에서 추출한 논리 시각이다.
+- Configuration Snapshot의 시간은 snapshot 생성 논리 시각이며 파일명/경로 규칙에서 추출한다.
 - timezone 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 - API에서는 UTC offset이 포함된 ISO-8601 값으로 표현한다.
 - `from`/`to`는 `[from, to)`로 해석해 `from`은 포함하고 `to`는 제외한다.
 - 시간 조건이 없으면 로그는 최근 24시간을 기본 조회 범위로 사용한다.
 - Continuous 로그는 위 시간 범위와 별도로 현재 파일을 포함한다.
-- Configuration 히스토리의 기본 시간 범위는 해당 Provider/API 경계와 함께 별도 확정한다.
+- Current Configuration은 시간 필터 대상이 아니다.
+- Configuration History의 기본 시간 범위는 API 설계에서 별도 확정한다.
 - 단일 파일을 요구하는 직접 다운로드 조건이 여러 파일과 일치하면 임의 선택하지 않고 충돌 오류 반환
 
-## 8. 기술/운영 MVP 결정
+## 8. fileId 의미
+
+- 로그/Configuration Snapshot의 `fileId`는 해당 논리 파일 하나를 가리킨다.
+- Current Configuration의 `fileId`는 특정 `equipmentId + configurationType`의 **현재 파일 슬롯**을 가리킨다.
+- Current Configuration은 목록 조회 후 내용이 변경될 수 있으며 같은 `fileId`로 이후 다운로드하면 다운로드 시점의 현재 내용을 제공한다.
+- 특정 과거 버전이 필요하면 Configuration Snapshot의 `fileId`를 사용한다.
+
+## 9. 기술/운영 MVP 결정
 
 - 서버: ASP.NET Core/.NET
 - 운영 OS: Windows Server
@@ -97,9 +106,10 @@ Configuration Provider와 외부 API의 구체적 경계는 설계 인터뷰에�
 - 주요 파일 크기: 대부분 100MB 이하 기준
 - 규모: 파일 서버 수십~수백 대, 동시 다운로드 수십 건 수준 고려
 
-## 9. MVP 제외
+## 10. MVP 제외
 
 - 설비 직접 접근/로그 수집/가공
+- Configuration History 생성/복사/보관
 - Linux 실제 배포/검증
 - SMB/SFTP Adapter 구현
 - Site별 다중 credential 관리
