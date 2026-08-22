@@ -61,6 +61,12 @@ IIS에서 21번 포트를 사용한다는 사실만으로 FTPS 여부를 판단�
 
 DB에는 정의가 있지만 실제 경로/파일이 없을 수 있다. 운영 진단을 위해 원인을 구분한다.
 
+### 생산 중 파일 일관성
+
+FileGateway는 읽기 전용 제공 계층이므로 Current Configuration 및 Hourly/Daily 로그의 생산 방식, 원자적 replace, 쓰기 중 읽기 일관성을 보장하지 않는다. 생산 중 파일이 변경되어 길이 불일치/I/O 실패가 발생하면 일반 streaming failure로 드러날 수 있다. 이 문제를 해결하기 위한 snapshot 복사/잠금/버전 고정은 MVP 범위 밖이다.
+
+Configuration History는 생산자가 완료 조건/marker를 제공하고, FileGateway는 완료가 확인된 Snapshot Set만 읽는 것으로 부분 복사 노출을 방지한다.
+
 ### 목록 변경 중 페이지네이션
 
 FTP 파일 목록은 조회 중 변할 수 있다. continuation token과 안정된 정렬 기준을 사용하지만 완전한 snapshot을 보장하지 않는다.
