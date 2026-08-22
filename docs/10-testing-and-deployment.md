@@ -37,6 +37,8 @@
 - `cardinality`의 슬롯 단위 검증
 - 후보 파일 metadata 파싱 실패 → `FileDefinitionConflict`
 - 계산된 목록 디렉터리 없음 → 해당 탐색 결과 0개
+- 설비별 Log/Configuration 정의를 제공 파일 종류 응답으로 투영
+- 제공 파일 종류 응답이 `logType + generationType`, `configurationType`만 포함하고 내부 경로/rule 정보를 포함하지 않음
 - `fileId` 보호/만료/논리 identity/resourceKind
 - token payload가 클라이언트에 노출되지 않는 opaque 보호
 - Configuration Snapshot `fileId` 재해석 시 완료 marker 재확인
@@ -71,6 +73,9 @@
 - validation 실패 + last-good cache 존재 시 새 데이터 미적용 및 stale fallback
 - 최초 기준정보 validation 실패 + cache 없음 → `ReferenceDataUnavailable`
 - 기준정보 refresh/readiness가 FTP 서버 전체를 선제 순회하지 않음
+- 설비별 제공 파일 종류 조회가 기준정보 cache만 사용하고 FTP 접근을 발생시키지 않음
+- DB 기준정보에 새 `logType`/`configurationType` 추가 후 정상 cache refresh 시 코드 변경 없이 catalog 결과에 반영
+- 서로 다른 설비/설비사에 연결된 정의 집합 차이가 catalog 결과 차이로 반영
 - FTP 목록/Stat/OpenRead
 - FTP timeout/인증/경로 오류
 - 목록 대상 디렉터리 부재와 연결/인증/프로토콜 장애 구분
@@ -99,6 +104,11 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 - 신/구 API Key overlap 활성화 가능 여부 검증
 - API Key query string 전달을 인증 수단으로 허용하지 않음
 - API Key 누락/오류 모두 `401 InvalidApiKey`
+- `GET /api/v1/equipments/{equipmentId}/file-types` 제공 파일 종류 조회
+- 제공 파일 종류 조회가 Log의 `logType + generationType`, Configuration의 `configurationType`을 반환하는지 검증
+- 존재하지 않는 equipment는 `EquipmentNotFound`, 유효 equipment의 정의 없음은 빈 배열 반환
+- 제공 파일 종류 응답에 host/path/rule 등 내부 기준정보가 노출되지 않는지 검증
+- 제공 파일 종류 조회가 실제 FTP 파일 존재를 의미하거나 FTP 접근을 수행하지 않는지 검증
 - 로그 목록/페이지네이션
 - Log 목록 응답이 `{ items, continuationToken }` envelope인지 검증
 - 빈 Log 결과가 `items=[]`, `continuationToken=null`인지 검증
@@ -154,6 +164,7 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 - 여러 `X-Api-Key` 인증/호출자 구분 및 query string key 비허용
 - API Key 신/구 overlap 회전
 - MSSQL 연결
+- 설비별 제공 파일 종류 API가 DB 기준정보와 일치하고 FTP 접근 없이 동작
 - 기준정보 구조 validation/atomic cache 교체/stale fallback/single-flight 동작
 - 기준정보 refresh가 FTP 실재 검사를 수행하지 않는지 확인
 - 각 파일 서버 21번 제어 연결
@@ -174,6 +185,7 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 
 - Windows Server + IIS 기동
 - MSSQL 기준정보 조회/검증/캐시
+- 설비별 제공 파일 종류 조회
 - 실제 FTP/FTPS 대상 목록/metadata/download
 - 대표 로그 규칙
 - Current Configuration 및 Configuration Snapshot History 규칙
