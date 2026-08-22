@@ -39,10 +39,12 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 
 ### Configuration File
 
-- 현재 설정파일 조회/다운로드
+- 현재 설정파일 집합 조회/다운로드
 - 파일 서버에 보관된 히스토리 설정파일 조회/다운로드
 - `equipmentId + configurationType` 기반 논리 조회
-- 실제 파일명/물리 경로는 외부 계약의 식별자로 사용하지 않음
+- 같은 `configurationType` 아래 PM1/PM2/PM3/PM4처럼 여러 현재 파일 존재 가능
+- 개별 Configuration File을 별도 `subtype`이나 `configurationType`으로 세분화하지 않음
+- 실제 물리 경로는 외부 계약의 식별자로 사용하지 않음
 - Current와 History를 명시적으로 구분해 조회
 
 ## 5. 로그 생성 유형 (`generationType`)
@@ -69,8 +71,12 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 설비가 실제 동작에 사용하는 파라미터 값들이 저장된 설정 파일이다.
 - 로그가 아니므로 `logType` 또는 `generationType`의 한 종류로 취급하지 않는다.
 - `configurationType`으로 업무 의미를 구분하며 실제 파일명과 분리한다.
-- 특정 `equipmentId + configurationType`에는 현재 사용 중인 Current Configuration이 하나 존재한다.
-- 별도 시스템이 과거 설정을 Configuration Snapshot으로 파일 서버에 저장한다.
+- 특정 `equipmentId + configurationType`은 현재 사용 중인 Configuration File **집합**을 식별하며 파일이 여러 개일 수 있다.
+- Current 조회는 전체 현재 파일 집합을 배열로 반환하고 pagination하지 않는다.
+- Current File의 논리 identity는 `equipmentId + configurationType + fileName`이다.
+- Current 직접 다운로드에서 0개 일치는 `FileNotFound`, 1개는 다운로드, 여러 개는 `MultipleFilesMatched`로 처리한다.
+- 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사해 Configuration Snapshot Set을 생성하며 Current 원본은 그대로 유지한다.
+- 같은 Snapshot Set의 파일들은 동일한 `snapshotTimestamp`를 공유하고, History API는 개별 Snapshot File 목록을 반환한다.
 - FileGateway는 Current/History 파일을 **읽기 전용으로 제공**하며 히스토리 생성·복사·보관 책임을 갖지 않는다.
 
 ## 7. 시간 조회 규칙
@@ -84,6 +90,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 로그에서 `from`만 있으면 `[from, from + 2일)`을 조회한다.
 - 로그에서 `to`만 있는 형태는 지원하지 않고 `InvalidRequest`로 처리한다.
 - 로그에서 `from`/`to`가 모두 있으면 지정한 `[from, to)`를 조회한다.
+- `from >= to`는 `InvalidRequest`다.
 - 로그 시간 조회에는 설정 가능한 최대 조회 기간을 두며, 구체적인 기간 값은 운영 설정에서 정한다. 최대 기간을 넘는 요청은 `InvalidRequest`다.
 - Continuous 로그는 위 시간 범위와 별도로 현재 파일을 포함한다.
 - Current Configuration은 시간 필터 대상이 아니다.
@@ -92,10 +99,12 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 
 ## 8. fileId 의미
 
-- 로그/Configuration Snapshot의 `fileId`는 해당 논리 파일 하나를 가리킨다.
-- Current Configuration의 `fileId`는 특정 `equipmentId + configurationType`의 **현재 파일 슬롯**을 가리킨다.
-- Current Configuration은 목록 조회 후 내용이 변경될 수 있으며 같은 `fileId`로 이후 다운로드하면 다운로드 시점의 현재 내용을 제공한다.
-- 특정 과거 버전이 필요하면 Configuration Snapshot의 `fileId`를 사용한다.
+- 로그 `fileId`는 `equipmentId + logType + timestamp + fileName`의 논리 파일을 가리킨다.
+- Configuration Snapshot File의 `fileId`는 `equipmentId + configurationType + snapshotTimestamp + fileName`의 논리 파일을 가리킨다.
+- Current Configuration File의 `fileId`는 `equipmentId + configurationType + fileName`의 현재 논리 파일을 가리킨다.
+- Current Configuration File은 목록 조회 후 내용이 변경될 수 있으며 같은 `fileId`로 이후 다운로드하면 다운로드 시점의 현재 내용을 제공한다.
+- Current File의 `fileName`이 바뀌면 다른 논리 파일로 취급한다.
+- 특정 과거 버전이 필요하면 Configuration Snapshot File의 `fileId`를 사용한다.
 
 ## 9. 기술/운영 MVP 결정
 
