@@ -14,6 +14,7 @@ FileGateway에는 `mattpocock/skills` 전체를 설치하지 않고 설계에 �
 - `domain-modeling`: 도메인 용어 정제와 설계 의사결정 기록 원칙
 - `improve-codebase-architecture`: 기존 코드베이스의 구조 개선 후보 탐색
 - `grilling`: `improve-codebase-architecture`의 후속 설계 검토에 필요한 직접 의존 skill
+- `grill-with-docs`: `grilling`과 `domain-modeling`을 함께 사용해 설계 토론과 문서화를 동시에 진행하는 조합 skill
 
 ## Excluded
 
