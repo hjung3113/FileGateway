@@ -64,6 +64,8 @@ Timezone 정보가 없는 논리 시각은 현재 Site의 운영 시간대 `Asia
 
 Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`으로 표현한다.
 
+Continuous 로그에 파일명/경로로부터 명확한 논리 시각을 추출할 수 없다면 `timestamp`는 `null`이다. 현재 시각이나 FTP modified time을 대신 넣지 않는다.
+
 일반 패턴은 Template을 우선하고 복잡한 예외만 Regex named group을 사용한다.
 
 ### FileDescriptor
@@ -98,7 +100,12 @@ Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`으로 표현�
 
 ### Continuous
 
-시간 필터와 무관하게 현재 존재 파일을 포함한다. 다운로드 시작 시점 크기까지만 전송한다.
+- 시간 필터와 무관하게 현재 존재 파일을 포함한다.
+- 명확한 논리 시각이 없으면 `timestamp=null`이다.
+- 다운로드 시작 직전 파일 크기를 확정하고 그 크기까지만 전송한다.
+- 다운로드 중 파일이 커져도 시작 시점 이후 추가된 내용은 전송하지 않는다.
+- 다운로드 중 파일이 줄어 시작 크기까지 읽지 못하면 정상 완료가 아니라 streaming I/O 실패다.
+- truncate/rotation 시 새 파일로 이어 붙이거나 자동 재시도하지 않는다.
 
 ## 필터
 
@@ -112,7 +119,7 @@ Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`으로 표현�
 
 `from`/`to`는 `timestamp` 기준 반개구간 `[from, to)`로 해석한다. `from`은 포함하고 `to`는 제외한다.
 
-시간 조건이 없으면 최근 24시간을 사용한다.
+시간 조건이 없으면 최근 24시간을 사용한다. Continuous 로그는 시간 범위와 별도로 현재 파일을 포함한다.
 
 ## 정렬
 
@@ -121,4 +128,4 @@ Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`으로 표현�
 1. `timestamp DESC`
 2. 동일 `timestamp`에서는 `fileName ASC`
 
-최신 논리 시각의 파일부터 반환하고 `fileName`을 동일 시각 내 안정적인 tie-breaker로 사용한다.
+최신 논리 시각의 파일부터 반환하고 `fileName`을 동일 시각 내 안정적인 tie-breaker로 사용한다. `timestamp=null`인 Continuous 파일의 목록 내 위치는 API 응답 계약 라운드에서 별도 확정한다.
