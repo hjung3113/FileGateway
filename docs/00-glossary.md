@@ -56,9 +56,21 @@ _Avoid_: `to` 포함 여부가 문맥에 따라 달라지는 표현
 물리 서버나 경로가 바뀌어도 같은 논리 파일을 다시 식별하기 위한 값의 조합이다. 로그는 `equipmentId + logType + timestamp + fileName`, Configuration Snapshot File은 `equipmentId + configurationType + snapshotTimestamp + fileName`, Current Configuration File은 `equipmentId + configurationType + fileName`을 사용한다.
 _Avoid_: FTP host/path를 파일 identity로 취급
 
+**Resource Kind (`resourceKind`)**:
+`fileId`가 어떤 feature의 logical identity를 담는지 내부적으로 구분하는 서명된 값이다. 현재 값은 `Log | ConfigurationCurrent | ConfigurationSnapshot`이다. 클라이언트는 이 값을 해석하거나 의존하지 않는다.
+_Avoid_: resourceKind를 외부 API 분기 파라미터로 사용
+
 **File ID (`fileId`)**:
-`Logical File Identity`를 가리키는 유효기간이 있는 opaque 참조다. 일반 조회조건 자체를 나타내는 토큰이 아니며 물리 서버/경로를 직접 식별하지 않는다. Current Configuration File의 경우 같은 논리 identity의 현재 내용을 가리키며 특정 바이트 버전을 고정하지 않는다.
+`Logical File Identity`를 가리키는 유효기간이 있는 opaque 참조다. 일반 조회조건 자체를 나타내는 토큰이 아니며 물리 서버/경로를 직접 식별하지 않는다. 내부에는 logical identity와 `resourceKind`가 서명된 형태로 보존된다. Current Configuration File의 경우 같은 논리 identity의 현재 내용을 가리키며 특정 바이트 버전을 고정하지 않는다.
 _Avoid_: query token, physical path identifier
+
+**Continuation Token (`continuationToken`)**:
+목록 조회의 다음 페이지를 가리키는 유효기간이 있는 opaque stateless cursor다. 서버에 이전 결과 전체를 저장하지 않고 원래 결과 집합을 결정한 조회조건과 마지막 반환 위치를 보존한다. Log는 `timestamp + fileName`, Configuration History는 `snapshotTimestamp + fileName`을 cursor로 사용한다. `limit`은 페이지 크기이므로 결과 집합 조건에 포함하지 않는다.
+_Avoid_: offset/page 번호, 서버 세션에 전체 결과를 저장하는 pagination token
+
+**Token Codec**:
+`fileId`와 `continuationToken`의 서명/검증, opaque encoding/decoding, TTL 처리를 담당하는 공통 기계적 계약이다. Log/Configuration identity나 pagination 의미는 해석하지 않는다.
+_Avoid_: 공통 token 계층에 Log/Configuration 업무 규칙을 넣는 것
 
 **Subtype (`subtype`)**:
 하나의 `logType` 내부에서 API 사용자가 자주 조회하는 대표 하위 분류 하나다. 같은 의미의 값을 `attributes`에 중복 저장하지 않는다. MVP Configuration 모델에는 사용하지 않는다.
