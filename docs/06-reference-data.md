@@ -28,13 +28,27 @@
 
 하나의 FileGateway 배포 범위에서 `equipmentId + logType`은 정확히 하나의 로그 정의를 식별한다. 동일 조합의 중복 정의는 기준정보 오류다.
 
+`pathTemplate`은 탐색할 논리 디렉터리 경로를 계산하고, `filePattern`은 해당 디렉터리에서 후보 파일을 선택한다. `timestamp`/`subtype`/`attributes` 추출은 metadata rule이 담당한다.
+
+MetadataRule은 물리 FTP root를 제외한 논리 relative path와 fileName 전체를 대상으로 해석할 수 있다. 후보 파일이 `filePattern`에 일치했지만 필수 metadata를 해석하지 못하면 누락시키지 않고 `FileDefinitionConflict`로 취급한다.
+
 `logType`은 업무적인 로그 종류이고 `generationType`은 파일 생성 주기/생명주기다. 두 값을 같은 분류로 취급하지 않는다.
 
 로그 `timestamp`는 파일명/경로 규칙에서 추출한 논리 시각이다. FTP modified time과 구분하며 timezone 정보가 없으면 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. Daily 로그의 논리 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 `timestamp`는 `null`이다.
 
 `subtype` 및 동적 attribute 값은 외부 조회에서 정확한 문자열 일치(case-sensitive)를 사용한다. 대소문자 비구분이 필요한 업무 값은 기준정보/파싱 단계에서 canonical value로 정규화한다.
 
-`cardinality=Single`은 탐색 결과가 최대 하나여야 한다는 정의상의 invariant다. 실제 결과가 2개 이상이면 정상적인 다중 결과가 아니라 기준정보/파일 상태 불일치로 취급한다.
+`cardinality`는 전체 조회 결과 수가 아니라 논리 생성 슬롯당 파일 개수 invariant다.
+
+- Hourly: 각 시간 슬롯
+- Daily: 각 날짜 슬롯
+- Continuous: 현재 슬롯
+- `Single`: 슬롯당 최대 1개
+- `Multiple`: 같은 슬롯에 여러 파일 허용
+
+`cardinality=Single`인데 하나의 슬롯에서 실제 결과가 2개 이상이면 정상적인 다중 결과가 아니라 기준정보/파일 상태 불일치로 취급한다.
+
+동일 `equipmentId + logType`에 여러 discovery rule이 실제로 필요한지는 별도 설계 결정으로 남기며, 실제 요구가 확인되기 전까지 MVP 기준정보는 하나의 discovery rule만 둔다.
 
 ### Configuration 정의
 
@@ -119,6 +133,6 @@ SP 결과 수신 시:
 - 지원하지 않는 generation/metadata mode
 - 유효하지 않은 regex/template/mapping
 
-실제 탐색 시 `cardinality=Single`인데 여러 파일이 발견되는 경우는 `FileDefinitionConflict`로 분류한다.
+실제 탐색 시 `cardinality=Single`인데 하나의 논리 생성 슬롯에서 여러 파일이 발견되거나 후보 파일의 필수 metadata 해석에 실패하면 `FileDefinitionConflict`로 분류한다.
 
 기준정보 오류와 실제 파일 서버 장애는 별도 원인으로 유지한다.
