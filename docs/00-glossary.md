@@ -29,8 +29,8 @@ _Avoid_: 파일명을 configuration type으로 직접 사용
 _Avoid_: 현재 파일을 불변 snapshot으로 간주하는 표현
 
 **Configuration Snapshot**:
-별도 시스템이 파일 서버에 저장한 과거 Configuration File의 시점별 히스토리 파일이다. FileGateway는 생성·보관 책임 없이 이미 저장된 snapshot을 조회·다운로드만 한다.
-_Avoid_: FileGateway가 생성하는 configuration backup
+별도 시스템이 파일 서버에 저장한 과거 Configuration File의 시점별 히스토리 파일이다. 생성이 완료된 snapshot은 불변이며 수정 대신 새 snapshot을 생성한다. FileGateway는 생성·보관 책임 없이 이미 저장된 snapshot을 조회·다운로드만 한다.
+_Avoid_: FileGateway가 생성하는 configuration backup, 생성 완료 후 내용이 바뀌는 snapshot
 
 **Configuration Snapshot Timestamp**:
 Configuration Snapshot이 생성된 논리 시각이다. 파일명/경로 규칙에서 추출하며 FTP modified time과 동일시하지 않는다.
@@ -53,5 +53,5 @@ _Avoid_: query token, physical path identifier
 _Avoid_: 임의의 모든 메타데이터를 subtype으로 승격
 
 **Attributes (`attributes`)**:
-`subtype` 외에 로그 파일에서 추출하거나 기준정보로 부여하는 가변 key-value 메타데이터다. Configuration File에도 동일 개념을 적용할지는 별도 설계 결정으로 확정한다.
-_Avoid_: subtype과 같은 의미의 값을 중복 저장
+`subtype` 외에 로그 파일에서 추출하거나 기준정보로 부여하는 가변 key-value 메타데이터다. MVP Configuration 모델에는 적용하지 않는다.
+_Avoid_: subtype과 같은 의미의 값을 중복 저장, Configuration에 요구사항 없이 attributes를 추가하는 것
