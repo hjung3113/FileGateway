@@ -32,7 +32,7 @@ GET /api/v1/logs
 
 `from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준 반개구간 `[from, to)`다. `from`은 포함하고 `to`는 제외한다.
 
-Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다.
+Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 `timestamp`는 `null`이며 현재 시각이나 FTP modified time으로 대체하지 않는다.
 
 `subtype` 및 `attr.<name>` 값은 정확한 문자열 일치(case-sensitive)로 비교한다.
 
@@ -48,7 +48,7 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 - isContinuous
 - attributes
 
-시간 기반 로그 목록의 기본 정렬은 `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`다.
+시간 기반 로그 목록의 기본 정렬은 `timestamp DESC`, 동일 timestamp에서는 `fileName ASC`다. `timestamp=null`인 Continuous 항목의 목록 내 위치는 별도 API 응답 계약으로 확정한다.
 
 목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
 
@@ -137,6 +137,8 @@ Current Configuration:
 `subtype`/`attributes`는 파일을 다시 식별하기 위한 핵심 identity로 사용하지 않는다.
 
 Current Configuration `fileId`는 특정 물리 버전이 아니라 현재 파일 슬롯을 가리키므로 토큰 발급 후 내용이 바뀌어도 다운로드 시점의 현재 내용을 제공한다.
+
+Continuous 로그 다운로드는 시작 직전 확인한 파일 크기를 해당 응답의 전송 상한으로 사용한다. 다운로드 중 파일이 커져도 추가된 내용은 보내지 않는다. 반대로 truncate/rotation으로 시작 크기까지 읽지 못하면 정상 완료가 아니라 streaming I/O 실패로 취급하며 새 파일로 이어 붙이거나 자동 재시도하지 않는다. 스트림 시작 후 실패의 HTTP 표현 방식은 다운로드 응답 계약 라운드에서 별도 확정한다.
 
 `fileId` 처리 오류는 다음 원인을 구분한다.
 
