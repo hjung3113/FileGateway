@@ -43,6 +43,7 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - 감사 로그
 - Health Check
 - JSON/streaming HTTP 응답
+- 공통 protected opaque token codec 사용/dispatch
 
 ### FileGateway.Logs
 
@@ -71,7 +72,7 @@ FileGateway는 클라이언트와 분산 파일 서버 사이의 논리적 파�
 - `IFileAccess`
 - 원격 파일 entry/stat/stream 모델
 - 공통 I/O 오류 분류
-- `fileId`/`continuationToken`에 사용할 공통 token codec 계약(서명/검증/opaque encoding/TTL)
+- `fileId`/`continuationToken`에 사용할 공통 token codec 계약(무결성 보호/payload 비노출/opaque encoding/TTL)
 
 Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec도 Log/Configuration의 logical identity나 pagination 조건을 해석하지 않는다.
 
@@ -81,17 +82,17 @@ Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec
 - 기준정보 memory cache
 - FTP/FTPS 파일 접근
 - credential/secret 로딩
-- token 서명 key/secret 공급 및 외부 I/O 구현
+- token 보호 key/secret 공급 및 외부 I/O 구현
 
 ## 토큰 책임 경계
 
 `fileId`와 `continuationToken`을 위해 범용 File Provider나 범용 Pagination Provider를 추가하지 않는다.
 
-- 공통 계층: token 서명/검증, opaque encoding/decoding, TTL 같은 기계적 codec 책임
+- 공통 계층: token 무결성 보호, payload 비노출, opaque encoding/decoding, TTL 같은 기계적 codec 책임
 - Logs: `Log` logical identity와 Log cursor/조회조건 의미
 - Configurations: `ConfigurationCurrent`/`ConfigurationSnapshot` logical identity와 History cursor/조회조건 의미
 
-`fileId`에는 외부에서 보이지 않는 서명된 `resourceKind`를 포함해 공통 `/files/{fileId}`가 해당 feature resolver로 위임할 수 있게 한다.
+`fileId`에는 외부에서 보이지 않는 보호된 `resourceKind`를 포함해 공통 `/files/{fileId}`가 해당 feature resolver로 위임할 수 있게 한다.
 
 ```text
 resourceKind
@@ -123,4 +124,5 @@ FileGateway
 6. Configuration은 로그 모델에 억지로 포함하지 않는다.
 7. FileGateway는 Configuration History를 생성하거나 보관하지 않고 이미 저장된 파일만 제공한다.
 8. 향후 Linux 배포를 위해 Core/feature 계층에서 Windows 전용 API에 직접 의존하지 않는다.
-9. 토큰의 암호학적/직렬화 책임과 도메인 의미를 분리한다.
+9. 토큰 보호/직렬화 책임과 도메인 의미를 분리한다.
+10. 로그의 논리 생성 슬롯과 물리 디렉터리를 1:1로 가정하지 않는다.
