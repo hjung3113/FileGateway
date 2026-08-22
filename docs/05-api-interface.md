@@ -72,6 +72,8 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 페이지네이션은 원격 파일 집합의 완전한 snapshot을 보장하지 않는다. 안정적인 정렬과 cursor를 사용하지만 페이지 사이에 파일이 추가/삭제되면 결과가 변할 수 있다.
 
+Log continuation token은 서버에 이전 FTP 결과 전체를 저장하지 않는 stateless cursor다. 토큰은 원래 조회조건과 마지막 반환 위치인 `timestamp + fileName`을 보존한다.
+
 탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
 
 조건 기반 존재 여부 전용 HEAD endpoint는 추가하지 않는다. 조건 조회는 목록 API를 사용하고, 특정 `fileId`를 얻은 뒤 존재 확인이 필요하면 공통 `HEAD /api/v1/files/{fileId}`를 사용한다.
@@ -148,7 +150,18 @@ GET /api/v1/configurations/history
 - 페이지 사이에 원격 History 파일이 추가/삭제되면 결과 변화가 가능하며 완전한 snapshot은 보장하지 않음
 - Current Configuration은 결과에 포함하지 않음
 
+Configuration History continuation token도 stateless cursor이며 원래 조회조건과 마지막 반환 위치인 `snapshotTimestamp + fileName`을 보존한다.
+
 Configuration History 전용 조건 기반 직접 다운로드 endpoint는 MVP에서 만들지 않는다. 원하는 Snapshot File의 `fileId`를 얻은 뒤 공통 `/api/v1/files/{fileId}/download`를 사용한다.
+
+### continuationToken 공통 계약
+
+- token 서명/검증/opaque encoding/TTL은 공통 token codec을 사용한다.
+- Log와 Configuration History는 각각 자신의 조회조건과 cursor 의미를 소유한다.
+- 서버에 이전 페이지 결과 전체를 저장하지 않는다.
+- TTL은 설정 가능하며 구체적인 값은 운영 설정에서 정한다.
+- 만료, 형식 오류, 서명 검증 실패/변조, 해당 endpoint에서 해석할 수 없는 token은 모두 `400 InvalidRequest`로 처리한다.
+- `fileId`의 `FileIdExpired`처럼 continuation token 전용 410 오류를 만들지 않는다.
 
 ### 파일 정보
 
@@ -160,8 +173,9 @@ HEAD /api/v1/files/{fileId}
 GET과 HEAD 모두 다음 순서로 실제 대상 상태를 검증한다.
 
 1. `fileId` 검증
-2. 현재 기준정보로 논리 identity 재해석
-3. 실제 원격 파일 stat/존재 여부 확인
+2. 토큰 내부 `resourceKind`에 따라 Logs 또는 Configurations의 identity resolver로 위임
+3. 현재 기준정보로 논리 identity 재해석
+4. 실제 원격 파일 stat/존재 여부 확인
 
 공통 `/files/{fileId}` endpoint는 feature 업무 metadata를 재구성하는 API가 아니라 공통 파일 상태 확인 용도다.
 
@@ -190,6 +204,16 @@ GET /api/v1/files/{fileId}/download
 - 다운로드 시 현재 기준정보를 다시 조회하여 논리 identity의 현재 물리 위치를 해석
 - 물리 서버/경로가 변경돼도 같은 논리 파일이 새 위치에 존재하면 기존 `fileId`로 정상 접근
 
+`fileId` 내부에는 클라이언트에 노출되지 않는 서명된 `resourceKind`가 포함된다.
+
+```text
+Log
+ConfigurationCurrent
+ConfigurationSnapshot
+```
+
+클라이언트는 `resourceKind`를 파싱하거나 외부 요청 파라미터로 전달하지 않는다.
+
 논리 identity는 다음 값을 사용한다.
 
 ```text
@@ -202,6 +226,8 @@ Configuration Snapshot File:
 Current Configuration File:
   equipmentId + configurationType + fileName
 ```
+
+공통 token 계층은 identity의 업무 의미를 해석하지 않는다. Logs와 Configurations가 각 identity 생성/재해석을 소유한다.
 
 `subtype`/`attributes`는 파일을 다시 식별하기 위한 핵심 identity로 사용하지 않는다.
 
