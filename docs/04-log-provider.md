@@ -2,15 +2,17 @@
 
 ## 역할
 
-`FileGateway.Logs`는 로그의 업무 의미와 탐색 규칙을 담당하고 실제 파일 I/O는 `IFileAccess`에 위임한다.
+`FileGateway.Logs`는 **로그**의 업무 의미와 탐색 규칙을 담당하고 실제 파일 I/O는 `IFileAccess`에 위임한다.
+
+`Configuration File`은 로그가 아니므로 이 Provider의 로그 종류로 취급하지 않는다. Configuration 제공 경계는 별도 설계 결정으로 확정한다.
 
 ## 핵심 처리 흐름
 
-1. 설비명/로그종류/조회조건 수신
+1. `equipmentId`/`logType`/조회조건 수신
 2. MSSQL 기준정보 조회(캐시 우선)
 3. `LogResolver`가 탐색 경로/후보 패턴 계산
 4. `IFileAccess`로 원격 목록/메타데이터 조회
-5. Template/Regex 규칙으로 timestamp/subtype/attributes 추출
+5. Template/Regex 규칙으로 `timestamp`/`subtype`/`attributes` 추출
 6. 날짜/시간/subtype/attribute 필터 적용
 7. `FileDescriptor[]` 구성
 8. `fileId` 발급 후 API 반환
@@ -21,12 +23,14 @@ Resolver의 기본 반환은 항상 **파일 집합**이다. 시간당 한 파�
 
 ### EquipmentLogDefinition
 
-- equipment
+- equipmentId
 - logType
 - serverId
 - generationType: `Hourly | Daily | Continuous`
 - discoveryRule
 - metadataRule
+
+`logType`은 업무적으로 어떤 종류의 로그인지를 나타내며, `generationType`은 파일 생성 주기/생명주기를 나타낸다. 두 개념을 혼용하지 않는다.
 
 ### ServerDefinition
 
@@ -50,12 +54,14 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 - pattern
 - mappings: 추출 값 → `timestamp`, `subtype`, `attribute.<key>`
 
+`timestamp`는 파일명/경로 규칙에서 추출한 **로그의 논리 시각**이다. FTP modified time이나 파일시스템 수정 시각과 동일한 개념으로 사용하지 않는다.
+
 일반 패턴은 Template을 우선하고 복잡한 예외만 Regex named group을 사용한다.
 
 ### FileDescriptor
 
 - fileId
-- equipment
+- equipmentId
 - logType
 - subtype(optional)
 - timestamp(optional)
@@ -64,9 +70,13 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 - isContinuous
 - attributes: `Dictionary<string,string>`
 
+`subtype`은 하나의 `logType` 내부에서 자주 조회하는 대표 하위 분류 하나다. 나머지 가변 메타데이터는 `attributes`에 두며 같은 의미의 값을 양쪽에 중복 저장하지 않는다.
+
+`fileId`는 특정 논리 파일 하나를 가리키는 임시 opaque 참조다. 일반 조회조건 자체를 나타내지 않는다.
+
 물리 host/path/credential은 포함하지 않는다.
 
-## 로그 정책
+## 로그 생성 정책 (`generationType`)
 
 ### Hourly
 
@@ -80,16 +90,14 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 
 시간 필터와 무관하게 현재 존재 파일을 포함한다. 다운로드 시작 시점 크기까지만 전송한다.
 
-### Configuration
-
-파일 종류와 속성이 다양하므로 subtype + attributes를 사용하고, 파일명/경로 파싱과 DB 정의를 조합한다.
-
 ## 필터
 
-- equipment
+- equipmentId
 - logType
 - from/to
 - subtype
 - 동적 attributes
+
+`from`/`to`는 `timestamp` 기준으로 해석한다.
 
 시간 조건이 없으면 최근 24시간을 사용한다.
