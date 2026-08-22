@@ -9,6 +9,8 @@ Status: Approved
 
 FileGateway는 **분산 파일 서버에 이미 저장된 설비 로그와 Configuration File을 조회·다운로드로 제공하는 읽기 전용 Gateway**다.
 
+클라이언트는 실제 파일 조회 전에 `equipmentId` 기준으로 해당 설비가 제공하도록 정의된 `logType`/`configurationType`을 조회할 수 있다.
+
 FileGateway가 하지 않는 일:
 
 - 설비 직접 접속
@@ -47,13 +49,13 @@ FileGateway.Infrastructure
   └─ FTP/FTPS
 ```
 
-- `Api`: HTTP/auth/validation/audit/health/streaming 응답
-- `Logs`: 로그 조회/탐색/필터/Log identity/pagination 의미
-- `Configurations`: Current/History 조회/Configuration identity/History pagination 의미
+- `Api`: HTTP/auth/validation/audit/health/streaming 응답, 설비별 제공 파일 종류 catalog 응답 조합
+- `Logs`: 로그 조회/탐색/필터/Log identity/pagination 의미, Log 정의 요약 제공
+- `Configurations`: Current/History 조회/Configuration identity/History pagination 의미, Configuration 정의 요약 제공
 - `Core`: `IFileAccess`, 원격 file/stat/stream, 공통 I/O 오류, 공통 token codec 계약
 - `Infrastructure`: MSSQL/cache/FTP/secret/token 보호 key 공급
 
-별도 Application 프로젝트나 범용 File Provider/Pagination Provider는 MVP에 추가하지 않는다.
+별도 Application 프로젝트나 범용 File Provider/Pagination Provider는 MVP에 추가하지 않는다. 설비별 제공 파일 종류 조회 때문에 범용 File Type Provider도 추가하지 않는다.
 
 ## 4. 공통 식별/시간 규칙
 
@@ -245,9 +247,42 @@ X-Api-Key: <key>
 - MVP 권한 범위는 모든 활성 key가 동일
 - key rotation 시 신/구 key overlap 가능
 
+### 설비별 제공 파일 종류
+
+```http
+GET /api/v1/equipments/{equipmentId}/file-types
+```
+
+검증 완료된 DB 기준정보에서 해당 설비에 등록된 제공 계약을 반환한다.
+
+```json
+{
+  "equipmentId": "EQ-001",
+  "logs": [
+    { "logType": "EventLog", "generationType": "Hourly" }
+  ],
+  "configurations": [
+    { "configurationType": "PM" }
+  ]
+}
+```
+
+- FTP 스캔/실재 파일 확인 없음
+- Log: `logType + generationType`
+- Configuration: `configurationType`
+- 내부 server/path/rule 정보 비노출
+- equipment 없음 → `EquipmentNotFound`
+- equipment는 있으나 정의 없음 → `200` + 빈 배열
+- pagination 없음
+- 설비사별 제공 파일 차이는 equipment별 DB 정의 차이로 표현
+- vendor 전용 코드 분기/API parameter 없음
+- 기존 계약 안의 새 종류는 DB 추가 + cache refresh만으로 catalog와 실제 조회 API에 반영 가능
+
 ### 주요 endpoints
 
 ```http
+GET /api/v1/equipments/{equipmentId}/file-types
+
 GET /api/v1/logs
 GET /api/v1/logs/download?... 
 
@@ -388,6 +423,10 @@ Stored Procedure가 제공하는 정보:
 - Configuration definitions
 - discovery/metadata/current/history/marker rules
 
+설비별 제공 파일 종류 API는 위 기준정보에서 equipment별 Log/Configuration 정의를 투영한다. 별도 FTP catalog를 유지하지 않는다.
+
+설비사별 제공 파일 차이는 최종 equipment 정의 집합의 차이로 표현한다. DB 내부에서 설비사 공통 규칙을 정규화/재사용하는 방식은 DB 구현 세부사항이고 FileGateway 외부 계약으로 고정하지 않는다.
+
 credential은 DB에서 받지 않는다.
 
 ### Cache
@@ -418,6 +457,7 @@ MVP에는 max-stale 차단 시간이 없으므로 stale cache 장기 사용은 �
 
 ## 12. 원격 I/O / 운영
 
+- 제공 파일 종류 catalog 조회는 FTP I/O를 수행하지 않음
 - 계산된 디렉터리 없음 → 정상 결과 0개
 - 실제 FTP 연결/인증/프로토콜 실패와 구분
 - 한 요청의 일부 디렉터리만 FTP 실패해도 부분 성공 반환 안 함
@@ -451,6 +491,7 @@ Health:
 - Web UI/WPF 클라이언트 구현
 - 분산 cache/HA
 - 범용 다중 discovery rule
+- 설비사별 전용 파일 provider/코드 분기
 
 ## 14. 구현 전 문서 우선순위
 
