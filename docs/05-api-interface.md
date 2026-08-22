@@ -48,18 +48,48 @@ Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Se
 
 목록은 `limit + opaque continuationToken` 방식으로 페이지네이션한다. offset/page 방식은 사용하지 않는다.
 
-### Configuration API 경계
+### Current Configuration 조회
 
-Configuration File은 MVP 제공 대상이지만 로그가 아니므로 `/api/v1/logs`에 포함하지 않는다.
+```http
+GET /api/v1/configurations/current?equipmentId=...&configurationType=...
+```
 
-- Configuration 전용 API namespace를 사용한다.
-- `equipmentId + configurationType`으로 Configuration을 식별한다.
-- Current와 History를 API에서 명시적으로 구분한다.
-- Current는 시간 필터와 무관하게 현재 파일을 조회한다.
-- History는 snapshot 논리 시각 기준의 기간 조회를 제공한다.
-- Current를 History 기간 조회 결과에 암묵적으로 섞지 않는다.
+- `equipmentId`, `configurationType` 모두 필수
+- 하나의 Current Configuration 논리 슬롯을 조회
+- 시간 필터를 사용하지 않음
+- `subtype`/`attributes`는 MVP에서 사용하지 않음
+- Current를 History 결과에 포함하지 않음
 
-구체적인 endpoint path와 History 기본 조회 범위는 설계 인터뷰에서 확정한다.
+### Current Configuration 직접 다운로드
+
+```http
+GET /api/v1/configurations/current/download?equipmentId=...&configurationType=...
+```
+
+- 목록/metadata 조회를 선행하지 않고 현재 설정파일을 직접 다운로드
+- 조회와 동일한 Current Resolver 규칙 사용
+- 다운로드 시점의 현재 파일 내용을 제공
+
+### Configuration History 목록
+
+```http
+GET /api/v1/configurations/history
+```
+
+주요 query:
+
+- `equipmentId` (필수)
+- `configurationType` (필수)
+- `from` (필수)
+- `to` (필수)
+- `limit` (선택)
+- `continuationToken` (선택)
+
+- snapshot 논리 시각 기준 `[from, to)` 조회
+- `from`/`to`가 없으면 임의 기본 기간 또는 전체 History로 대체하지 않고 `InvalidRequest`
+- 생성 완료된 snapshot은 불변으로 취급
+- History 목록은 `limit + opaque continuationToken`으로 페이지네이션
+- Current Configuration은 결과에 포함하지 않음
 
 ### 파일 정보
 
