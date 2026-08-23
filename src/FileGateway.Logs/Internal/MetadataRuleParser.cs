@@ -168,31 +168,29 @@ public static partial class MetadataRuleParser
         return generation == GenerationType.Daily ? SiteTime.SiteLocalMidnight(parsed) : parsed;
     }
 
-    // 오프셋 지정자는 .NET 표준 K/z 계열만 인정한다. 'Z'는 지정자가 아니므로 제외하고
-    // single-quoted literal 안의 문자도 제외한다(DateTimeOffset 포맷의 이스케이프는 홑따옴표뿐).
+    // format의 offset 포함 여부를 명시적으로 분류한다.
+    // (a) 표준 format "O"/"o"(round-trip)·"R"/"r"(RFC1123)은 값에 offset을 포함한다.
+    // (b) custom format은 quoted literal('...' 또는 "...") 밖의 K/z 계열 지정자만 offset으로 인정한다.
+    //     대문자 Z는 .NET custom format에서 literal이므로 offset이 아니다.
     private static bool HasOffsetSpecifier(string format)
     {
-        var inSingleQuote = false;
+        if (format is "O" or "o" or "R" or "r") return true;
+        char quote = default;
         for (var i = 0; i < format.Length; i++)
         {
             var c = format[i];
             if (c == '\\')
             {
-                i++;
+                i++; // 이스케이프된 다음 문자는 literal
                 continue;
             }
-            if (c == '\'')
+            if (c is '\'' or '"')
             {
-                // ''는 이스케이프된 홑따옴표 리터럴
-                if (inSingleQuote && i + 1 < format.Length && format[i + 1] == '\'')
-                {
-                    i++;
-                    continue;
-                }
-                inSingleQuote = !inSingleQuote;
-                continue;
+                if (quote == c) quote = default;        // 닫는 따옴표
+                else if (quote == default) quote = c;    // 여는 따옴표
+                continue;                                 // 다른 종류 따옴표는 literal 내부 문자
             }
-            if (!inSingleQuote && c is 'K' or 'z') return true;
+            if (quote == default && c is 'K' or 'z') return true;
         }
         return false;
     }

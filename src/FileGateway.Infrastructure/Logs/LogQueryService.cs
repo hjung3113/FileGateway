@@ -29,8 +29,10 @@ public sealed class LogQueryService(
         if (query.Limit is < 1)
             throw new FileGatewayException("InvalidRequest", "limit must be at least 1");
 
+        query = Normalize(query);
+
         // 커서 검증(복호화+바인딩)은 탐색 전에: 잘못된 토큰은 resolver/FTP 워크 없이 즉시 거부한다.
-        (DateTimeOffset? LastTs, string? LastName)? cursor = null;
+        (DateTimeOffset? LastTs, string? LastName, EffectiveRange Range)? cursor = null;
         if (query.ContinuationToken is not null)
         {
             LogCursor.AssertBinding(tokens, query.ContinuationToken, query);
@@ -38,7 +40,10 @@ public sealed class LogQueryService(
         }
 
         var def = await FindDefinitionAsync(query.EquipmentId, query.LogType, ct);
-        var range = EffectiveRangePlanner.Normalize(query, def.Definition.GenerationType, maxQueryRange, clock);
+        // continuation은 첫 페이지의 effective range를 토큰에서 재사용한다(from/to==null 기본 24h의
+        // 재계산 금지). 첫 페이지에서만 Normalize가 range를 결정하고 이후 페이지는 그 값을 고정한다.
+        var range = cursor?.Range
+            ?? EffectiveRangePlanner.Normalize(query, def.Definition.GenerationType, maxQueryRange, clock);
         var files = ApplyFilters(await ResolveAsync(def, range, ct), query);
         if (cursor is not null)
             files = SkipUntilAfter(files, def.Definition.GenerationType, cursor.Value.LastTs, cursor.Value.LastName);
@@ -51,13 +56,14 @@ public sealed class LogQueryService(
             var last = page[^1];
             var lastTs = def.Definition.GenerationType == GenerationType.Continuous
                 ? null : last.Metadata.Timestamp;
-            next = LogCursor.Encode(tokens, clock, query, lastTs, last.Entry.Name, pageTtl);
+            next = LogCursor.Encode(tokens, clock, query, lastTs, last.Entry.Name, range, pageTtl);
         }
         return new(page.Select(f => ToDescriptor(def, f, query)).ToList(), next);
     }
 
     public async Task<SingleFileMatch> ResolveSingleAsync(LogListQuery query, CancellationToken ct)
     {
+        query = Normalize(query);
         var def = await FindDefinitionAsync(query.EquipmentId, query.LogType, ct);
         var range = EffectiveRangePlanner.Normalize(query, def.Definition.GenerationType, maxQueryRange, clock);
         var files = ApplyFilters(await ResolveAsync(def, range, ct), query);
@@ -120,6 +126,11 @@ public sealed class LogQueryService(
             f.Entry.Name, f.Entry.Size, def.Definition.GenerationType == GenerationType.Continuous,
             f.Metadata.Attributes);
     }
+
+    // 진입부 1회 정규화: 빈 subtype는 미지정과 같은 의미로 바인딩(Canonical)·필터(ApplyFilters)
+    // 모두에 적용한다(null=필터 없음, ""는 미지정과 동일 취급).
+    private static LogListQuery Normalize(LogListQuery q)
+        => q.Subtype is { Length: 0 } ? q with { Subtype = null } : q;
 
     // subtype/attribute 필터는 case-sensitive 정확 일치
     private static IReadOnlyList<ResolvedLogFile> ApplyFilters(IReadOnlyList<ResolvedLogFile> files, LogListQuery q)

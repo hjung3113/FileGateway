@@ -1,4 +1,6 @@
+using System.Globalization;
 using FileGateway.Core.Errors;
+using FileGateway.Core.Time;
 using FileGateway.Core.Tokens;
 using FileGateway.Logs;
 using FileGateway.Logs.Internal;
@@ -22,7 +24,8 @@ public class LogCursorTests
     private static readonly DateTimeOffset To = new(2026, 8, 23, 0, 0, 0, TimeSpan.FromHours(9));
 
     internal static string Issue(LogListQuery q, DateTimeOffset? lastTs, string? lastName)
-        => LogCursor.Encode(Codec, TimeProvider.System, q, lastTs, lastName, TimeSpan.FromMinutes(30));
+        => LogCursor.Encode(Codec, TimeProvider.System, q, lastTs, lastName,
+            new EffectiveRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue), TimeSpan.FromMinutes(30));
 
     [Fact]
     public void Binding_same_raw_conditions_matches()
@@ -62,13 +65,26 @@ public class LogCursorTests
         var q = new LogListQuery("EQ-1", "Event", From, To, null, NoAttrs, 50, null);
         var ts = new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.FromHours(9));
 
-        var (lastTs, lastName) = LogCursor.Decode(Codec, Issue(q, ts, "2026082218_Event.zip"));
+        var (lastTs, lastName, _) = LogCursor.Decode(Codec, Issue(q, ts, "2026082218_Event.zip"));
         Assert.Equal(ts, lastTs);
         Assert.Equal("2026082218_Event.zip", lastName);
 
-        var (noTs, noName) = LogCursor.Decode(Codec, Issue(q, null, null));
+        var (noTs, noName, _) = LogCursor.Decode(Codec, Issue(q, null, null));
         Assert.Null(noTs);
         Assert.Null(noName);
+    }
+
+    [Fact]
+    public void Decode_round_trips_effective_range()
+    {
+        // from/to==null 첫 페이지의 effective range(기본 24h)가 토큰에 그대로 담겨야 한다
+        var q = new LogListQuery("EQ-1", "Event", null, null, null, NoAttrs, 50, null);
+        var range = new EffectiveRange(
+            DateTimeOffset.Parse("2026-08-21T20:00:00Z", CultureInfo.InvariantCulture),
+            DateTimeOffset.Parse("2026-08-22T20:00:00Z", CultureInfo.InvariantCulture));
+        var token = LogCursor.Encode(Codec, TimeProvider.System, q, null, null, range,
+            TimeSpan.FromMinutes(30));
+        Assert.Equal(range, LogCursor.Decode(Codec, token).EffectiveRange);
     }
 
     [Fact]
@@ -77,7 +93,8 @@ public class LogCursorTests
         var q = new LogListQuery("EQ-1", "Event", From, To, null, NoAttrs, 50, null);
         Assert.Equal("InvalidRequest",
             Assert.Throws<FileGatewayException>(() => LogCursor.Decode(Codec, "not-a-token")).Code);
-        var expired = LogCursor.Encode(Codec, TimeProvider.System, q, null, null, TimeSpan.FromSeconds(-1));
+        var expired = LogCursor.Encode(Codec, TimeProvider.System, q, null, null,
+            new EffectiveRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue), TimeSpan.FromSeconds(-1));
         Assert.Equal("InvalidRequest",
             Assert.Throws<FileGatewayException>(() => LogCursor.Decode(Codec, expired)).Code);
         Assert.Throws<FileGatewayException>(() => LogCursor.AssertBinding(Codec, expired, q));
@@ -99,7 +116,8 @@ public class LogCursorTests
         var q = new LogListQuery("EQ-1", "Event", From, To, null, NoAttrs, 50, null);
         var issuedInPast = LogCursor.Encode(Codec,
             new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)),
-            q, null, null, TimeSpan.FromMinutes(30));
+            q, null, null, new EffectiveRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue),
+            TimeSpan.FromMinutes(30));
 
         // 발급 시각이 주입 시계 기준 과거 → 현재 시점에 만료: clock이 페이로드에 반영됐다는 증거
         Assert.Equal("InvalidRequest",

@@ -31,7 +31,8 @@ public sealed class LogResolver(IFileAccess fileAccess)
             if (!listing.Exists) continue;                                      // 디렉터리 부재 = 정상 0개
 
             // 중복 판정은 "동일 탐색 결과(동일 디렉터리)" 기준이다(문서: 동일 탐색 범위의 case-insensitive 동일 파일명).
-            // 서로 다른 디렉터리의 같은 basename은 논리 timestamp가 다른 별개 파일이므로 충돌이 아니다.
+            // 서로 다른 디렉터리의 같은 basename은 논리 timestamp가 다른 한 별개 파일이다 —
+            // (timestamp, fileName) 전역 유일성은 아래 SortAndCheckIdentity에서 강제한다.
             var seenNames = new HashSet<string>(FileNameComparison.Comparer);
             foreach (var entry in listing.Files)
             {
@@ -55,8 +56,23 @@ public sealed class LogResolver(IFileAccess fileAccess)
 
         return d.GenerationType == GenerationType.Continuous
             ? files.OrderBy(f => f.Entry.Name, FileNameComparison.Comparer).ToList()
-            : files.OrderByDescending(f => f.Metadata.Timestamp!.Value)
-                   .ThenBy(f => f.Entry.Name, FileNameComparison.Comparer).ToList();
+            : SortAndCheckIdentity(files);
+    }
+
+    // Hourly/Daily: 논리 identity는 (timestamp, fileName ci)이며 전역(전 디렉터리) 유일해야 한다.
+    // 정렬(ts DESC, name ASC ci) 후 인접 검사로 중복을 찾는다 — 서로 다른 디렉터리에서 regex 메타가
+    // 같은 basename을 같은 timestamp로 매핑하면 커서 키가 충돌해 pagination이 항목을 잃는다.
+    // Continuous는 단일 슬롯(단일 디렉터리)이라 위 per-directory 검사가 이미 전역이다.
+    private static List<ResolvedLogFile> SortAndCheckIdentity(List<ResolvedLogFile> files)
+    {
+        var sorted = files.OrderByDescending(f => f.Metadata.Timestamp!.Value)
+            .ThenBy(f => f.Entry.Name, FileNameComparison.Comparer).ToList();
+        for (var i = 1; i < sorted.Count; i++)
+            if (sorted[i - 1].Metadata.Timestamp == sorted[i].Metadata.Timestamp
+                && FileNameComparison.Same(sorted[i - 1].Entry.Name, sorted[i].Entry.Name))
+                throw new FileGatewayException("FileDefinitionConflict",
+                    $"duplicate logical file identity (timestamp, fileName): {sorted[i].Entry.Name}");
+        return sorted;
     }
 
     private static void CheckCardinality(EquipmentLogDefinition d, Cardinality card, List<ResolvedLogFile> files)

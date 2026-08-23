@@ -140,4 +140,55 @@ public class MetadataRuleParserTests
         var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly, "Z/20260822180000Z/x.log")!;
         Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.FromHours(9)), meta.Timestamp);
     }
+
+    [Fact]
+    public void Regex_quoted_uppercase_Z_literal_stays_site_local()
+    {
+        var rule = new LogMetadataRule(MetadataMode.Regex, @"^Z/(?<ts>\d{8}_\d{4}Z)/x\.log$",
+            [new MetadataMapping("ts", "timestamp", "yyyyMMdd_HHmm'Z'")]);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly, "Z/20260822_1800Z/x.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.FromHours(9)), meta.Timestamp);
+    }
+
+    [Fact]
+    public void Regex_unquoted_uppercase_Z_is_literal_not_offset()
+    {
+        // custom format의 대문자 Z는 지정자가 아닌 literal → offset 없음 → site-local 해석
+        var rule = new LogMetadataRule(MetadataMode.Regex, @"^Z/(?<ts>\d{8}_\d{4}Z)/x\.log$",
+            [new MetadataMapping("ts", "timestamp", "yyyyMMdd_HHmmZ")]);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly, "Z/20260822_1800Z/x.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.FromHours(9)), meta.Timestamp);
+        Assert.Equal(TimeSpan.FromHours(9), meta.Timestamp!.Value.Offset);
+    }
+
+    [Fact]
+    public void Regex_double_quoted_literal_K_is_not_offset_specifier()
+    {
+        // "..." literal 안의 K는 지정자가 아니다 → site-local
+        var rule = new LogMetadataRule(MetadataMode.Regex, @"^Z/(?<ts>\d{8}_\d{4}K)/x\.log$",
+            [new MetadataMapping("ts", "timestamp", "yyyyMMdd_HHmm\"K\"")]);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly, "Z/20260822_1800K/x.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.FromHours(9)), meta.Timestamp);
+    }
+
+    [Fact]
+    public void Regex_zzz_format_preserves_parsed_offset()
+    {
+        var rule = new LogMetadataRule(MetadataMode.Regex, @"^ZZ/(?<ts>\d{8}_\d{4}[+-]\d{2}:\d{2})/x\.log$",
+            [new MetadataMapping("ts", "timestamp", "yyyyMMdd_HHmmzzz")]);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly, "ZZ/20260822_1800+03:30/x.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.FromHours(3) + TimeSpan.FromMinutes(30)),
+            meta.Timestamp);
+    }
+
+    [Fact]
+    public void Regex_standard_O_format_preserves_parsed_offset()
+    {
+        // 표준 round-trip "O"는 값에 offset을 포함한다 — host 시계대로 재해석하지 않는다
+        var rule = new LogMetadataRule(MetadataMode.Regex, @"^O/(?<ts>[^/]+)/x\.log$",
+            [new MetadataMapping("ts", "timestamp", "O")]);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly, "O/2026-08-22T18:00:00.0000000Z/x.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.Zero), meta.Timestamp);
+        Assert.Equal(TimeSpan.Zero, meta.Timestamp!.Value.Offset);
+    }
 }

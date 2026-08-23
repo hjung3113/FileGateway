@@ -94,6 +94,29 @@ public class LogResolverTests
     }
 
     [Fact]
+    public async Task Same_basename_same_timestamp_across_directories_is_conflict()
+    {
+        // flat/regex 정의: timestamp를 파일명에서 추출하므로 서로 다른 디렉터리의 같은 basename이
+        // 같은 (timestamp, fileName ci)로 매핑될 수 있다 — 논리 키 중복은 pagination 커서를
+        // 붕괴시키므로 FileDefinitionConflict로 거부한다.
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/2026/08/22/17/20260822_1800_Event.zip", "x"u8.ToArray());
+        ftp.AddFile("Logs/2026/08/22/18/20260822_1800_Event.zip", "y"u8.ToArray());
+        var def = new ResolvedLogDefinition(new EquipmentLogDefinition("EQ-001", "EventLog", "SRV1",
+            GenerationType.Hourly,
+            new LogDiscoveryRule("Logs/{yyyy}/{MM}/{dd}/{HH}", "*.zip", Cardinality.Multiple),
+            new LogMetadataRule(MetadataMode.Regex,
+                @"^Logs/\d{4}/\d{2}/\d{2}/\d{2}/(?<ts>\d{8}_\d{4})_Event\.zip$",
+                [new MetadataMapping("ts", "timestamp", "yyyyMMdd_HHmm")])), Srv);
+        var range = new EffectiveRange(
+            new DateTimeOffset(2026, 8, 22, 17, 0, 0, TimeSpan.FromHours(9)),
+            new DateTimeOffset(2026, 8, 22, 19, 0, 0, TimeSpan.FromHours(9)));
+        var ex = await Assert.ThrowsAsync<FileGatewayException>(() =>
+            new LogResolver(ftp).ResolveAsync(def, range, CancellationToken.None));
+        Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
     public async Task Single_cardinality_with_two_files_in_slot_is_conflict()
     {
         var ftp = new FakeFileAccess();
