@@ -130,6 +130,18 @@ public class SnapshotBuilderTests
         Assert.Contains(errors, e => e.Contains("{week}"));  // historyRule markerPathTemplate
     }
 
+    [Fact]
+    public void Configuration_validator_unsafe_path_reports_only_safety_error()
+    {
+        // rooted(unsafe) path에 unknown token이 함께 있어도 — 안전 오류만, token 오류는 중복 없음
+        var def = new EquipmentConfigurationDefinition("E", "PM", "S",
+            new CurrentRule("/PM/{plant}", "PM_*.cfg"),
+            new HistoryRule("PM/hist/{yyyy}/{MM}/{dd}", "PM_*.cfg", "PM/hist/{yyyy}/{MM}/{dd}/_DONE"));
+        var errors = ConfigurationDefinitionValidator.Validate(def);
+        Assert.Single(errors);
+        Assert.Contains("currentRule pathTemplate unsafe: /PM/{plant}", errors);
+    }
+
     [Theory]
     [InlineData("Logs/2024/file.log")]
     [InlineData("^Logs/2024/file.log")]

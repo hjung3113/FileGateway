@@ -28,8 +28,11 @@ public static class ConfigurationDefinitionValidator
     private static void ValidatePath(string pathTemplate, string field, List<string> errors)
     {
         if (!RemotePath.IsSafeDefinitionPath(pathTemplate))
+        {
             errors.Add($"{field} unsafe: {pathTemplate}");
-        else if (pathTemplate.Split('/').Any(s => s.Contains("..")))
+            return; // unsafe면 token 검사까지 돌려 같은 필드에 오류가 중복된다
+        }
+        if (pathTemplate.Split('/').Any(s => s.Contains("..")))
             errors.Add($"{field} contains '..'");
         // LogDefinitionValidator와 동일한 PathTokens 화이트리스트 — 미지원 token은 거부(계획 247행).
         foreach (var token in ExtractTokens(pathTemplate))
