@@ -592,7 +592,7 @@ git add -A && git commit -m "feat(core): protocol-agnostic file access contract 
   - `record TokenPayload(string Purpose, IReadOnlyDictionary<string,string> Claims, DateTimeOffset IssuedAt, TimeSpan Ttl)`
   - `enum TokenValidity { Valid, Invalid, Expired }`
   - `record TokenDecodeResult(TokenValidity Validity, TokenPayload? Payload)`
-  - `interface ITokenCodec { string Protect(TokenPayload payload); TokenDecodeResult Unprotect(string token); }` — payload.Purpose 불일치는 호출자(각 feature) 판단
+  - `interface ITokenCodec { string Protect(TokenPayload payload); TokenDecodeResult Unprotect(string token, string expectedPurpose); }` — protector purpose를 payload.Purpose별로 분리(확정 결정 #7). codec이 expected purpose 불일치 토큰(`Invalid`)으로 거부하며, 호출자는 각 feature의 purpose 상수(`fg.fileid.log` 등)를 전달한다. (2026-08-23 PR #2 리뷰 보강으로 개정 — 이후 Task의 `Unprotect(token)` 예제 코드는 모두 이 시그니처로 읽는다)
   - `class DataProtectionTokenCodec(IDataProtectionProvider provider) : ITokenCodec`
 
 - [ ] **Step 1: 실패 테스트**
