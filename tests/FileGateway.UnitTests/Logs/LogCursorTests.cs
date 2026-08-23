@@ -6,6 +6,7 @@ using FileGateway.Infrastructure.Tokens;
 using FileGateway.Logs.Tokens;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
+using FileGateway.UnitTests.TestUtils;
 
 namespace FileGateway.UnitTests.Logs;
 
@@ -21,7 +22,7 @@ public class LogCursorTests
     private static readonly DateTimeOffset To = new(2026, 8, 23, 0, 0, 0, TimeSpan.FromHours(9));
 
     internal static string Issue(LogListQuery q, DateTimeOffset? lastTs, string? lastName)
-        => LogCursor.Encode(Codec, q, lastTs, lastName, TimeSpan.FromMinutes(30));
+        => LogCursor.Encode(Codec, TimeProvider.System, q, lastTs, lastName, TimeSpan.FromMinutes(30));
 
     [Fact]
     public void Binding_same_raw_conditions_matches()
@@ -76,11 +77,33 @@ public class LogCursorTests
         var q = new LogListQuery("EQ-1", "Event", From, To, null, NoAttrs, 50, null);
         Assert.Equal("InvalidRequest",
             Assert.Throws<FileGatewayException>(() => LogCursor.Decode(Codec, "not-a-token")).Code);
-
-        var expired = LogCursor.Encode(Codec, q, null, null, TimeSpan.FromSeconds(-1));
+        var expired = LogCursor.Encode(Codec, TimeProvider.System, q, null, null, TimeSpan.FromSeconds(-1));
         Assert.Equal("InvalidRequest",
             Assert.Throws<FileGatewayException>(() => LogCursor.Decode(Codec, expired)).Code);
         Assert.Throws<FileGatewayException>(() => LogCursor.AssertBinding(Codec, expired, q));
+    }
+
+    [Fact]
+    public void Subtype_null_and_empty_bind_identically()
+    {
+        var q = new LogListQuery("EQ-1", "Event", From, To, null, NoAttrs, 50, null);
+        var token = Issue(q, null, null);
+
+        // ""는 null과 동일 바인딩이어야 한다(빈 subtype로 재요청한 페이지가 바인딩 실패하지 않는다)
+        LogCursor.AssertBinding(Codec, token, q with { Subtype = "" });
+    }
+
+    [Fact]
+    public void Encode_uses_injected_clock_for_issued_at()
+    {
+        var q = new LogListQuery("EQ-1", "Event", From, To, null, NoAttrs, 50, null);
+        var issuedInPast = LogCursor.Encode(Codec,
+            new FixedTimeProvider(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)),
+            q, null, null, TimeSpan.FromMinutes(30));
+
+        // 발급 시각이 주입 시계 기준 과거 → 현재 시점에 만료: clock이 페이로드에 반영됐다는 증거
+        Assert.Equal("InvalidRequest",
+            Assert.Throws<FileGatewayException>(() => LogCursor.Decode(Codec, issuedInPast)).Code);
     }
 
     [Fact]

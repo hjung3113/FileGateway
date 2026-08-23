@@ -7,11 +7,7 @@ using FileGateway.Logs.Definitions;
 namespace FileGateway.Logs.Internal;
 
 public sealed record ParsedMetadata(
-    DateTimeOffset? Timestamp, string? Subtype, IReadOnlyDictionary<string, string> Attributes)
-{
-    public static readonly ParsedMetadata Empty = new(null, null,
-        (IReadOnlyDictionary<string, string>)new Dictionary<string, string>());
-}
+    DateTimeOffset? Timestamp, string? Subtype, IReadOnlyDictionary<string, string> Attributes);
 
 public static partial class MetadataRuleParser
 {
@@ -68,7 +64,8 @@ public static partial class MetadataRuleParser
 
         if (date is not null)
         {
-            var midnight = SiteLocalMidnight(date.Value.Date);
+            // date는 fg_ts_yyyy 파싱 시점에 이미 SiteLocalMidnight 값이다 — 재계산하지 않는다.
+            var midnight = date.Value;
             if (generation == GenerationType.Daily) return new(midnight, subtype, attrs);
             if (generation == GenerationType.Hourly)
             {
@@ -171,10 +168,11 @@ public static partial class MetadataRuleParser
         return generation == GenerationType.Daily ? SiteTime.SiteLocalMidnight(parsed) : parsed;
     }
 
+    // 오프셋 지정자는 .NET 표준 K/z 계열만 인정한다. 'Z'는 지정자가 아니므로 제외하고
+    // single-quoted literal 안의 문자도 제외한다(DateTimeOffset 포맷의 이스케이프는 홑따옴표뿐).
     private static bool HasOffsetSpecifier(string format)
     {
         var inSingleQuote = false;
-        var inDoubleQuote = false;
         for (var i = 0; i < format.Length; i++)
         {
             var c = format[i];
@@ -183,8 +181,9 @@ public static partial class MetadataRuleParser
                 i++;
                 continue;
             }
-            if (c == '\'' && !inDoubleQuote)
+            if (c == '\'')
             {
+                // ''는 이스케이프된 홑따옴표 리터럴
                 if (inSingleQuote && i + 1 < format.Length && format[i + 1] == '\'')
                 {
                     i++;
@@ -193,18 +192,7 @@ public static partial class MetadataRuleParser
                 inSingleQuote = !inSingleQuote;
                 continue;
             }
-            if (c == '"' && !inSingleQuote)
-            {
-                if (inDoubleQuote && i + 1 < format.Length && format[i + 1] == '"')
-                {
-                    i++;
-                    continue;
-                }
-                inDoubleQuote = !inDoubleQuote;
-                continue;
-            }
-            if (!inSingleQuote && !inDoubleQuote && c is 'K' or 'z' or 'Z')
-                return true;
+            if (!inSingleQuote && c is 'K' or 'z') return true;
         }
         return false;
     }

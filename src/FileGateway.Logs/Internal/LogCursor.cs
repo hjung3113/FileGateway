@@ -12,18 +12,23 @@ namespace FileGateway.Logs.Internal;
 public static class LogCursor
 {
     public static string Canonical(LogListQuery q)
-        => string.Join("|",
+    {
+        // subtype ""→null 정규화: 빈 subtype는 미지정과 동일 바인딩이어야 한다(null/empty가 서로 다른 페이지에서
+        // 바인딩 실패하지 않도록). ApplyFilters의 null/"" 구분과는 별개 계약이다.
+        var subtype = q.Subtype is { Length: > 0 } ? q.Subtype : null;
+        return string.Join("|",
             Esc(q.EquipmentId), Esc(q.LogType),
             q.From?.ToString("O", CultureInfo.InvariantCulture) ?? "",
             q.To?.ToString("O", CultureInfo.InvariantCulture) ?? "",
-            Esc(q.Subtype ?? ""),
+            Esc(subtype ?? ""),
             string.Join("&", q.Attributes.OrderBy(kv => kv.Key, StringComparer.Ordinal)
                 .Select(kv => $"{Esc(kv.Key)}={Esc(kv.Value)}")));
+    }
 
     private static string Esc(string s)
         => s.Replace("\\", "\\\\").Replace("|", "\\|").Replace("&", "\\&").Replace("=", "\\=");
 
-    public static string Encode(ITokenCodec codec, LogListQuery q,
+    public static string Encode(ITokenCodec codec, TimeProvider clock, LogListQuery q,
         DateTimeOffset? lastTimestamp, string? lastFileName, TimeSpan ttl)
     {
         var claims = new Dictionary<string, string>
@@ -33,7 +38,7 @@ public static class LogCursor
             ["lastName"] = lastFileName ?? "",
         };
         return codec.Protect(new TokenPayload(LogTokenKinds.ContinuationPurpose, claims,
-            DateTimeOffset.UtcNow, ttl));
+            clock.GetUtcNow(), ttl));
     }
 
     public static (DateTimeOffset? LastTs, string? LastName) Decode(ITokenCodec codec, string token)

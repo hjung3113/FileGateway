@@ -18,7 +18,7 @@ public sealed record LogListQuery(
 /// <summary>조회 조건을 물리 탐색 range로 정규화한다. 규칙 위반은 <see cref="FileGatewayException"/>("InvalidRequest").</summary>
 public static class EffectiveRangePlanner
 {
-    public static EffectiveRange Normalize(LogListQuery q, GenerationType type, TimeSpan maxRange)
+    public static EffectiveRange Normalize(LogListQuery q, GenerationType type, TimeSpan maxRange, TimeProvider clock)
     {
         if (type == GenerationType.Continuous)
         {
@@ -31,7 +31,7 @@ public static class EffectiveRangePlanner
         if (q.To is not null && q.From >= q.To)
             throw new FileGatewayException("InvalidRequest", "from must be before to");
 
-        var now = DateTimeOffset.UtcNow; // 시계는 1회만 읽는다(두 번 읽으면 기본 24h가 정확히 떨어지지 않는다)
+        var now = clock.GetUtcNow(); // 시계는 1회만 읽는다(두 번 읽으면 기본 24h가 정확히 떨어지지 않는다)
         var from = q.From ?? now.AddHours(-24);
         var to = q.To ?? (q.From is not null ? q.From.Value.AddDays(2) : now);
         if (to - from > maxRange)

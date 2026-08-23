@@ -29,16 +29,19 @@ public sealed class LogQueryService(
         if (query.Limit is < 1)
             throw new FileGatewayException("InvalidRequest", "limit must be at least 1");
 
-        var def = await FindDefinitionAsync(query.EquipmentId, query.LogType, ct);
-        var range = EffectiveRangePlanner.Normalize(query, def.Definition.GenerationType, maxQueryRange);
-        var files = ApplyFilters(await ResolveAsync(def, range, ct), query);
-
+        // 커서 검증(복호화+바인딩)은 탐색 전에: 잘못된 토큰은 resolver/FTP 워크 없이 즉시 거부한다.
+        (DateTimeOffset? LastTs, string? LastName)? cursor = null;
         if (query.ContinuationToken is not null)
         {
             LogCursor.AssertBinding(tokens, query.ContinuationToken, query);
-            var cursor = LogCursor.Decode(tokens, query.ContinuationToken);
-            files = SkipUntilAfter(files, def.Definition.GenerationType, cursor.LastTs, cursor.LastName);
+            cursor = LogCursor.Decode(tokens, query.ContinuationToken);
         }
+
+        var def = await FindDefinitionAsync(query.EquipmentId, query.LogType, ct);
+        var range = EffectiveRangePlanner.Normalize(query, def.Definition.GenerationType, maxQueryRange, clock);
+        var files = ApplyFilters(await ResolveAsync(def, range, ct), query);
+        if (cursor is not null)
+            files = SkipUntilAfter(files, def.Definition.GenerationType, cursor.Value.LastTs, cursor.Value.LastName);
 
         var limit = query.Limit ?? limitDefault;
         var page = files.Take(limit).ToList();
@@ -48,7 +51,7 @@ public sealed class LogQueryService(
             var last = page[^1];
             var lastTs = def.Definition.GenerationType == GenerationType.Continuous
                 ? null : last.Metadata.Timestamp;
-            next = LogCursor.Encode(tokens, query, lastTs, last.Entry.Name, pageTtl);
+            next = LogCursor.Encode(tokens, clock, query, lastTs, last.Entry.Name, pageTtl);
         }
         return new(page.Select(f => ToDescriptor(def, f, query)).ToList(), next);
     }
@@ -56,7 +59,7 @@ public sealed class LogQueryService(
     public async Task<SingleFileMatch> ResolveSingleAsync(LogListQuery query, CancellationToken ct)
     {
         var def = await FindDefinitionAsync(query.EquipmentId, query.LogType, ct);
-        var range = EffectiveRangePlanner.Normalize(query, def.Definition.GenerationType, maxQueryRange);
+        var range = EffectiveRangePlanner.Normalize(query, def.Definition.GenerationType, maxQueryRange, clock);
         var files = ApplyFilters(await ResolveAsync(def, range, ct), query);
         return files.Count switch
         {

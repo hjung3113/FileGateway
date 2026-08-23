@@ -130,4 +130,14 @@ public class MetadataRuleParserTests
             "Trace/2026/08/22/18/42.log")!;
         Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 42, 0, TimeSpan.FromHours(9)), meta.Timestamp);
     }
+
+    [Fact]
+    public void Regex_quoted_z_literal_is_not_offset_specifier()
+    {
+        // 'Z'는 오프셋 지정자가 아니다(인용된 리터럴) → offsetless 값은 site-local(Seoul)로 해석
+        var rule = new LogMetadataRule(MetadataMode.Regex, @"^Z/(?<ts>\d{14}Z)/x\.log$",
+            [new MetadataMapping("ts", "timestamp", "yyyyMMddHHmmss'Z'")]);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly, "Z/20260822180000Z/x.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.FromHours(9)), meta.Timestamp);
+    }
 }

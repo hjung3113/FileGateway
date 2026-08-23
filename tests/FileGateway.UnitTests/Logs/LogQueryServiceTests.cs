@@ -1,5 +1,6 @@
 using FileGateway.Core.Errors;
 using FileGateway.Core.Queries;
+using FileGateway.Core.Files;
 using FileGateway.Core.Tokens;
 using FileGateway.Infrastructure.ReferenceData;
 using FileGateway.Infrastructure.Tokens;
@@ -217,6 +218,51 @@ public class LogQueryServiceTests
         var p2 = await svc.ListAsync(q with { ContinuationToken = p1.ContinuationToken }, CancellationToken.None);
         Assert.Equal("Trace_beta.zip", Assert.Single(p2.Items).FileName);
         Assert.Null(p2.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task Equal_timestamps_tie_break_by_file_name_then_continue()
+    {
+        var ftp = new FakeFileAccess();
+        // 동일 timestamp(18시)의 서로 다른 이름 2개 + 더 오래된 파일 1개
+        ftp.AddFile("Logs/attr/2026082218_Event_A.zip", "1"u8.ToArray());
+        ftp.AddFile("Logs/attr/2026082218_Event_B.zip", "2"u8.ToArray());
+        ftp.AddFile("Logs/attr/2026082217_Event_C.zip", "3"u8.ToArray());
+        var svc = Service(ftp, Snapshot(AttrLog));
+
+        var q = new LogListQuery("EQ-001", "AttrLog", From, To, null, NoAttrs, 1, null);
+        var p1 = await svc.ListAsync(q, CancellationToken.None);
+        Assert.Equal("2026082218_Event_A.zip", Assert.Single(p1.Items).FileName); // 동일 ts → fileName ASC(ci) 첫째
+
+        var p2 = await svc.ListAsync(q with { ContinuationToken = p1.ContinuationToken }, CancellationToken.None);
+        Assert.Equal("2026082218_Event_B.zip", Assert.Single(p2.Items).FileName); // 동일 ts 둘째(SkipUntilAfter equal-ts)
+
+        var p3 = await svc.ListAsync(q with { ContinuationToken = p2.ContinuationToken }, CancellationToken.None);
+        Assert.Equal("2026082217_Event_C.zip", Assert.Single(p3.Items).FileName); // 이후 오래된 ts
+        Assert.Null(p3.ContinuationToken);
+    }
+
+    [Fact]
+    public async Task Invalid_continuation_token_rejected_before_file_access()
+    {
+        // 커서 검증이 resolver/FTP 탐색보다 먼저다 — fileAccess가 호출되면 코드 "RemoteAccessFailed"로 실패한다
+        var svc = new LogQueryService(new FixedView(Snapshot()), new ExplodingFileAccess(), Codec,
+            TimeProvider.System, TimeSpan.FromDays(31), 50, TimeSpan.FromHours(24), TimeSpan.FromMinutes(30));
+        var q = new LogListQuery("EQ-001", "EventLog", From, To, null, NoAttrs, null, "garbage-token");
+        var ex = await Assert.ThrowsAsync<FileGatewayException>(() => svc.ListAsync(q, CancellationToken.None));
+        Assert.Equal("InvalidRequest", ex.Code);
+    }
+
+    private sealed class ExplodingFileAccess : IFileAccess
+    {
+        public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
+            => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
+        public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+            => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
+        public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
+            => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
+        public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string path, CancellationToken ct)
+            => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
     }
 
     [Fact]
