@@ -4,12 +4,12 @@
 
 - 설계 확정: `docs/00-glossary.md`~`10-testing-and-deployment.md` + 통합 스냅샷 `docs/superpowers/specs/2026-08-22-filegateway-design.md`
 - 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개
-- 코드: Foundation(PR #2) + 기준정보(PR #3) merge 완료. **Logs(Task 8~11) 구현 완료** — 브랜치 `implement/logs` (HEAD `39355dd`), PR 오픈/리뷰 대기. 게이트 green — 빌드 0 경고, 단위 134/134 + 통합 16/16
-- 브랜치: 다음 세션은 Logs PR merge 후 새 브랜치에서 Task 12 (Configurations)부터 계속. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
+- 코드: Foundation(PR #2) + 기준정보(PR #3) + **Logs(PR #4, squash `af01bad`) merge 완료**. 게이트 green — 빌드 0 경고, 단위 148/148 + 통합 16/16. 사용자 inline 리뷰 P2 5건(range drift 커서 고정, subtype 진입 정규화, offset 명시적 분류, cross-directory identity 검사, 중복 range 코멘트) `9a03b2e`로 해소 후 merge. glm-5.3 high PR 리뷰(본문+diff) APPROVED 전제
+- 브랜치: `implement/configurations` 분기 완료. 다음: Task 12 (Configurations)부터 계속. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
 
 ## 다음 작업: 계획 실행
 
-`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~11 완료**. 다음 세션 순서: **Logs PR merge → Task 12 (Configurations)부터 새 브랜치로 계속**.
+`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~11 완료**. 다음 세션 순서: **Task 12 (Configurations)부터 `implement/configurations` 브랜치로 계속**.
 
 **보강 3건 해소 내역 (구현 브랜치 커밋):**
 
@@ -51,7 +51,7 @@
 | 문서 동기화 | 0 | ✅ 완료 (`ea6fd4b`) |
 | Foundation (Core/FTP/token) | 1–5 | ✅ 완료 (리뷰 통과, PR) |
 | 기준정보 (SP/cache) | 6–7 | ✅ 완료 (보강 3건 포함, 리뷰 통과, `implement/reference-data` PR) |
-| Logs | 8–11 | 미시작 |
+| Logs | 8–11 | ✅ 완료 (PR #4 `af01bad` merge — luna max/glm-5.3 혼합 디스패치, task 리뷰+glm-5.3 high PR 리뷰+사용자 inline 5건 해소) |
 | Configurations | 12–13 | 미시작 |
 | Api | 14–18 | 미시작 |
 | 검증/배포 준비 | 19–20 | 미시작 |
