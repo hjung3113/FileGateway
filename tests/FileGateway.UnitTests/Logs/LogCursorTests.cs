@@ -92,4 +92,32 @@ public class LogCursorTests
         Assert.Equal("InvalidRequest",
             Assert.Throws<FileGatewayException>(() => LogCursor.Decode(Codec, fileId)).Code);
     }
+
+    [Fact]
+    public void Binding_subtype_with_delimiter_round_trips()
+    {
+        var q = new LogListQuery("EQ-1", "Event", From, To, "A|B", NoAttrs, 50, null);
+        var token = Issue(q, null, null);
+        LogCursor.AssertBinding(Codec, token, q); // 예외 없음
+
+        // 구분자를 포함한 subtype이 다른 값과 충돌하지 않아야 한다
+        Assert.Equal("InvalidRequest",
+            Assert.Throws<FileGatewayException>(() =>
+                LogCursor.AssertBinding(Codec, token, q with { Subtype = "A", Attributes = new Dictionary<string, string> { ["B"] = "" } })).Code);
+    }
+
+    [Fact]
+    public void Binding_attribute_value_with_delimiters_round_trips()
+    {
+        var attrs = new Dictionary<string, string> { ["lot"] = "7&8=9", ["line"] = "2" };
+        var q = new LogListQuery("EQ-1", "Event", From, To, null, attrs, 50, null);
+        var token = Issue(q, null, null);
+        LogCursor.AssertBinding(Codec, token, q); // 예외 없음
+
+        // '&'와 '='가 다른 key/value 구조로 해석되지 않아야 한다
+        var crafted = new Dictionary<string, string> { ["lot"] = "7", ["8"] = "9", ["line"] = "2" };
+        Assert.Equal("InvalidRequest",
+            Assert.Throws<FileGatewayException>(() =>
+                LogCursor.AssertBinding(Codec, token, q with { Attributes = crafted })).Code);
+    }
 }

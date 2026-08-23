@@ -13,12 +13,15 @@ public static class LogCursor
 {
     public static string Canonical(LogListQuery q)
         => string.Join("|",
-            q.EquipmentId, q.LogType,
+            Esc(q.EquipmentId), Esc(q.LogType),
             q.From?.ToString("O", CultureInfo.InvariantCulture) ?? "",
             q.To?.ToString("O", CultureInfo.InvariantCulture) ?? "",
-            q.Subtype ?? "",
+            Esc(q.Subtype ?? ""),
             string.Join("&", q.Attributes.OrderBy(kv => kv.Key, StringComparer.Ordinal)
-                .Select(kv => $"{kv.Key}={kv.Value}")));
+                .Select(kv => $"{Esc(kv.Key)}={Esc(kv.Value)}")));
+
+    private static string Esc(string s)
+        => s.Replace("\\", "\\\\").Replace("|", "\\|").Replace("&", "\\&").Replace("=", "\\=");
 
     public static string Encode(ITokenCodec codec, LogListQuery q,
         DateTimeOffset? lastTimestamp, string? lastFileName, TimeSpan ttl)
