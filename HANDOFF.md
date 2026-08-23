@@ -6,12 +6,20 @@
 
 - 설계 확정: `docs/00-glossary.md`~`10-testing-and-deployment.md` + 통합 스냅샷 `docs/superpowers/specs/2026-08-22-filegateway-design.md`
 - 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개, PR 리뷰 13건(사용자 7 + Codex inline 6) 반영 완료
-- 코드: Foundation(Task 0~5) 완료 — 5프로젝트 scaffold, Core 계약(RemotePath/GlobPattern/IFileAccess/ExactLengthStream/ITokenCodec), DataProtection token codec, FluentFTP Adapter(예외 안전 lease, 오류 매핑). 테스트 42/42(단위 33 + FTP 통합 9), 빌드 경고 0. `db/` 스크립트는 Task 7 예정
-- 브랜치: `implement/mvp` (main `58d2339` 분기, task별 커밋) — Foundation PR 생성됨. Task 6+는 PR merge 후 재개
+- 코드: Foundation(Task 0~5) **PR #2 merge 완료**(`db5de59`, task별 커밋 + 사용자 FTP fix 2건 `f74c6ea`/`8a109ec` 포함). 게이트 green — 단위 38 + FTP 통합 11 = 49/49, 빌드 경고 0. `db/` 스크립트는 Task 7 예정
+- 브랜치: `main` 최신(`db5de59`). Task 6부터는 새 브랜치 분기. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
 
 ## 다음 작업: 계획 실행
 
-`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~5 완료**(리뷰 게이트 통과, SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`). Task 6부터 재개:
+`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~5 + PR #2 merge 완료**. 다음 세션 순서: **보강 태스크(아래 3건) → Task 6**:
+
+**PR #2 리뷰 미해결 3건 (Task 6 이전 필수 — 둘 다 Task 6+가 소비하는 계약 결함):**
+
+1. **[P1] Token purpose 분리** — `DataProtectionTokenCodec`이 단일 protector(`filegateway.tokens.v1`) 사용. 계획 확정 결정 6/7의 종류별 purpose(`fg.fileid.log` 등) 계약 위반. 종류별 protector 또는 decode 시 expected purpose 검증 + cross-kind 거부 테스트 추가
+2. **[P1] `RemotePath.IsUnderRoot` `..` 우회** — `IsUnderRoot("ftproot", "ftproot/../outside")`가 `true`. prefix 비교 전 `.`/`..` canonicalize 또는 거부 + traversal 테스트 추가
+3. **[P2] 동기 `Dispose()` 경로 미해제** — `OwnedFtpStream`이 `DisposeAsync()`만 override. `Stream.Dispose()`/`using` 시 inner/client/permit 누출. sync/async 공통 idempotent cleanup + Dispose 후 permit 재획득 테스트 (`ExactLengthStream` 동일 패턴 점검)
+
+(Codex FTP 4건 — 550 permission 구분, implicit 990 포트, 디렉터리≠파일 존재판정, stream 오류 분류 — 은 merge 전 사용자 커밋으로 해소 완료)
 
 - **Subagent-Driven** — Task별 fresh subagent + Task 간 리뷰. `superpowers:subagent-driven-development` 스킬 필수
 - **Inline** — 이 세션에서 체크포인트별 일괄 실행. `superpowers:executing-plans` 스킬 필수
