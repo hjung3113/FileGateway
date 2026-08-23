@@ -6,20 +6,20 @@
 
 - 설계 확정: `docs/00-glossary.md`~`10-testing-and-deployment.md` + 통합 스냅샷 `docs/superpowers/specs/2026-08-22-filegateway-design.md`
 - 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개, PR 리뷰 13건(사용자 7 + Codex inline 6) 반영 완료
-- 코드: Foundation(Task 0~5) **PR #2 merge 완료**(`db5de59`, task별 커밋 + 사용자 FTP fix 2건 `f74c6ea`/`8a109ec` 포함). 게이트 green — 단위 38 + FTP 통합 11 = 49/49, 빌드 경고 0. `db/` 스크립트는 Task 7 예정
-- 브랜치: `main` 최신(`db5de59`). Task 6부터는 새 브랜치 분기. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
+- 코드: Foundation(Task 0~5) PR #2 merge 완료(`db5de59`). **보강 3건 + 기준정보(Task 6~7) 완료** — 브랜치 `implement/reference-data` (PR 참조). 게이트 green — 단위 65 + 통합 15 = 80/80, 빌드 경고 0. `db/` 스크립트는 Task 7에서 생성됨
+- 브랜치: 기준정보 phase는 `implement/reference-data`에서 PR 진행. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
 
 ## 다음 작업: 계획 실행
 
-`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~5 + PR #2 merge 완료**. 다음 세션 순서: **보강 태스크(아래 3건) → Task 6**:
+`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~7 완료 + 보강 3건 완료**. 다음 세션: **Task 8 (Logs — pathTemplate 슬롯 확장)**부터. 기준정보 phase는 `implement/reference-data` PR로 진행/병합.
 
-**PR #2 리뷰 미해결 3건 (Task 6 이전 필수 — 둘 다 Task 6+가 소비하는 계약 결함):**
+**보강 3건 해소 내역 (구현 브랜치 커밋):**
 
-1. **[P1] Token purpose 분리** — `DataProtectionTokenCodec`이 단일 protector(`filegateway.tokens.v1`) 사용. 계획 확정 결정 6/7의 종류별 purpose(`fg.fileid.log` 등) 계약 위반. 종류별 protector 또는 decode 시 expected purpose 검증 + cross-kind 거부 테스트 추가
-2. **[P1] `RemotePath.IsUnderRoot` `..` 우회** — `IsUnderRoot("ftproot", "ftproot/../outside")`가 `true`. prefix 비교 전 `.`/`..` canonicalize 또는 거부 + traversal 테스트 추가
-3. **[P2] 동기 `Dispose()` 경로 미해제** — `OwnedFtpStream`이 `DisposeAsync()`만 override. `Stream.Dispose()`/`using` 시 inner/client/permit 누출. sync/async 공통 idempotent cleanup + Dispose 후 permit 재획득 테스트 (`ExactLengthStream` 동일 패턴 점검)
+1. Token purpose 분리 — `ITokenCodec.Unprotect(token, expectedPurpose)` 계약 변경. protector purpose `filegateway.tokens.v1:{purpose}` 파생, cross-kind 토큰 `Invalid`. 계획 595행 갱신. **Task 11~13 구현 시 각 feature purpose 상수(`fg.fileid.log` 등)를 Unprotect에 전달할 것**
+2. `RemotePath.IsUnderRoot` — canonicalize 방식으로 `..` 우회 차단 (`ad78390` 다음 커밋 `dfb8883`)
+3. 동기 `Dispose()` 경로 — `OwnedFtpStream`/`ExactLengthStream` 공통 idempotent cleanup (`d3d3a4c`)
 
-(Codex FTP 4건 — 550 permission 구분, implicit 990 포트, 디렉터리≠파일 존재판정, stream 오류 분류 — 은 merge 전 사용자 커밋으로 해소 완료)
+**Task 7 룰링 (D4)**: 계획의 `_inFlight` re-arm 코드에 경합 결함(동기 완료 load 시 `_inFlight` 잔존)이 있어 구현이 수정함 — single-flight 의미는 보존. Task 14에서 `FileGatewayException` 확장 시 optional-message ctor 필요할 수 있음.
 
 - **Subagent-Driven** — Task별 fresh subagent + Task 간 리뷰. `superpowers:subagent-driven-development` 스킬 필수
 - **Inline** — 이 세션에서 체크포인트별 일괄 실행. `superpowers:executing-plans` 스킬 필수
@@ -48,7 +48,7 @@
 |---|---|---|
 | 문서 동기화 | 0 | ✅ 완료 (`ea6fd4b`) |
 | Foundation (Core/FTP/token) | 1–5 | ✅ 완료 (리뷰 통과, PR) |
-| 기준정보 (SP/cache) | 6–7 | 미시작 |
+| 기준정보 (SP/cache) | 6–7 | ✅ 완료 (보강 3건 포함, 리뷰 통과, `implement/reference-data` PR) |
 | Logs | 8–11 | 미시작 |
 | Configurations | 12–13 | 미시작 |
 | Api | 14–18 | 미시작 |
