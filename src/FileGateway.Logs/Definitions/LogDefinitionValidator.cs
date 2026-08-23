@@ -53,6 +53,10 @@ public static class LogDefinitionValidator
         }
         else
         {
+            // metadata regex는 정규화된 전체 상대경로 매칭 계약 — ^...$ anchor 강제.
+            // 부분 매칭 pattern은 잘못된 파일을 다른 경로로 오인시킬 수 있다.
+            if (!meta.Pattern.StartsWith('^') || !meta.Pattern.EndsWith('$'))
+                errors.Add("metadata regex must be anchored to the full path (^...$)");
             try
             {
                 // ExplicitCapture: 이름 없는 그룹 캡처 방지 — mapping은 named group만 허용
@@ -62,6 +66,9 @@ public static class LogDefinitionValidator
                     errors.Add($"{def.GenerationType} requires a timestamp mapping");
                 foreach (var m in meta.Mappings)
                 {
+                    // group 존재 검증은 timestamp뿐 아니라 모든 mapping(subtype/attribute.*)에 적용한다.
+                    if (!regex.GetGroupNames().Contains(m.Group))
+                        errors.Add($"mapping group not in regex: {m.Group}");
                     if (m.Target is "timestamp")
                     {
                         if (string.IsNullOrEmpty(m.Format)) errors.Add("timestamp mapping requires format");
@@ -70,8 +77,11 @@ public static class LogDefinitionValidator
                             if (def.GenerationType == GenerationType.Daily &&
                                 (m.Format!.Contains('H') || m.Format.Contains('m') || m.Format.Contains('s')))
                                 errors.Add("Daily timestamp format must be date-only");
-                            if (!regex.GetGroupNames().Contains(m.Group))
-                                errors.Add($"mapping group not in regex: {m.Group}");
+                            // Hourly는 년/월/일/시를 모두 포함해야 한다 — 부분 포맷(예: yyyyMMdd) 거부.
+                            if (def.GenerationType == GenerationType.Hourly &&
+                                !(m.Format.Contains('y') && m.Format.Contains('M') &&
+                                  m.Format.Contains('d') && m.Format.Contains('H')))
+                                errors.Add("Hourly timestamp format must contain yyyy/MM/dd/HH");
                         }
                     }
                     else if (m.Target is not "subtype" && !m.Target.StartsWith("attribute."))

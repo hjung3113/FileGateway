@@ -120,6 +120,63 @@ public class SnapshotBuilderTests
     }
 
     [Fact]
+    public void Configuration_validator_rejects_unknown_path_tokens()
+    {
+        var def = new EquipmentConfigurationDefinition("E", "PM", "S",
+            new CurrentRule("PM/{plant}", "PM_*.cfg"),
+            new HistoryRule("PM/hist/{yyyy}/{MM}/{dd}", "PM_*.cfg", "PM/hist/{yyyy}/{MM}/{dd}/{week}"));
+        var errors = ConfigurationDefinitionValidator.Validate(def);
+        Assert.Contains(errors, e => e.Contains("{plant}")); // currentRule pathTemplate
+        Assert.Contains(errors, e => e.Contains("{week}"));  // historyRule markerPathTemplate
+    }
+
+    [Theory]
+    [InlineData("Logs/2024/file.log")]
+    [InlineData("^Logs/2024/file.log")]
+    [InlineData("Logs/2024/file.log$")]
+    public void Validator_rejects_unanchored_metadata_regex(string pattern)
+    {
+        var def = new EquipmentLogDefinition("E", "L", "S", GenerationType.Hourly,
+            new LogDiscoveryRule("Logs", "*.log", Cardinality.Multiple),
+            new LogMetadataRule(MetadataMode.Regex, pattern,
+                [new MetadataMapping("ts", "timestamp", "yyyy/MM/dd/HH")]));
+        Assert.Contains(LogDefinitionValidator.Validate(def), e => e.Contains("anchored"));
+    }
+
+    [Fact]
+    public void Validator_accepts_anchored_full_path_regex()
+    {
+        var def = new EquipmentLogDefinition("E", "L", "S", GenerationType.Hourly,
+            new LogDiscoveryRule("Logs", "*.log", Cardinality.Multiple),
+            new LogMetadataRule(MetadataMode.Regex, @"^Logs/(?<ts>\d{4}/\d{2}/\d{2}/\d{2})/[^/]+\.log$",
+                [new MetadataMapping("ts", "timestamp", "yyyy/MM/dd/HH")]));
+        Assert.Empty(LogDefinitionValidator.Validate(def));
+    }
+
+    [Fact]
+    public void Validator_rejects_hourly_regex_timestamp_format_missing_hour()
+    {
+        var def = new EquipmentLogDefinition("E", "L", "S", GenerationType.Hourly,
+            new LogDiscoveryRule("Logs", "*.log", Cardinality.Multiple),
+            new LogMetadataRule(MetadataMode.Regex, @"^Logs/(?<ts>\d{4}\d{2}\d{2})/[^/]+\.log$",
+                [new MetadataMapping("ts", "timestamp", "yyyyMMdd")])); // 시간 없는 부분 포맷
+        Assert.Contains(LogDefinitionValidator.Validate(def), e => e.Contains("Hourly"));
+    }
+
+    [Fact]
+    public void Validator_checks_group_existence_for_subtype_and_attribute_mappings()
+    {
+        var def = new EquipmentLogDefinition("E", "L", "S", GenerationType.Continuous,
+            new LogDiscoveryRule("Logs", "*.log", Cardinality.Multiple),
+            new LogMetadataRule(MetadataMode.Regex, @"^Cfg/(?<env>prod)/[^/]+\.zip$",
+            [
+                new MetadataMapping("env", "subtype", null),        // 존재 — 오류 아님
+                new MetadataMapping("nope", "attribute.line", null) // 부재 — 오류
+            ]));
+        Assert.Single(LogDefinitionValidator.Validate(def), e => e.Contains("nope"));
+    }
+
+    [Fact]
     public void Snapshot_exposes_root_boundary_via_servers() // rootPath 경계 데이터가 스냅샷에 보존됨
     {
         var snap = ReferenceDataSnapshotBuilder.Build(Valid());

@@ -1,4 +1,5 @@
 // src/FileGateway.Configurations/Definitions/ConfigurationDefinitionValidator.cs
+using System.Text.RegularExpressions;
 using FileGateway.Core.Files;
 using FileGateway.Core.Paths;
 
@@ -6,6 +7,8 @@ namespace FileGateway.Configurations.Definitions;
 
 public static class ConfigurationDefinitionValidator
 {
+    private static readonly string[] PathTokens = ["{yyyy}", "{MM}", "{dd}", "{HH}"];
+
     public static IReadOnlyList<string> Validate(EquipmentConfigurationDefinition def)
     {
         var errors = new List<string>();
@@ -28,6 +31,10 @@ public static class ConfigurationDefinitionValidator
             errors.Add($"{field} unsafe: {pathTemplate}");
         else if (pathTemplate.Split('/').Any(s => s.Contains("..")))
             errors.Add($"{field} contains '..'");
+        // LogDefinitionValidator와 동일한 PathTokens 화이트리스트 — 미지원 token은 거부(계획 247행).
+        foreach (var token in ExtractTokens(pathTemplate))
+            if (!PathTokens.Contains(token))
+                errors.Add($"{field} unknown token: {token}");
     }
 
     private static void ValidatePattern(string filePattern, string field, List<string> errors)
@@ -45,4 +52,7 @@ public static class ConfigurationDefinitionValidator
         if (pathTemplate.Contains("{HH}", StringComparison.Ordinal))
             errors.Add($"{field} must not contain {{HH}} token");
     }
+
+    private static IEnumerable<string> ExtractTokens(string pattern)
+        => Regex.Matches(pattern, @"\{[^}]+\}").Select(m => m.Value);
 }
