@@ -65,6 +65,6 @@ public class SlotExpansionTests
 
     [Fact]
     public void SiteTime_midnight_uses_seoul_offset()
-        => Assert.Equal(new DateTimeOffset(2026, 8, 22, 0, 0, 0, TimeSpan.FromHours(9)),
-                        SiteTime.SiteLocalMidnight(new DateTimeOffset(2026, 8, 22, 15, 0, 0, TimeSpan.FromHours(9))));
+        => Assert.Equal(new DateTimeOffset(2026, 8, 23, 0, 0, 0, TimeSpan.FromHours(9)),
+                        SiteTime.SiteLocalMidnight(new DateTimeOffset(2026, 8, 22, 15, 0, 0, TimeSpan.Zero)));
 }
