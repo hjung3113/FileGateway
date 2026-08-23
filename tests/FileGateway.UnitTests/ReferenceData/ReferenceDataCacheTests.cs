@@ -106,5 +106,25 @@ public class ReferenceDataCacheTests
         Assert.Contains("EQ-B", second.EquipmentIds);
     }
 
+    [Fact]
+    public async Task Cancelled_waiter_on_shared_initial_load_throws_but_load_continues()
+    {
+        // 공유 initial load가 느리다(400ms). 호출자는 100ms에 취소된다.
+        var src = new FakeSource(Raw()) { Next = async () => { await Task.Delay(400); return Raw("EQ-LATE"); } };
+        var cache = new ReferenceDataCache(src, TimeSpan.FromMinutes(15));
+        using var cts = new CancellationTokenSource(100);
+
+        // 호출자 ct 취소 관찰 — 공유 load task를 그대로 반환하면 ct가 무시된다.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => cache.GetSnapshotAsync(cts.Token));
+
+        // 공유 load는 취소된 호출자와 무관하게 계속되어 cache를 채운다.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (cache.CurrentSnapshot is null && DateTime.UtcNow < deadline)
+            await Task.Delay(50);
+        Assert.NotNull(cache.CurrentSnapshot);
+        Assert.Contains("EQ-LATE", cache.CurrentSnapshot!.EquipmentIds);
+    }
+
     private sealed class SqlExceptionSim : Exception;
 }

@@ -15,22 +15,28 @@ public sealed class ReferenceDataCache(IReferenceDataSource source, TimeSpan ttl
     public DateTime? LastRefreshFailedAt { get; private set; }
     public string? LastRefreshError { get; private set; }
 
-    public Task<ReferenceDataSnapshot> GetSnapshotAsync(CancellationToken ct)
+    public async Task<ReferenceDataSnapshot> GetSnapshotAsync(CancellationToken ct)
     {
+        Task<ReferenceDataSnapshot> load;
         lock (_gate)
         {
-            if (CurrentSnapshot is not null)
+            var snapshot = CurrentSnapshot;
+            if (snapshot is not null)
             {
                 if (DateTimeOffset.UtcNow - _loadedAt < ttl)
-                    return Task.FromResult(CurrentSnapshot);
+                    return snapshot;
                 // TTL 만료: single-flight background refresh 촉발 후 stale 즉시 반환.
                 // 요청이 DB를 기다리지 않는다(확정 결정 14, 리뷰 P1 반영).
                 _ = TriggerRefresh();
-                return Task.FromResult(CurrentSnapshot);
+                // 동기 완료 refresh가 이미 스냅샷을 교체했을 수 있다 — 반환 시점의 현재 값을 돌려준다(기존 동작).
+                return CurrentSnapshot!;
             }
             // 최초 로딩: 동시 요청이 동일 공유 로딩을 await
-            return _inFlight ?? StartLoadUnderLock();
+            load = _inFlight ?? StartLoadUnderLock();
         }
+        // 공유 load 자체는 취소하지 않는다(다른 대기 호출자와 cache 상태 보존).
+        // 이 호출자는 자기 ct로만 대기를 관찰한다 — 취소 시 이 await만 실패하고 load는 계속된다.
+        return await load.WaitAsync(ct);
     }
 
     // _gate 잠금 안에서만 호출한다. LoadAsync 내부에서 _inFlight를 해제하면
