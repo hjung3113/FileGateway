@@ -14,11 +14,3 @@ public sealed record ConfigurationHistoryItem(
     DateTimeOffset SnapshotTimestamp,
     string FileName,
     long Size);
-
-public sealed record ConfigurationHistoryQuery(
-    string EquipmentId,
-    string ConfigurationType,
-    DateTimeOffset From,
-    DateTimeOffset To,
-    int? Limit,
-    string? ContinuationToken);
