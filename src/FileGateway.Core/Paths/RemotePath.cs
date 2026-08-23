@@ -31,8 +31,30 @@ public static class RemotePath
 
     public static bool IsUnderRoot(string root, string path)
     {
-        var r = Normalize(root);
-        var p = Normalize(path);
+        if (!TryCanonicalize(Normalize(root), out var r) || !TryCanonicalize(Normalize(path), out var p))
+            return false;
         return (p + "/").StartsWith(r + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // `.` 제거, `..`는 직전 세그먼트 제거. 루트 위로 벗어나는 잉여 `..`는 실패 처리.
+    private static bool TryCanonicalize(string normalized, out string canonical)
+    {
+        var segments = new List<string>();
+        foreach (var seg in normalized.Split('/'))
+        {
+            if (seg == "..")
+            {
+                if (segments.Count == 0)
+                {
+                    canonical = string.Empty;
+                    return false;
+                }
+                segments.RemoveAt(segments.Count - 1);
+            }
+            else if (seg != ".")
+                segments.Add(seg);
+        }
+        canonical = string.Join("/", segments);
+        return true;
     }
 }
