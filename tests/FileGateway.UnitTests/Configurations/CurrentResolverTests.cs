@@ -12,7 +12,7 @@ public class CurrentResolverTests
     private static ResolvedConfigurationDefinition Def()
         => new(new EquipmentConfigurationDefinition("EQ-001", "PM", "SRV1",
                new CurrentRule("PM/current", "PM*.cfg"),
-               new HistoryRule("PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg", "PM/history/{yyyy}/{MM}/{dd}/_DONE")),
+               new HistoryRule("PM/history/{yyyy}/{MM}/{dd}", "PM*.cfg", "PM/history/{yyyy}/{MM}/{dd}/_DONE")),
                Srv);
 
     [Fact]

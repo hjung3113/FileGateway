@@ -33,9 +33,7 @@ public class HistoryResolverTests
         var ftp = new FakeFileAccess();
         Seed(ftp, 22, "PM1.cfg", "PM2.cfg"); // marker 있음
         ftp.AddFile("PM/history/2026/08/21/PM1.cfg", "x"u8.ToArray()); // marker 없음
-        var files = await new HistoryResolver(ftp).ResolveAsync(Def(), Range(21) with { }, CancellationToken.None);
-        // 21~22 범위로 확장해 확인
-        files = await new HistoryResolver(ftp).ResolveAsync(
+        var files = await new HistoryResolver(ftp).ResolveAsync(
             Def(),
             new(new DateTimeOffset(2026, 8, 21, 0, 0, 0, TimeSpan.FromHours(9)),
                 new DateTimeOffset(2026, 8, 23, 0, 0, 0, TimeSpan.FromHours(9))), CancellationToken.None);
