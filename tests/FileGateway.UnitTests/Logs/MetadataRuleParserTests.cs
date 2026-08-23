@@ -29,6 +29,21 @@ public class MetadataRuleParserTests
     }
 
     [Fact]
+    public void Template_extracts_dotted_attribute_key()
+    {
+        var rule = new LogMetadataRule(MetadataMode.Template, "Trace/{attribute.source.ip}.log", []);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Continuous, "Trace/10.0.0.1.log")!;
+        Assert.Equal("10.0.0.1", meta.Attributes["source.ip"]);
+    }
+
+    [Fact]
+    public void Template_duplicate_hour_token_returns_null()
+        => Assert.Null(MetadataRuleParser.Parse(
+            new LogMetadataRule(MetadataMode.Template,
+                "Logs/{yyyy}/{MM}/{dd}/{HH}/{HH}/Event.log", []),
+            GenerationType.Hourly, "Logs/2026/08/22/18/18/Event.log"));
+
+    [Fact]
     public void Daily_timestamp_is_site_local_midnight()
     {
         var rule = new LogMetadataRule(MetadataMode.Template, "Logs/{yyyy}/{MM}/{dd}/Event_{subtype}.zip", []);
@@ -85,5 +100,34 @@ public class MetadataRuleParserTests
             [new MetadataMapping("ts", "timestamp", "yyyyMMdd")]);
         var meta = MetadataRuleParser.Parse(rule, GenerationType.Daily, "D/20260822/x.log")!;
         Assert.Equal(new DateTimeOffset(2026, 8, 22, 0, 0, 0, TimeSpan.FromHours(9)), meta.Timestamp);
+    }
+
+    [Fact]
+    public void Regex_timestamp_with_z_value_preserves_utc_offset()
+    {
+        var rule = new LogMetadataRule(MetadataMode.Regex, @"^U/(?<ts>\d{8}_\d{4}Z)/x\.log$",
+            [new MetadataMapping("ts", "timestamp", "yyyyMMdd_HHmmK")]);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly, "U/20260822_1800Z/x.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.Zero), meta.Timestamp);
+    }
+
+    [Fact]
+    public void Template_hourly_includes_minutes_when_mm_is_present()
+    {
+        var rule = new LogMetadataRule(MetadataMode.Template,
+            "Logs/{yyyy}/{MM}/{dd}/{HH}/{mm}/Event.log", []);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Hourly,
+            "Logs/2026/08/22/18/42/Event.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 42, 0, TimeSpan.FromHours(9)), meta.Timestamp);
+    }
+
+    [Fact]
+    public void Template_continuous_includes_minutes_when_mm_is_present()
+    {
+        var rule = new LogMetadataRule(MetadataMode.Template,
+            "Trace/{yyyy}/{MM}/{dd}/{HH}/{mm}.log", []);
+        var meta = MetadataRuleParser.Parse(rule, GenerationType.Continuous,
+            "Trace/2026/08/22/18/42.log")!;
+        Assert.Equal(new DateTimeOffset(2026, 8, 22, 18, 42, 0, TimeSpan.FromHours(9)), meta.Timestamp);
     }
 }
