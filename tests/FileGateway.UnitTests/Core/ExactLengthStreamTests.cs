@@ -36,4 +36,18 @@ public class ExactLengthStreamTests
         await using var capped = new ExactLengthStream(Source("ab"u8.ToArray()), 0);
         Assert.Equal(0, await capped.ReadAsync(new byte[8], CancellationToken.None));
     }
+
+    [Fact]
+    public async Task Sync_dispose_releases_source_and_double_dispose_is_harmless()
+    {
+        var source = Source("abc"u8.ToArray());
+        using var capped = new ExactLengthStream(source, 3);
+
+        capped.Dispose(); // using 문의 sync Dispose 경로 — 이 시점에 source까지 해제돼야 한다
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => capped.ReadAsync(new byte[8], CancellationToken.None).AsTask());
+        Assert.Throws<ObjectDisposedException>(() => source.Read(new byte[8], 0, 8));
+
+        await capped.DisposeAsync(); // sync 후 async 이중 해제 무해성
+    }
 }

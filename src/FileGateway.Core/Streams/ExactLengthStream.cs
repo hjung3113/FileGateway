@@ -5,6 +5,7 @@ public sealed class ExactLengthStream(Stream source, long declaredLength) : Stre
 {
     private readonly long _declaredLength = declaredLength;
     private long _remaining = declaredLength;
+    private int _disposed; // sync/async 경로 간 이중 해제 방지
     public override bool CanRead => true;
     public override bool CanSeek => false;
     public override bool CanWrite => false;
@@ -24,7 +25,19 @@ public sealed class ExactLengthStream(Stream source, long declaredLength) : Stre
         return read;
     }
 
-    public override async ValueTask DisposeAsync() { await source.DisposeAsync(); base.DisposeAsync().AsTask().Dispose(); }
+    // 기본 Stream.DisposeAsync는 Dispose()를 호출하므로 Dispose(bool) 재진입 대신 _disposed로만 방지한다.
+    protected override void Dispose(bool disposing)
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+        base.Dispose(disposing);
+        if (disposing) source.Dispose();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+        await source.DisposeAsync();
+    }
     public override void Flush() => throw new NotSupportedException();
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     public override void SetLength(long value) => throw new NotSupportedException();
