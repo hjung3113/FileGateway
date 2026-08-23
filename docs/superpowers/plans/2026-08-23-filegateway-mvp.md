@@ -1834,7 +1834,7 @@ git add -A && git commit -m "feat(reference-data): mssql sp reader and single-fl
   - `static class PathTemplate { static string Expand(string template, DateTimeOffset siteLocalSlot); static void ValidateTokens(string template); }` — 허용 토큰 `{yyyy}{MM}{dd}{HH}`
   - `static class SlotExpansion { static IEnumerable<DateTimeOffset> EnumerateSlots(GenerationType type, EffectiveRange range); }` — Hourly: Site local 시간 슬롯(정시 절사), Daily: Site local 자정 날짜 슬롯, Continuous: 단일 더미 슬롯
 
-- [ ] **Step 1: 실패 테스트**
+- [x] **Step 1: 실패 테스트**
 
 ```csharp
 namespace FileGateway.UnitTests.Logs;
@@ -1905,9 +1905,9 @@ public class SlotExpansionTests
 }
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~SlotExpansionTests"` / Expected: FAIL
+- [x] **Step 2: 실패 확인** — Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~SlotExpansionTests"` / Expected: FAIL
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 ```csharp
 // src/FileGateway.Core/Time/SiteTime.cs
@@ -1999,7 +1999,7 @@ public static class SlotExpansion
 
 `SiteTime.Parse`는 offset 미포함 문자열을 Site local(+09:00)로 확정하는 구현으로 마무리한다(테스트 참조).
 
-- [ ] **Step 4: 통과 확인 후 커밋**
+- [x] **Step 4: 통과 확인 후 커밋**
 
 Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~SlotExpansionTests"` / Expected: PASS
 
@@ -2019,7 +2019,7 @@ git add -A && git commit -m "feat(logs): site-local slot expansion and path temp
 - Consumes: Task 6 `LogMetadataRule`, Task 8 `SiteTime`
 - Produces: `record ParsedMetadata(DateTimeOffset? Timestamp, string? Subtype, IReadOnlyDictionary<string, string> Attributes)`; `static class MetadataRuleParser { static ParsedMetadata? Parse(LogMetadataRule rule, GenerationType generation, string relativePath); }` — 해석 불가 시 `null`(호출자가 `FileDefinitionConflict`로 승격)
 
-- [ ] **Step 1: 실패 테스트**
+- [x] **Step 1: 실패 테스트**
 
 ```csharp
 namespace FileGateway.UnitTests.Logs;
@@ -2110,9 +2110,9 @@ public class MetadataRuleParserTests
 }
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~MetadataRuleParserTests"` / Expected: FAIL
+- [x] **Step 2: 실패 확인** — Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~MetadataRuleParserTests"` / Expected: FAIL
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 ```csharp
 // src/FileGateway.Logs/Internal/MetadataRuleParser.cs
@@ -2246,7 +2246,7 @@ public static partial class MetadataRuleParser
 }
 ```
 
-- [ ] **Step 4: 통과 확인 후 커밋**
+- [x] **Step 4: 통과 확인 후 커밋**
 
 Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~MetadataRuleParserTests"` / Expected: PASS
 
@@ -2271,7 +2271,7 @@ git add -A && git commit -m "feat(logs): metadata rule parser for template and r
   - `record ResolvedLogFile(ParsedMetadata Metadata, RemoteFileEntry Entry, string RelativePath)`
   - `class LogResolver(IFileAccess fileAccess)` — `Task<IReadOnlyList<ResolvedLogFile>> ResolveAsync(ResolvedLogDefinition def, EffectiveRange range, CancellationToken ct)`: 슬롯→디렉터리(중복 제거)→목록(부재 0개, I/O 오류 전체 실패)→glob→metadata→case-insensitive 중복 검사→cardinality 슬롯 검사→시간 필터; 정렬은 반환 전 적용(Hourly/Daily `timestamp DESC`,`fileName ASC` ci / Continuous `fileName ASC` ci)
 
-- [ ] **Step 1: 실패 테스트**
+- [x] **Step 1: 실패 테스트**
 
 ```csharp
 namespace FileGateway.UnitTests.Logs;
@@ -2458,9 +2458,9 @@ public class LogResolverTests
 }
 ```
 
-- [ ] **Step 2: 실패 확인** — Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~LogResolverTests|FullyQualifiedName~EffectiveRangeTests"` / Expected: FAIL
+- [x] **Step 2: 실패 확인** — Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~LogResolverTests|FullyQualifiedName~EffectiveRangeTests"` / Expected: FAIL
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 `EffectiveRangePlanner.Normalize`:
 
@@ -2567,7 +2567,7 @@ public sealed class LogResolver(IFileAccess fileAccess)
 }
 ```
 
-- [ ] **Step 4: 통과 확인 후 커밋**
+- [x] **Step 4: 통과 확인 후 커밋**
 
 Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~LogResolverTests|FullyQualifiedName~EffectiveRangeTests"` / Expected: PASS (첫 테스트의 정리 안 된 중복 라인은 구현 확정 후 삭제 — 테스트 코드 최종본에는 `ftp2` 케이스만 남긴다)
 
@@ -2593,7 +2593,7 @@ git add -A && git commit -m "feat(logs): resolver with slot dedup, filters, card
   - cursor claims(raw 조회조건 바인딩): `equipmentId`,`logType`,`from`,`to`(원본, 없으면 빈 문자열),`subtype`,`attrs`(정규화 `k=v&...` 정렬),`lastTs`(없으면 빈),`lastName`. limit 미포함
   - fileId claims: `equipmentId`,`logType`,`ts`(round-trip "O", 없으면 빈),`fileName`
 
-- [ ] **Step 1: 실패 테스트**
+- [x] **Step 1: 실패 테스트**
 
 ```csharp
 namespace FileGateway.UnitTests.Logs;
@@ -2773,9 +2773,9 @@ public class LogQueryServiceTests
 
 (`FixedView`/`FixedViewWrapper`는 `IReferenceDataView` 구현 3줄 헬퍼로 `TestUtils`에 둔다: `Task<ReferenceDataSnapshot> GetSnapshotAsync(CancellationToken ct) => Task.FromResult(_snap);`)
 
-- [ ] **Step 2: 실패 확인** — Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~LogCursorTests|FullyQualifiedName~LogQueryServiceTests"` / Expected: FAIL
+- [x] **Step 2: 실패 확인** — Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~LogCursorTests|FullyQualifiedName~LogQueryServiceTests"` / Expected: FAIL
 
-- [ ] **Step 3: 구현**
+- [x] **Step 3: 구현**
 
 ```csharp
 // src/FileGateway.Logs/Internal/LogCursor.cs
@@ -2911,7 +2911,7 @@ public sealed class LogQueryService(
 
 생성자 파라미터에 `TimeSpan maxQueryRange`, `int limitDefault`를 추가하고 `ResolveSingleAsync`는 `ListAsync`와 동일 경로(토큰 없이)를 재사용한다. `SkipUntilAfter`: Hourly/Daily는 `timestamp < cursor.LastTs` 스킵 + 동일 timestamp에서 `fileName` ci 정렬 순 커서 이후부터, Continuous는 `fileName` 커서 이후. `InvalidFileId` 판정은 Api가 `TokenValidity`로 선행 처리하되 purpose 불일치 방어도 유지한다.
 
-- [ ] **Step 4: 통과 확인 후 커밋**
+- [x] **Step 4: 통과 확인 후 커밋**
 
 Run: `dotnet test tests/FileGateway.UnitTests --filter "FullyQualifiedName~LogCursorTests|FullyQualifiedName~LogQueryServiceTests"` / Expected: PASS
 

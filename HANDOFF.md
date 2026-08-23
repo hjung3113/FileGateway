@@ -2,16 +2,14 @@
 
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
-## 현재 상태 (2026-08-23)
-
 - 설계 확정: `docs/00-glossary.md`~`10-testing-and-deployment.md` + 통합 스냅샷 `docs/superpowers/specs/2026-08-22-filegateway-design.md`
-- 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개, PR 리뷰 13건(사용자 7 + Codex inline 6) 반영 완료
-- 코드: Foundation(Task 0~5) PR #2 merge 완료(`db5de59`). **보강 3건 + 기준정보(Task 6~7) + PR #3 리뷰 6건 수정 + P3 정리 완료** — **PR #3 오픈/merge 대기**(브랜치 `implement/reference-data`, HEAD `5ff5b97`, merge state clean). 게이트 green — 빌드 0 경고, 단위 74/74 + 통합 16/16. `db/` 스크립트는 Task 7 생성
-- 브랜치: 다음 세션은 PR #3 merge 후 새 브랜치 분기. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
+- 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개
+- 코드: Foundation(PR #2) + 기준정보(PR #3) merge 완료. **Logs(Task 8~11) 구현 완료** — 브랜치 `implement/logs` (HEAD `39355dd`), PR 오픈/리뷰 대기. 게이트 green — 빌드 0 경고, 단위 134/134 + 통합 16/16
+- 브랜치: 다음 세션은 Logs PR merge 후 새 브랜치에서 Task 12 (Configurations)부터 계속. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
 
 ## 다음 작업: 계획 실행
 
-`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~7 + 보강/PR #3 수정 완료**. 다음 세션 순서: **PR #3 merge → Task 8 (Logs — pathTemplate 슬롯 확장)부터 새 브랜치로 계속**.
+`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~11 완료**. 다음 세션 순서: **Logs PR merge → Task 12 (Configurations)부터 새 브랜치로 계속**.
 
 **보강 3건 해소 내역 (구현 브랜치 커밋):**
 
