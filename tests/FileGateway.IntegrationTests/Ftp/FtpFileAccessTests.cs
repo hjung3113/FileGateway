@@ -158,4 +158,44 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
         var second = await access.OpenReadAsync(Server(ftp.Port), "Logs/b.bin", CancellationToken.None);
         await second.Stream.DisposeAsync();
     }
+
+    [Fact]
+    public async Task Sync_dispose_releases_permit_for_immediate_reacquisition()
+    {
+        await Seed(ftp, "ftproot/Logs/a.bin", "12345"u8.ToArray());
+        await Seed(ftp, "ftproot/Logs/b.bin", "67890"u8.ToArray());
+        var opt = new FtpOptions { UserName = FtpAdapterFixture.UserName, Password = FtpAdapterFixture.Password,
+                                   MaxConcurrentPerServer = 1 };
+        WithPort(ftp, opt);
+        var access = new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt));
+
+        var first = await access.OpenReadAsync(Server(ftp.Port), "Logs/a.bin", CancellationToken.None);
+        // 선행 확인: permit 상한 1에서 첫 스트림이 살아있으면 두 번째 open은 대기하다 취소된다
+        using var blocked = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => access.OpenReadAsync(Server(ftp.Port), "Logs/b.bin", blocked.Token));
+
+        first.Stream.Dispose(); // sync dispose — inner/client/lease 모두 해제돼야 한다
+        using var reopened = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // 해제 누수면 즉시 실패
+        var second = await access.OpenReadAsync(Server(ftp.Port), "Logs/b.bin", reopened.Token);
+        await second.Stream.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Double_dispose_sync_then_async_is_harmless()
+    {
+        await Seed(ftp, "ftproot/Logs/a.bin", "12345"u8.ToArray());
+        var opt = new FtpOptions { UserName = FtpAdapterFixture.UserName, Password = FtpAdapterFixture.Password,
+                                   MaxConcurrentPerServer = 1 };
+        WithPort(ftp, opt);
+        var access = new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt));
+
+        var opened = await access.OpenReadAsync(Server(ftp.Port), "Logs/a.bin", CancellationToken.None);
+        opened.Stream.Dispose();
+        await opened.Stream.DisposeAsync(); // sync 후 async 이중 해제 — 예외 없이 정확히 1회만 반환
+
+        using var reacquired = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // permit이 정상 상태인지 재획득으로 증명
+        var second = await access.OpenReadAsync(Server(ftp.Port), "Logs/a.bin", reacquired.Token);
+        await second.Stream.DisposeAsync();
+    }
 }

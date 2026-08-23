@@ -38,4 +38,13 @@ public class RemotePathTests
         Assert.False(RemotePath.IsUnderRoot("ftproot", "ftproot2/x"));  // prefix 함정
         Assert.False(RemotePath.IsUnderRoot("ftproot", "other/x"));
     }
+
+    [Theory]
+    [InlineData("ftproot", "ftproot/../outside", false)]   // traversal 우회 차단
+    [InlineData("ftproot", "../ftproot/x", false)]          // 루트 위 잉여 ..
+    [InlineData("ftproot", "ftproot/./sub/../x", true)]     // 무해한 dot 세그먼트 정규화
+    [InlineData("ftproot", "ftproot/sub", true)]            // 회귀
+    [InlineData("FTPRoot", "ftproot/./Sub/../x", true)]     // 대소문자 무시 + 정규화
+    public void IsUnderRoot_canonicalizes_dot_segments(string root, string path, bool expected)
+        => Assert.Equal(expected, RemotePath.IsUnderRoot(root, path));
 }

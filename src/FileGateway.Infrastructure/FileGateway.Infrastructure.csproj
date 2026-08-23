@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentFTP" Version="54.2.0" />
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="7.0.2" />
   </ItemGroup>
 
   <PropertyGroup>

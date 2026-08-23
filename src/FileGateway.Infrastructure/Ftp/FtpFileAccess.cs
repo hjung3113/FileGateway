@@ -126,9 +126,11 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
         => ex is FtpMissingObjectException
            || (ex as FtpCommandException)?.CompletionCode == "550";
 
-    /// <summary>OpenRead 반환용 스트림. DisposeAsync에서 데이터 스트림, client, lease를 함께 해제한다.</summary>
+    /// <summary>OpenRead 반환용 스트림. Dispose/DisposeAsync에서 데이터 스트림, client, lease를 함께 해제한다.</summary>
     private sealed class OwnedFtpStream(Stream inner, AsyncFtpClient client, FtpConcurrencyLimiter.FtpLease lease) : Stream
     {
+        private int _disposed; // sync/async 경로 간 이중 해제 방지
+
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
@@ -156,8 +158,20 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
                 throw Classify(ex);
             }
         }
+        protected override void Dispose(bool disposing)
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
+            base.Dispose(disposing);
+            if (!disposing) return;
+            // 해제 실패가 permit 누수로 이어지지 않게 각 단계를 best-effort로 처리한다.
+            try { inner.Dispose(); } catch { /* best-effort teardown */ }
+            try { client.Dispose(); } catch { /* best-effort teardown */ }
+            lease.DisposeAsync().GetAwaiter().GetResult(); // FtpLease 해제는 항상 동기 완료
+        }
+
         public override async ValueTask DisposeAsync()
         {
+            if (Interlocked.Exchange(ref _disposed, 1) == 1) return;
             // 해제 실패가 permit 누수로 이어지지 않게 각 단계를 best-effort로 처리한다.
             try { await inner.DisposeAsync(); } catch { /* best-effort teardown */ }
             try { await client.DisposeAsync(); } catch { /* best-effort teardown */ }
