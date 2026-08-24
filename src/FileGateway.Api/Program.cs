@@ -1,4 +1,5 @@
 using FileGateway.Api.Audit;
+using Microsoft.AspNetCore.DataProtection;
 using FileGateway.Api.Auth;
 using FileGateway.Api.Endpoints;
 using FileGateway.Api.Errors;
@@ -22,7 +23,14 @@ builder.Services.AddOptions<FileGatewayOptions>()
     .ValidateOnStart();
 builder.Services.Configure<AuthenticationOptions>(builder.Configuration.GetSection("Authentication"));
 
-builder.Services.AddDataProtection(); // Task 20에서 IIS persist 구성 추가
+// DataProtection 키 내구성: 미설정 시 기본 키 링은 프로세스/IIS App Pool 재시작과 무관하지 않으나
+// 배포 환경(프로필 없는 App Pool identity)에서는 휘발성이므로 명시적 디렉터리를 요구한다.
+var keyDir = builder.Configuration["DataProtection:KeyDirectory"];
+if (!string.IsNullOrEmpty(keyDir))
+    builder.Services.AddDataProtection(o => o.ApplicationDiscriminator = "FileGateway")
+        .PersistKeysToFileSystem(new DirectoryInfo(keyDir));
+else
+    builder.Services.AddDataProtection(o => o.ApplicationDiscriminator = "FileGateway");
 builder.Services.AddSingleton<ITokenCodec, DataProtectionTokenCodec>();
 builder.Services.AddSingleton<FtpConcurrencyLimiter>();
 builder.Services.AddSingleton<FtpOptions>(sp => sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value.Ftp
@@ -61,6 +69,10 @@ builder.Services.AddSingleton<IConfigurationQueryService>(sp =>
 });
 
 var app = builder.Build();
+if (string.IsNullOrEmpty(keyDir))
+    app.Logger.LogWarning(
+        "DataProtection:KeyDirectory가 설정되지 않았습니다. 키가 내구성 없는 기본 위치에 저장되어 프로세스/IIS 재시작 시 fileId가 무효화될 수 있습니다(개발 환경 전용).");
+
 app.UseMiddleware<AuditMiddleware>();       // 최외곽: 최종 status + Audit.ErrorCode를 함께 기록
 app.UseMiddleware<ErrorMappingMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
