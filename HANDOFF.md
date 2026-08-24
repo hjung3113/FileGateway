@@ -6,11 +6,18 @@
 - 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개
 - 코드: Foundation(PR #2) + 기준정보(PR #3) + **Logs(PR #4, squash `af01bad`) merge 완료**. 게이트 green — 빌드 0 경고, 단위 148/148 + 통합 16/16. 사용자 inline 리뷰 P2 5건(range drift 커서 고정, subtype 진입 정규화, offset 명시적 분류, cross-directory identity 검사, 중복 range 코멘트) `9a03b2e`로 해소 후 merge. glm-5.3 high PR 리뷰(본문+diff) APPROVED 전제
 - 브랜치: **Configurations(Task 12~13) merge 완료 (PR #5 squash `6283349`)**. 게이트 green — 빌드 0 경고, 단위 166/166 + 통합 16/16. 사용자 inline P2 3건(marker glob 제외, limit 최댓값, Current fileId stat — Logs에도 limitMaximum 대칭 적용) `848c4fc`로 해소 후 merge. glm-5.3 high 리뷰 APPROVED(P1/P2 0건, P3 7건 중 2건 fix·5건 deferred).
-- 브랜치: **Api(Task 14~18) 구현 완료** — `implement/api` (HEAD `e064725`). 게이트 green — 빌드 0 경고, 단위 166/166 + 통합 59/59. Task별 omp subagent 디스패치(judgment→glm-5.3 low/구현·high/리뷰, mechanical fix→gpt-5.6-luna max) + task review + fix loop 전부 통과. Task 16/17에서 동일 패턴(plan-mandated Audit.FileId 누락)이 반복 발견·수정됨 — Task 18은 사전 룰링으로 회피(ITokenCodec purpose 3종 순차 시도). PR 오픈 예정, glm-5.3 high(diff+PR body만) 리뷰 대기. 다음: PR merge 후 Task 19~20(검증/배포 준비)부터 새 브랜치. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
+- 브랜치: **Api(Task 14~18) merge 완료 (PR #6 squash `c58ca27`)**. 게이트 green — 빌드 0 경고, 단위 166/166 + 통합 63/63. Task별 omp subagent 디스패치(judgment→glm-5.3 low/구현·high/리뷰, mechanical fix→gpt-5.6-luna max) + task review + fix loop 전부 통과. Task 16/17에서 동일 패턴(plan-mandated Audit.FileId 누락)이 반복 발견·수정됨 — Task 18은 사전 룰링으로 회피(ITokenCodec purpose 3종 순차 시도), 그런데 **Task 18 자신의 Audit.FileSize/EquipmentId/LogType 누락**이 세 번째 반복으로 PR 레벨 리뷰(Opus5, diff+PR body만)에서 Critical로 발견됨 — fix wave(`0cc0003`)로 해소, glm-5.3 high 재검토 5/5 ADDRESSED. Opus5 리뷰 Important 4건 중 1건(subtype/attr path traversal)은 컨트롤러 검증 결과 **false positive**(ApplyFilters가 listing 이후 순수 필터링, path 조합 미관여) — 반박 근거 ledger 기록. 나머지 3건(appsettings.json Logging 누락, IFileAccess 수명 오기재, Content-Disposition backslash 미이스케이프)도 fix wave에 포함해 해소.
+- 브랜치: **검증/배포 준비(Task 19~20) 구현 완료** — `implement/verification` (HEAD `eeb22d6`). 게이트 green — 빌드 0 경고, 단위 166/166 + 통합 68/68. Task 19: 실 MSSQL 컨테이너+실 in-proc FTP+실 DataProtection, 서비스 오버라이드 전무한 E2E 시나리오 2건(리뷰 confirmed "provably failure-preserving"). Task 20: DataProtection key 내구성, appsettings.json 전체 구조 확정, web.config 신설, README 갱신. **Task 0~20 전체 자동화 구현 완료.** PR #7 오픈, Opus5(diff+PR body만, 529 재시도 3회 끝 성공) 리뷰 Approve with comments → fix wave(`6d995ba`) → 재검토 clean. **이후 사용자가 GitHub에 직접 inline 리뷰 코멘트 2건 추가**(appsettings `FileIdTtl` TimeSpan 파싱 버그 — `"24:00:00"`이 24시간이 아니라 24일로 파싱됨 확인됨·DataProtection key at-rest 미보호) → 둘 다 확인 후 fix(`eeb22d6`), 사용자 코멘트에 답글. **merge는 사용자 보류 중**(PR #7 오픈 상태).
+- 별도: **PR #6(이미 merge됨) 사후 코멘트 3건** — 사용자가 merge 후 재검증하여 P1 1건(`FileAccessException`이 `ErrorMappingMiddleware`에서 매핑 안 되고 항상 500으로 뭉개짐, Task 8부터 존재하던 미해소 gap) + P2 2건(`/health/ready`가 stale 서빙 중에도 무조건 `Healthy`, 다운로드 audit가 resolve-time 크기 기록해 open-time과 race 가능) 발견 → 별도 워크트리(`main`에서 분기, branch `hjung3113/pr6-followup`)에서 fix, task review Approved → **PR #8 오픈**(merge 대기).
+- SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
 
-## 다음 작업: 계획 실행
+## 다음 작업
 
-`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~18 완료**. 다음 세션 순서: **Api PR merge 후 Task 19 (검증/배포 준비)부터 새 브랜치로 계속**.
+계획(Task 0~20) 자동화 구현은 전부 완료. 열려 있는 PR 2개가 다음 세션의 최우선 순서:
+- **PR #7** (`implement/verification` → main): Task 19-20 + 사용자 코멘트 2건 수정 완료, merge 보류 중 — 사용자 승인 대기
+- **PR #8** (`hjung3113/pr6-followup` → main): PR #6 사후 발견 3건 수정, task review Approved, merge 대기
+
+두 PR merge 후: **Task 21 (수동 배포 검증)** — 사용자 직접 수행, MVP 완료 조건, 자동화 게이트로 대체 불가.
 
 **보강 3건 해소 내역 (구현 브랜치 커밋):**
 
@@ -54,9 +61,9 @@
 | 기준정보 (SP/cache) | 6–7 | ✅ 완료 (보강 3건 포함, 리뷰 통과, `implement/reference-data` PR) |
 | Logs | 8–11 | ✅ 완료 (PR #4 `af01bad` merge — luna max/glm-5.3 혼합 디스패치, task 리뷰+glm-5.3 high PR 리뷰+사용자 inline 5건 해소) |
 | Configurations | 12–13 | ✅ 완료 (PR #5 `6283349` merge — task 리뷰 2건 + glm-5.3 high APPROVED + 사용자 inline P2 3건 해소) |
-| Api | 14–18 | ✅ 구현 완료 (`e064725`, PR 오픈 예정) — task 리뷰 5건(Task16/17 fix loop 각 2라운드 포함), 단위 166 + 통합 59 |
-| 검증/배포 준비 | 19–20 | 미시작 |
-| MVP 수동 게이트 | 21 | 미시작 |
+| Api | 14–18 | ✅ 완료 (PR #6 `c58ca27` merge — task 리뷰 5건 + Opus5 PR 리뷰 Request changes→fix wave→재검토 clean, 단위 166 + 통합 63). 사후 발견 3건은 **PR #8**(merge 대기)로 해소 |
+| 검증/배포 준비 | 19–20 | ✅ 구현 완료 (`eeb22d6`) — task 리뷰 2건 Approved + Opus5 PR 리뷰(재시도 3회)→fix wave→재검토 clean + 사용자 GitHub 코멘트 2건 해소. **PR #7 merge 보류 중**, 단위 166 + 통합 68 |
+| MVP 수동 게이트 | 21 | 미시작 (PR #7·#8 merge 후 다음 대상) |
 
 ## 환경 (2026-08-23 확인)
 

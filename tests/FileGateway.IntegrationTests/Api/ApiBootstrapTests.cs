@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using FileGateway.Api.Options;
 using FileGateway.Infrastructure.ReferenceData;
+using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
@@ -145,6 +146,28 @@ public class ApiBootstrapTests
         using var factory = new Factory(s => s.PostConfigure<FileGatewayOptions>(
             o => o.Logs.MaxQueryRange = TimeSpan.FromDays(1)));
         Assert.Throws<OptionsValidationException>(() => factory.CreateClient());
+    }
+
+    [Fact]
+    public void Missing_key_directory_fails_startup_outside_development()
+    {
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        var ex = Assert.ThrowsAny<InvalidOperationException>(() => factory.CreateClient());
+        Assert.Contains("DataProtection:KeyDirectory", ex.Message);
+    }
+
+    [Fact]
+    public void Appsettings_file_binds_FileIdTtl_to_exactly_24_hours()
+    {
+        // 회귀: "24:00:00"은 TimeSpan 파서에서 24일(d.hh:mm:ss 해석)로 파싱된다.
+        // 실제 appsettings.json을 AddJsonFile으로 로드해 모호한 문자열 재발을 잡는다.
+        var appsettings = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..",
+            "src", "FileGateway.Api", "appsettings.json"));
+        var config = new ConfigurationBuilder().AddJsonFile(appsettings).Build();
+        var options = config.GetSection("FileGateway").Get<FileGatewayOptions>()!;
+        Assert.Equal(TimeSpan.FromHours(24), options.Tokens.FileIdTtl);
     }
 
     [Fact]
