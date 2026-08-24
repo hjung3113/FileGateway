@@ -31,7 +31,7 @@ if (!string.IsNullOrEmpty(keyDir))
 {
     dp.PersistKeysToFileSystem(new DirectoryInfo(keyDir));
     if (OperatingSystem.IsWindows())
-        dp.ProtectKeysWithDpapi(protectToLocalMachine: true); // App Pool 서비스 계정(프로필 없는 local machine 범위)으로 복호화 제한
+        dp.ProtectKeysWithDpapi(); // 현재 프로세스 계정(App Pool identity) 범위로 복호화 제한 — IIS Application Pool "Load User Profile"=true 필수
 }
 builder.Services.AddSingleton<ITokenCodec, DataProtectionTokenCodec>();
 builder.Services.AddSingleton<FtpConcurrencyLimiter>();

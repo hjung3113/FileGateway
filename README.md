@@ -32,7 +32,7 @@ dotnet run --project src/FileGateway.Api
 ### IIS 배포
 
 - .NET Hosting Bundle(ASP.NET Core Module V2) 설치 후 In-process(`web.config` 참조)로 호스팅
-- `DataProtection:KeyDirectory`는 App Pool 재시작 후에도 유지되는 경로(예: 전용 로컬 디렉터리)로 지정 — 유실 시 모든 `fileId`가 무효화됨. Windows에서는 저장된 키가 자동으로 DPAPI(local machine 범위)로 암호화되며, 추가 방어 계층으로 해당 디렉터리의 파일시스템 ACL을 App Pool identity만 접근 가능하도록 제한할 것(DPAPI와 ACL은 상호 보완 관계)
+- `DataProtection:KeyDirectory`는 App Pool 재시작 후에도 유지되는 경로(예: 전용 로컬 디렉터리)로 지정 — 유실 시 모든 `fileId`가 무효화됨. Windows에서는 저장된 키가 자동으로 DPAPI로 암호화되며, 이때 **current-user 범위**(키가 실행 프로세스 계정, 즉 App Pool identity에 귀속)로 보호된다. 이것이 동작하려면 IIS Application Pool의 **"Load User Profile"을 반드시 `true`**로 설정해야 한다 — 미설정 시 App Pool identity의 DPAPI 사용자 프로필 저장소가 로드되지 않아 키 protect/unprotect가 실패할 수 있다(`applicationHost.config` 수준 설정이며 `web.config`로 제어되지 않음). 추가 방어 계층으로 해당 디렉터리의 파일시스템 ACL을 App Pool identity만 접근 가능하도록 제한할 것(DPAPI와 ACL은 상호 보완 관계)
 - FTP Passive 모드 사용 시 파일 서버의 Passive 포트 범위가 방화벽에서 열려 있는지 확인
 - FTP 보안: `FileGateway:Ftp:Security` = `Plain | ExplicitTls | ImplicitTls`. 내부 self-signed 인증서 허용은 `AcceptUntrustedCertificates: true`로만(운영 판단 필요)
 - 배포 전 필수 확인 목록: [`docs/10-testing-and-deployment.md`](docs/10-testing-and-deployment.md) "배포 전 필수 확인"
