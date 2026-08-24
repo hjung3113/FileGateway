@@ -8,8 +8,8 @@ public static class ContentDispositionHelper
 {
     public static string Attachment(string fileName)
     {
-        var fallback = new string(fileName.Where(c => c > 0x20 && c < 0x7f).ToArray());
-        return $"attachment; filename=\"{fallback.Replace("\"", string.Empty, StringComparison.Ordinal)}\"; filename*=UTF-8''{Encode(fileName)}";
+        var fallback = new string(fileName.Where(c => c > 0x20 && c < 0x7f && c != '"' && c != '\\').ToArray());
+        return $"attachment; filename=\"{fallback}\"; filename*=UTF-8''{Encode(fileName)}";
     }
 
     private static string Encode(string value)

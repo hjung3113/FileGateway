@@ -27,7 +27,7 @@ builder.Services.AddSingleton<ITokenCodec, DataProtectionTokenCodec>();
 builder.Services.AddSingleton<FtpConcurrencyLimiter>();
 builder.Services.AddSingleton<FtpOptions>(sp => sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value.Ftp
     ?? throw new InvalidOperationException("Ftp options required"));
-builder.Services.AddTransient<IFileAccess, FtpFileAccess>();
+builder.Services.AddSingleton<IFileAccess, FtpFileAccess>(); // 싱글톤 서비스에만 주입되어 사실상 단일 인스턴스 — FtpFileAccess는 상태 없이 안전
 builder.Services.AddSingleton<IReferenceDataSource>(sp => new SpReferenceDataSource(
     builder.Configuration.GetConnectionString("ReferenceData")
     ?? throw new InvalidOperationException("ReferenceData connection string required")));

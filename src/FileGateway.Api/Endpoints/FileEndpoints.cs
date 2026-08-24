@@ -18,9 +18,7 @@ public static class FileEndpoints
             string fileId, ITokenCodec codec, ILogQueryService logs,
             IConfigurationQueryService configurations, HttpContext ctx, CancellationToken ct) =>
         {
-            var located = await LocateAsync(fileId, codec, logs, configurations, ct);
-            ctx.Items["Audit.FileId"] = fileId;
-            ctx.Items["Audit.FileName"] = located.FileName;
+            var located = await LocateAsync(fileId, codec, logs, configurations, ctx, ct);
             return Results.Ok(new { fileId, fileName = located.FileName, size = located.Size });
         });
 
@@ -29,26 +27,34 @@ public static class FileEndpoints
             IConfigurationQueryService configurations, IFileAccess fileAccess,
             HttpContext ctx, CancellationToken ct) =>
         {
-            var located = await LocateAsync(fileId, codec, logs, configurations, ct);
-            ctx.Items["Audit.FileId"] = fileId;
-            ctx.Items["Audit.FileName"] = located.FileName;
+            var located = await LocateAsync(fileId, codec, logs, configurations, ctx, ct);
             return new DownloadResult(located, fileAccess);
         });
         return app;
     }
 
+    // 재해석에 성공한 payload의 claims에서 감사 항목을 채우고, purpose에 맞는 feature service로 위임한다.
     private static async Task<LocatedFile> LocateAsync(
         string fileId, ITokenCodec codec, ILogQueryService logs,
-        IConfigurationQueryService configurations, CancellationToken ct)
+        IConfigurationQueryService configurations, HttpContext ctx, CancellationToken ct)
     {
         var payload = DecodeFileId(fileId, codec);
-        return payload.Purpose switch
+        ctx.Items["Audit.FileId"] = fileId;
+        ctx.Items["Audit.EquipmentId"] = payload.Claims.GetValueOrDefault("equipmentId");
+        if (payload.Purpose == LogTokenKinds.FileIdPurpose)
+            ctx.Items["Audit.LogType"] = payload.Claims.GetValueOrDefault("logType");
+        else
+            ctx.Items["Audit.ConfigurationType"] = payload.Claims.GetValueOrDefault("configurationType");
+        var located = payload.Purpose switch
         {
             LogTokenKinds.FileIdPurpose => await logs.LocateByFileIdAsync(payload, ct),
             ConfigurationTokenKinds.FileIdCurrentPurpose or ConfigurationTokenKinds.FileIdSnapshotPurpose
                 => await configurations.LocateByFileIdAsync(payload, ct),
             _ => throw new FileGatewayException("InvalidFileId", "unknown file id purpose"),
         };
+        ctx.Items["Audit.FileName"] = located.FileName;
+        ctx.Items["Audit.FileSize"] = located.Size;
+        return located;
     }
 
     // 목적을 사전에 알 수 없는 공통 엔드포인트 특성상, 세 종류의 file-id purpose를 순서대로 시도한다.

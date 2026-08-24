@@ -1,9 +1,11 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FileGateway.Api.Options;
 using FileGateway.Infrastructure.ReferenceData;
 using FileGateway.UnitTests.TestUtils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace FileGateway.IntegrationTests.Api;
 
@@ -67,6 +69,27 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
         Assert.True(response.Content.Headers.ContentLength > 0);
         var bytes = await response.Content.ReadAsByteArrayAsync();
         Assert.Equal(response.Content.Headers.ContentLength.Value, bytes.Length);
+    }
+
+    [Fact]
+    public async Task Download_audit_log_carries_fileId_fileSize_equipmentId()
+    {
+        var logs = new CollectingLoggerProvider();
+        using var factory = new ApiFactory(s => s.AddSingleton<ILoggerProvider>(logs));
+        factory.SetSnapshot(Snapshot());
+        factory.UseFakeFtp(SeedFtp);
+        var fileId = await GetFileIdAsync(factory);
+        using var response = await factory.CreateClient()
+            .GetAsync($"/api/v1/files/{Uri.EscapeDataString(fileId)}/download");
+        Assert.Equal(200, (int)response.StatusCode);
+
+        var entry = logs.Entries.Single(e => e.Category == "FileGateway.Audit" && e.Message.Contains("/api/v1/files/", StringComparison.Ordinal));
+        var auditFileId = Regex.Match(entry.Message, @"fileId (\S+) fileName").Groups[1].Value;
+        Assert.False(string.IsNullOrEmpty(auditFileId), $"audit message missing fileId: {entry.Message}");
+        var fileSize = Regex.Match(entry.Message, @"fileSize (\S+) status").Groups[1].Value;
+        Assert.True(long.TryParse(fileSize, out var size) && size > 0, $"audit message missing positive fileSize: {entry.Message}");
+        var equipmentId = Regex.Match(entry.Message, @"equipmentId (\S+) logType").Groups[1].Value;
+        Assert.False(string.IsNullOrEmpty(equipmentId), $"audit message missing equipmentId: {entry.Message}");
     }
 
     [Fact]
