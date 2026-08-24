@@ -45,6 +45,18 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     public void SetFileAccess(IFileAccess inner) => _fileAccess.Inner = inner;
 
+    /// <summary>테스트가 시드/변이 가능한 FakeFileAccess를 IFileAccess로 등록한다(호출마다 새 인스턴스).</summary>
+    public void UseFakeFtp(Action<FakeFileAccess>? seed = null)
+    {
+        var ftp = new FakeFileAccess();
+        seed?.Invoke(ftp);
+        SetFileAccess(ftp);
+        Ftp = ftp;
+    }
+
+    /// <summary>UseFakeFtp로 등록한 마지막 FakeFileAccess. 등록 전 접근은 의미 없다.</summary>
+    public FakeFileAccess Ftp { get; private set; } = new();
+
     public new HttpClient CreateClient() // 기본 "test-key" 헤더
     {
         var client = base.CreateClient();
