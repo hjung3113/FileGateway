@@ -21,6 +21,7 @@ public sealed class LogQueryService(
     TimeProvider clock,
     TimeSpan maxQueryRange,
     int limitDefault,
+    int limitMaximum,
     TimeSpan fileTtl,
     TimeSpan pageTtl) : ILogQueryService
 {
@@ -28,6 +29,8 @@ public sealed class LogQueryService(
     {
         if (query.Limit is < 1)
             throw new FileGatewayException("InvalidRequest", "limit must be at least 1");
+        if (query.Limit is int logLimit && logLimit > limitMaximum)
+            throw new FileGatewayException("InvalidRequest", $"limit exceeds maximum of {limitMaximum}");
 
         query = Normalize(query);
 
