@@ -68,7 +68,7 @@ app.MapHealthEndpoints();
 app.MapCatalogEndpoints();
 app.MapLogEndpoints();
 app.MapConfigurationEndpoints();
-// app.MapFileEndpoints();          // Task 18
+app.MapFileEndpoints();
 app.Run();
 
 public partial class Program;
