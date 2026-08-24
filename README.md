@@ -10,6 +10,38 @@ API 소비자는 실제 파일 서버 주소나 물리 경로를 알 필요 없�
 
 MVP 구현이 완료되어 통합 검증 단계를 거쳤습니다(단위/통합 테스트 전 통과). 배포는 [`docs/10-testing-and-deployment.md`](docs/10-testing-and-deployment.md)의 "배포 전 필수 확인" 목록을 통과해야 MVP 완료로 간주합니다.
 
+## 설치
+
+### 사전 요구사항
+
+- .NET 10 SDK (`global.json` 고정 버전 — `dotnet --version`으로 확인)
+- MSSQL 인스턴스 + `dbo.FileGateway_GetReferenceData` Stored Procedure(`db/mvp-stored-procedure.sql`, 테스트/개발용 스키마는 `db/mvp-schema.sql`)
+- FTP/FTPS로 접근 가능한 분산 파일 서버 및 해당 계정
+- (통합 테스트 실행 시) Docker — Testcontainers가 MSSQL 컨테이너를 띄움
+
+### 로컬 개발 실행
+
+```bash
+git clone <repo-url>
+cd FileGateway
+dotnet build
+dotnet test                              # 단위 + 통합(Testcontainers) 전체
+dotnet run --project src/FileGateway.Api # 기본 개발 서버 기동
+```
+
+로컬 개발 시 비밀은 `dotnet user-secrets` 또는 환경변수로 주입합니다(아래 "비밀 주입" 참조). `appsettings.Development.json`에는 비밀을 넣지 않습니다.
+
+### 최소 설정 확인
+
+기동 직후 아래로 헬스체크합니다.
+
+```bash
+curl -k https://localhost:5001/health/live    # 프로세스 생존만 확인
+curl -k https://localhost:5001/health/ready    # 기준정보 최초 로딩 유발 + 상태 반영
+```
+
+`/health/ready`는 usable 캐시가 있으면 stale이어도 200을 반환합니다. 최초 기동 시 DB 연결이 안 되어 있으면 503 `ReferenceDataUnavailable`이 정상입니다.
+
 ## 실행 / 배포
 
 ### 실행
@@ -20,14 +52,40 @@ dotnet test
 dotnet run --project src/FileGateway.Api
 ```
 
+### 설정 항목 (`appsettings.json` 기준값)
+
+| Key | 기본값 | 의미 |
+|---|---|---|
+| `FileGateway:Logs:MaxQueryRange` | `31.00:00:00` | 로그 시간 범위 조회 최대 폭(≥2일 필요) |
+| `FileGateway:Configurations:HistoryMaxQueryRange` | `366.00:00:00` | Configuration History 조회 최대 폭 |
+| `FileGateway:Paging:LimitDefault` / `LimitMax` | `100` / `1000` | 목록 pagination `limit` 기본/최댓값 |
+| `FileGateway:Tokens:FileIdTtl` | `1.00:00:00` | `fileId` 유효기간(24시간) |
+| `FileGateway:Tokens:ContinuationTtl` | `00:30:00` | `continuationToken` 유효기간 |
+| `FileGateway:ReferenceData:CacheTtl` | `00:15:00` | 기준정보 캐시 TTL(만료 시 stale 즉시 반환 + single-flight 백그라운드 refresh) |
+| `FileGateway:Ftp:Security` | `Plain` | `Plain \| ExplicitTls \| ImplicitTls` |
+| `FileGateway:Ftp:AcceptUntrustedCertificates` | `false` | 내부 self-signed 인증서 허용 여부(운영 판단 필요) |
+| `FileGateway:Ftp:ConnectTimeoutSeconds` / `ReadTimeoutSeconds` | `15` / `60` | FTP 연결/읽기 타임아웃 |
+| `FileGateway:Ftp:MaxConcurrentGlobal` / `MaxConcurrentPerServer` | `50` / `5` | FTP 동시 접속 상한(전체/서버별) |
+
 ### 비밀 주입
 
 비밀은 파일에 두지 않고 환경변수(또는 IIS/Secret 관리 도구)로만 주입합니다:
 
-- `Authentication__ApiKeys__0__Key` / `Authentication__ApiKeys__0__CallerId` — API Key
+- `Authentication__ApiKeys__0__Key` / `Authentication__ApiKeys__0__CallerId` — API Key(복수 호출자는 인덱스 `1`, `2`...로 추가)
 - `ConnectionStrings__ReferenceData` — MSSQL 기준정보 연결 문자열
 - `FileGateway__Ftp__UserName` / `FileGateway__Ftp__Password` — FTP 계정
 - `DataProtection__KeyDirectory` — DataProtection 키 저장 디렉터리(미설정 시 개발용 ephemeral 경고 로그)
+
+API Key 회전 예시(overlap 배포):
+
+```bash
+# 구 key(index 0) 유지한 채 신규 key(index 1) 추가 → 앱 재시작/재배포
+Authentication__ApiKeys__0__Key=<old-key>
+Authentication__ApiKeys__0__CallerId=wpf-client
+Authentication__ApiKeys__1__Key=<new-key>
+Authentication__ApiKeys__1__CallerId=wpf-client
+# 클라이언트 전환 확인 후 index 0 제거 → 재배포
+```
 
 ### IIS 배포
 
@@ -36,6 +94,7 @@ dotnet run --project src/FileGateway.Api
 - FTP Passive 모드 사용 시 파일 서버의 Passive 포트 범위가 방화벽에서 열려 있는지 확인
 - FTP 보안: `FileGateway:Ftp:Security` = `Plain | ExplicitTls | ImplicitTls`. 내부 self-signed 인증서 허용은 `AcceptUntrustedCertificates: true`로만(운영 판단 필요)
 - 배포 전 필수 확인 목록: [`docs/10-testing-and-deployment.md`](docs/10-testing-and-deployment.md) "배포 전 필수 확인"
+- **실 배포 시 수동 검증 체크리스트(MVP 완료 게이트)**: [`docs/DEPLOYMENT-CHECKLIST.md`](docs/DEPLOYMENT-CHECKLIST.md) — 항목별 통과/차단 기록용
 
 구현/변경 작업은 [`docs/INDEX.md`](docs/INDEX.md)를 시작점으로 역할별 설계 문서를 확인합니다.
 
@@ -63,25 +122,138 @@ dotnet run --project src/FileGateway.Api
 
 설비사나 설비 종류에 따라 제공 파일이 달라도 `equipmentId`별 기준정보 차이로 표현합니다.
 
-## 주요 API
+## API 사용법
+
+인증은 HTTPS + `X-Api-Key` header를 사용합니다. query string으로 key를 전달할 수 없습니다.
 
 ```http
-GET /api/v1/equipments/{equipmentId}/file-types
-
-GET /api/v1/logs
-GET /api/v1/logs/download
-
-GET /api/v1/configurations/current
-GET /api/v1/configurations/current/download
-GET /api/v1/configurations/history
-
-GET /api/v1/files/{fileId}
-GET /api/v1/files/{fileId}/download
+X-Api-Key: <caller-key>
 ```
 
-인증은 HTTPS + `X-Api-Key` header를 사용합니다.
+전체 계약(query 상세, 정렬, pagination, `fileId` 오류 구분 등)은 [`docs/05-api-interface.md`](docs/05-api-interface.md)가 기준입니다. 아래는 실제 호출 예시입니다.
 
-`file-types` API는 실제 FTP 파일 존재 여부를 스캔하는 API가 아니라, 검증 완료된 DB 기준정보를 기준으로 해당 설비에 **어떤 종류의 파일을 제공하도록 정의했는지** 반환합니다.
+### 1. 설비별 제공 파일 종류 조회
+
+```bash
+curl -s https://gateway.example/api/v1/equipments/EQ-001/file-types \
+  -H "X-Api-Key: $API_KEY"
+```
+
+```json
+{
+  "equipmentId": "EQ-001",
+  "logs": [
+    { "logType": "EventLog", "generationType": "Hourly" },
+    { "logType": "TraceLog", "generationType": "Continuous" }
+  ],
+  "configurations": [
+    { "configurationType": "PM" }
+  ]
+}
+```
+
+FTP를 스캔하지 않고 DB 기준정보 snapshot만 반환합니다. `equipmentId` 없음 → `404 EquipmentNotFound`.
+
+### 2. 로그 목록 조회 (Hourly/Daily)
+
+```bash
+curl -s "https://gateway.example/api/v1/logs?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T00:00:00+09:00&to=2026-08-21T00:00:00+09:00&limit=50" \
+  -H "X-Api-Key: $API_KEY"
+```
+
+```json
+{
+  "items": [
+    {
+      "fileId": "eyJh...opaque",
+      "fileName": "EventLog_20260820_09.log",
+      "equipmentId": "EQ-001",
+      "logType": "EventLog",
+      "subtype": null,
+      "timestamp": "2026-08-20T09:00:00+09:00",
+      "size": 10240,
+      "isContinuous": false,
+      "attributes": {}
+    }
+  ],
+  "continuationToken": null
+}
+```
+
+- `from`/`to` 생략 시 최근 24시간, `from`만 있으면 `[from, from+2일)`.
+- 다음 페이지: 같은 조회조건에 `continuationToken`만 추가(`limit`은 페이지마다 바꿔도 됨).
+- Continuous `logType`은 `from`/`to`를 주면 `400 InvalidRequest`.
+
+### 3. 로그 조건 기반 직접 다운로드
+
+```bash
+curl -s -OJ "https://gateway.example/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T09:00:00+09:00&to=2026-08-20T10:00:00+09:00" \
+  -H "X-Api-Key: $API_KEY"
+```
+
+0건 → `404 FileNotFound`, 2건 이상 일치 → `409 MultipleFilesMatched`(이 경우 목록 조회로 `fileId`를 얻어 `/files/{fileId}/download` 사용).
+
+### 4. Current Configuration 조회/다운로드
+
+```bash
+curl -s "https://gateway.example/api/v1/configurations/current?equipmentId=EQ-001&configurationType=PM" \
+  -H "X-Api-Key: $API_KEY"
+
+curl -s -OJ "https://gateway.example/api/v1/configurations/current/download?equipmentId=EQ-001&configurationType=PM" \
+  -H "X-Api-Key: $API_KEY"
+```
+
+동일 `equipmentId + configurationType`에 여러 파일(PM1~PM4 등)이 있으면 직접 다운로드는 `409 MultipleFilesMatched` — 목록에서 `fileId`를 골라 공통 다운로드 endpoint를 사용합니다.
+
+### 5. Configuration History 조회
+
+```bash
+curl -s "https://gateway.example/api/v1/configurations/history?equipmentId=EQ-001&configurationType=PM&from=2026-08-01T00:00:00+09:00&to=2026-08-24T00:00:00+09:00" \
+  -H "X-Api-Key: $API_KEY"
+```
+
+`from`/`to` 둘 다 필수(생략 시 `400 InvalidRequest`). marker 없는 미완료 Snapshot Set은 노출되지 않습니다.
+
+### 6. 공통 파일 조회/다운로드 (`fileId`)
+
+```bash
+curl -s https://gateway.example/api/v1/files/$FILE_ID \
+  -H "X-Api-Key: $API_KEY"
+
+curl -s -OJ https://gateway.example/api/v1/files/$FILE_ID/download \
+  -H "X-Api-Key: $API_KEY"
+```
+
+`fileId`는 목록/직접 다운로드 응답에서 얻은 24시간 TTL opaque 토큰입니다. `Content-Length`는 스트림 시작 직전 실제 크기로 설정되며, 응답 헤더는 `Content-Type: application/octet-stream`, `Content-Disposition: attachment`.
+
+### 오류 응답
+
+```json
+{
+  "type": "about:blank",
+  "title": "File not found",
+  "status": 404,
+  "code": "FileNotFound",
+  "traceId": "0HN..."
+}
+```
+
+| status | code | 의미 |
+|---|---|---|
+| 400 | `InvalidRequest` | 요청 파라미터/시간범위/토큰 조건 오류 |
+| 400 | `InvalidFileId` | `fileId` 형식/서명 오류 |
+| 401 | `InvalidApiKey` | `X-Api-Key` 누락/불일치 |
+| 404 | `EquipmentNotFound` | 존재하지 않는 `equipmentId` |
+| 404 | `LogDefinitionNotFound` / `ConfigurationDefinitionNotFound` | 기준정보 삭제로 재해석 불가 |
+| 404 | `FileNotFound` | 논리 파일이 실제로 없음 |
+| 409 | `MultipleFilesMatched` | 직접 다운로드 조건에 정상 파일 2건 이상 일치 |
+| 410 | `FileIdExpired` | `fileId` TTL(24시간) 경과 |
+| 500 | `FileDefinitionConflict` | cardinality 위반/metadata 해석 실패 |
+| 500 | `InternalError` | 서버 내부 오류 |
+| 502 | `FileServerUnavailable` / `FileServerProtocolError` | 파일 서버 연결/프로토콜 오류 |
+| 503 | `ReferenceDataUnavailable` | 사용 가능한 기준정보 없음 |
+
+`code`로 분기하고, 원인 추적은 `traceId`로 서버 로그와 연계합니다. 물리 경로/credential/DB 진단 정보는 오류 응답에 포함되지 않습니다.
 
 ## 구조
 

@@ -22,6 +22,7 @@
 | Agent/Superpowers/심볼릭 링크 관리 | [08 Agent Tooling](08-agent-tooling.md) | `AGENTS.md`, `.superpowers/UPSTREAM.md` |
 | 인증, Secret, token, 감사로그, Health, 장애/timeout 정책 | [09 보안/운영](09-security-and-operations.md) | [05 API 인터페이스](05-api-interface.md) |
 | 테스트 전략, IIS 배포, MVP 완료 검증 | [10 테스트/배포](10-testing-and-deployment.md) | [01 요구사항](01-requirements.md) |
+| 실 배포 환경 수동 검증 진행(Task 21) | [배포 검증 체크리스트](DEPLOYMENT-CHECKLIST.md) | [10 테스트/배포](10-testing-and-deployment.md) |
 | 확정된 전체 설계의 단일 스냅샷이 필요할 때 | [Superpowers 설계 Spec](superpowers/specs/2026-08-22-filegateway-design.md) | 역할별 문서를 최신 기준으로 사용 |
 
 ## 문서 구조
