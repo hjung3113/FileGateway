@@ -148,6 +148,15 @@ public class ApiBootstrapTests
     }
 
     [Fact]
+    public void Missing_key_directory_fails_startup_outside_development()
+    {
+        using var factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(b => b.UseEnvironment("Production"));
+        var ex = Assert.ThrowsAny<InvalidOperationException>(() => factory.CreateClient());
+        Assert.Contains("DataProtection:KeyDirectory", ex.Message);
+    }
+
+    [Fact]
     public async Task Audit_log_contains_caller_and_endpoint_without_key()
     {
         var logs = new CollectingLoggerProvider();

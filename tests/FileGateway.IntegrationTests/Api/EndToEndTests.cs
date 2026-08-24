@@ -76,6 +76,8 @@ public class EndToEndTests(DatabaseFixture db, FtpAdapterFixture ftp)
         var history = await client.GetFromJsonAsync<JsonElement>(
             "/api/v1/configurations/history?equipmentId=EQ-001&configurationType=PM&from=2026-08-22T00:00:00%2B09:00&to=2026-08-23T00:00:00%2B09:00");
         var snapshotId = history.GetProperty("items")[0].GetProperty("fileId").GetString()!;
+        // marker 제거 전 정상 해석(200)을 먼저 확인해야 404 assertion이 인과적이 된다.
+        Assert.Equal(200, (int)(await client.GetAsync($"/api/v1/files/{Uri.EscapeDataString(snapshotId)}")).StatusCode);
         await FtpDeleteAsync("ftproot/PM/history/2026/08/22/_DONE");
         Assert.Equal(404, (int)(await client.GetAsync($"/api/v1/files/{Uri.EscapeDataString(snapshotId)}")).StatusCode);
     }

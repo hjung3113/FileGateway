@@ -70,8 +70,14 @@ builder.Services.AddSingleton<IConfigurationQueryService>(sp =>
 
 var app = builder.Build();
 if (string.IsNullOrEmpty(keyDir))
-    app.Logger.LogWarning(
-        "DataProtection:KeyDirectory가 설정되지 않았습니다. 키가 내구성 없는 기본 위치에 저장되어 프로세스/IIS 재시작 시 fileId가 무효화될 수 있습니다(개발 환경 전용).");
+{
+    if (builder.Environment.IsDevelopment())
+        app.Logger.LogWarning(
+            "DataProtection:KeyDirectory가 설정되지 않았습니다. 키가 내구성 없는 기본 위치에 저장되어 프로세스/IIS 재시작 시 fileId가 무효화될 수 있습니다(개발 환경 전용).");
+    else
+        throw new InvalidOperationException(
+            "DataProtection:KeyDirectory is required outside the Development environment; without it every issued fileId is invalidated on process/App Pool restart.");
+}
 
 app.UseMiddleware<AuditMiddleware>();       // 최외곽: 최종 status + Audit.ErrorCode를 함께 기록
 app.UseMiddleware<ErrorMappingMiddleware>();

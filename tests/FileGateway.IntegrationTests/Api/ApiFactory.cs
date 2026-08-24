@@ -12,12 +12,13 @@ namespace FileGateway.IntegrationTests.Api;
 
 /// <summary>API 통합테스트 공통 factory: 고정 snapshot 뷰 + 교체 가능 IFileAccess(기본: 호출되면 실패).
 /// 실제 호스트는 지연 생성되는 InnerFactory가 담당하며, RestartApplication으로 재시작을 시뮬레이션할 수 있다.</summary>
-public sealed class ApiFactory : WebApplicationFactory<Program>
+public sealed class ApiFactory : IAsyncLifetime, IDisposable
 {
     // 기본 시각: 시드 파일(2026-08-22 KST)이 기본 24h 조회 범위에 들어오도록 고정.
     private readonly MutableTimeProvider _clock = new(new DateTimeOffset(2026, 8, 23, 3, 0, 0, TimeSpan.Zero));
     private readonly SwitchableFileAccess _fileAccess = new(new ThrowingFileAccess());
     private readonly FixedSnapshotView _view = new(null);
+
     public ApiFactory() { }
 
     internal ApiFactory(Action<IServiceCollection>? extraServices) => _extraServices = extraServices;
@@ -25,6 +26,26 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly Action<IServiceCollection>? _extraServices;
     private string? _dataProtectionKeyDir;
     private InnerFactory? _host;
+
+    /// <summary>xUnit 클래스 fixture 정리 시점에 실제 호스트까지 dispose한다.</summary>
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
+    {
+        if (_host is not null)
+        {
+            await _host.DisposeAsync();
+            _host = null;
+        }
+    }
+
+    /// <summary>테스트 본문에서 using으로 쓰는 국소 인스턴스용 동기 정리(RestartApplication과 동일 방식).</summary>
+    public void Dispose()
+    {
+        _host?.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        _host = null;
+    }
+
 
     /// <summary>DataProtection 키 저장 디렉터리 지정(첫 호스트 생성 전에만 유효).</summary>
     public void SetDataProtectionKeyDirectory(string keyDir) => _dataProtectionKeyDir = keyDir;
@@ -55,7 +76,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>UseFakeFtp로 등록한 마지막 FakeFileAccess. 등록 전 접근은 의미 없다.</summary>
     public FakeFileAccess Ftp { get; private set; } = new();
 
-    public new HttpClient CreateClient() // 기본 "test-key" 헤더
+    public HttpClient CreateClient() // 기본 "test-key" 헤더
     {
         var client = Host.CreateClient();
         client.DefaultRequestHeaders.Add("X-Api-Key", "test-key");

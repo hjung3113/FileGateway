@@ -37,6 +37,7 @@ public class KeyPersistenceTests : IClassFixture<ApiFactory>
         _factory.RestartApplication(keyDir);            // 같은 key dir으로 호스트 재생성(재시작 시뮬레이션)
 
         var error = await _factory.GetFileErrorAsync(fileId);
+        Assert.Equal(200, error.status);             // 재시작 후 fileId가 여전히 정상 해석됨
         Assert.NotEqual("InvalidFileId", error.code); // 키 유실이 아니면 Invalid/Expired 아님
         Assert.NotEqual("FileIdExpired", error.code);
     }
