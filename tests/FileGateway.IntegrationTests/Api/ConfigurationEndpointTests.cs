@@ -1,7 +1,10 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FileGateway.Infrastructure.ReferenceData;
 using FileGateway.UnitTests.TestUtils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace FileGateway.IntegrationTests.Api;
 
@@ -74,6 +77,26 @@ public class ConfigurationEndpointTests : IClassFixture<ApiFactory>
             .GetAsync("/api/v1/configurations/current/download?equipmentId=EQ-001&configurationType=PM");
         Assert.Equal(200, (int)response.StatusCode);
         Assert.True(response.Content.Headers.ContentLength > 0);
+    }
+
+    [Fact]
+    public async Task Current_download_audit_log_carries_fileId()
+    {
+        var logs = new CollectingLoggerProvider();
+        using var factory = new ApiFactory(s => s.AddSingleton<ILoggerProvider>(logs));
+        factory.SetSnapshot(Snapshot());
+        factory.UseFakeFtp(SeedFtp);
+        factory.Ftp.RemoveFile("PM/current/PM2.cfg");
+        using var response = await factory.CreateClient()
+            .GetAsync("/api/v1/configurations/current/download?equipmentId=EQ-001&configurationType=PM");
+        Assert.Equal(200, (int)response.StatusCode);
+
+        var entry = logs.Entries.Single(e => e.Category == "FileGateway.Audit");
+        var fileId = Regex.Match(entry.Message, @"fileId (\S+) fileName").Groups[1].Value;
+        Assert.False(string.IsNullOrEmpty(fileId), $"audit message missing fileId: {entry.Message}");
+        var fileSize = Regex.Match(entry.Message, @"fileSize (\S+) status").Groups[1].Value;
+        Assert.True(long.TryParse(fileSize, out var size) && size > 0,
+            $"audit message missing positive fileSize: {entry.Message}");
     }
 
     [Fact]
