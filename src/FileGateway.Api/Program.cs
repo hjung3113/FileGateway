@@ -65,7 +65,7 @@ app.UseMiddleware<AuditMiddleware>();       // 최외곽: 최종 status + Audit.
 app.UseMiddleware<ErrorMappingMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
 app.MapHealthEndpoints();
-app.MapCatalogEndpoints();          // Task 15가 catalog 전체로 확장
+app.MapCatalogEndpoints();
 // app.MapLogEndpoints();           // Task 16
 // app.MapConfigurationEndpoints(); // Task 17
 // app.MapFileEndpoints();          // Task 18

@@ -1,24 +1,27 @@
-// src/FileGateway.Api/Endpoints/CatalogEndpoints.cs
 using FileGateway.Core.Errors;
 using FileGateway.Infrastructure.ReferenceData;
 
 namespace FileGateway.Api.Endpoints;
 
-/// <summary>설비별 제공 파일 종류 조회. 기준정보 cache만 사용(FTP 접근 없음). Task 15가 전체 catalog로 확장한다.</summary>
+/// <summary>설비별 제공 파일 종류 조회. 기준정보 snapshot만 사용(FTP 접근 없음).</summary>
 public static class CatalogEndpoints
 {
     public static IEndpointRouteBuilder MapCatalogEndpoints(this IEndpointRouteBuilder app)
     {
         app.MapGet("/api/v1/equipments/{equipmentId}/file-types",
-            async (string equipmentId, IReferenceDataView view, CancellationToken ct) =>
+            async (string equipmentId, IReferenceDataView referenceData, HttpContext ctx, CancellationToken ct) =>
         {
-            var snapshot = await view.GetSnapshotAsync(ct);
+            ctx.Items["Audit.EquipmentId"] = equipmentId;
+            var snapshot = await referenceData.GetSnapshotAsync(ct);
             if (!snapshot.EquipmentIds.Contains(equipmentId))
-                throw new FileGatewayException("EquipmentNotFound");
+                throw new FileGatewayException("EquipmentNotFound", "unknown equipment");
             return Results.Ok(new
             {
-                logs = snapshot.GetLogSummaries(equipmentId),
-                configurations = snapshot.GetConfigurationTypeSummaries(equipmentId),
+                equipmentId,
+                logs = snapshot.GetLogSummaries(equipmentId)
+                    .Select(s => new { logType = s.LogType, generationType = s.GenerationType }),
+                configurations = snapshot.GetConfigurationTypeSummaries(equipmentId)
+                    .Select(t => new { configurationType = t }),
             });
         });
         return app;
