@@ -51,7 +51,7 @@ public class FileAccessErrorMappingTests
 
     [Theory]
     [MemberData(nameof(AllErrors))]
-    public async Task Open_failure_logs_sanitized_error_and_traceId(FileAccessError error)
+    public async Task Open_failure_logs_sanitized_error_traceId_and_audit_code(FileAccessError error)
     {
         var logs = new CollectingLoggerProvider();
         using var factory = new ApiFactory(s => s.AddSingleton<ILoggerProvider>(logs));
@@ -65,6 +65,15 @@ public class FileAccessErrorMappingTests
         Assert.Contains(error.ToString(), entry.Message);
         Assert.Contains(body.GetProperty("traceId").GetString()!, entry.Message); // traceId 상관관계
         Assert.DoesNotContain("secret-host", entry.Message); // 원본 예외 세부정보 비노출
+
+        var expectedCode = error switch
+        {
+            FileAccessError.ProtocolError => "FileServerProtocolError",
+            FileAccessError.FileNotFound => "FileNotFound",
+            _ => "FileServerUnavailable",
+        };
+        var auditEntry = Assert.Single(logs.Entries, e => e.Category == "FileGateway.Audit");
+        Assert.Contains($"errorCode {expectedCode}", auditEntry.Message);
     }
 
     /// <summary>기존: resolve(목록)는 성공하고 open에서 지정한 FileAccessError로 실패하는 IFileAccess.</summary>
