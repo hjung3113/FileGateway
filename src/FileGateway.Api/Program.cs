@@ -66,7 +66,7 @@ app.UseMiddleware<ErrorMappingMiddleware>();
 app.UseMiddleware<ApiKeyMiddleware>();
 app.MapHealthEndpoints();
 app.MapCatalogEndpoints();
-// app.MapLogEndpoints();           // Task 16
+app.MapLogEndpoints();
 // app.MapConfigurationEndpoints(); // Task 17
 // app.MapFileEndpoints();          // Task 18
 app.Run();
