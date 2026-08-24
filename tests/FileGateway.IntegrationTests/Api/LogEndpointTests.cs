@@ -158,6 +158,8 @@ public class LogEndpointTests : IClassFixture<ApiFactory>
         var entry = logs.Entries.Single(e => e.Category == "FileGateway.Audit");
         var fileId = Regex.Match(entry.Message, @"fileId (\S+) fileName").Groups[1].Value;
         Assert.False(string.IsNullOrEmpty(fileId), $"audit message missing fileId: {entry.Message}");
+        var fileSize = Regex.Match(entry.Message, @"fileSize (\S+) status").Groups[1].Value;
+        Assert.True(long.TryParse(fileSize, out var size) && size > 0, $"audit message missing positive fileSize: {entry.Message}");
     }
 
     [Fact]

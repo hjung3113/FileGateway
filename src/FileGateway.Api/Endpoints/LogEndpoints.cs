@@ -39,6 +39,7 @@ public static class LogEndpoints
                 throw new FileGatewayException("MultipleFilesMatched", "query matched more than one file");
             var file = match.File!;
             ctx.Items["Audit.FileName"] = file.FileName;
+            ctx.Items["Audit.FileSize"] = file.Size;
             ctx.Items["Audit.FileId"] = match.FileId;
             return new DownloadResult(file, fileAccess);
         });
