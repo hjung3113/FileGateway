@@ -66,8 +66,10 @@ git clone <repo-url>
 cd FileGateway
 dotnet build
 dotnet test                              # 단위 + 통합(Testcontainers) 전체
-dotnet run --project src/FileGateway.Api # 기본 개발 서버 기동
+dotnet run --project src/FileGateway.Api # 기본 개발 서버 기동 (launchSettings.json "http" 프로필)
 ```
+
+`launchSettings.json` 기준 기본 바인딩은 `http://localhost:5178`(HTTPS로 기동하려면 `dotnet run --project src/FileGateway.Api --launch-profile https` → `https://localhost:7108`). IIS 배포 시 실제 포트/바인딩은 별도입니다.
 
 로컬 개발 시 비밀은 `dotnet user-secrets` 또는 환경변수로 주입합니다(아래 "비밀 주입" 참조). `appsettings.Development.json`에는 비밀을 넣지 않습니다.
 
@@ -76,21 +78,15 @@ dotnet run --project src/FileGateway.Api # 기본 개발 서버 기동
 기동 직후 아래로 헬스체크합니다.
 
 ```bash
-curl -k https://localhost:5001/health/live    # 프로세스 생존만 확인
-curl -k https://localhost:5001/health/ready    # 기준정보 최초 로딩 유발 + 상태 반영
+curl http://localhost:5178/health/live    # 프로세스 생존만 확인
+curl http://localhost:5178/health/ready   # 기준정보 최초 로딩 유발 + 상태 반영
 ```
 
-`/health/ready`는 usable 캐시가 있으면 stale이어도 200을 반환합니다. 최초 기동 시 DB 연결이 안 되어 있으면 503 `ReferenceDataUnavailable`이 정상입니다.
+`/health/ready`는 usable 캐시가 있으면 stale이어도 `200 {"status":"Degraded","stale":true}`를 반환합니다. usable 캐시가 전혀 없으면(최초 기동 시 DB 연결 실패 등) `503 {"status":"Unhealthy"}`입니다 — 이 503은 API 오류 응답(`code`/`traceId` 포함 Problem Details)이 아니라 health 전용 shape입니다.
 
 ## 실행 / 배포
 
-### 실행
-
-```bash
-dotnet build
-dotnet test
-dotnet run --project src/FileGateway.Api
-```
+빌드/테스트/로컬 실행 명령은 위 "설치 > 로컬 개발 실행" 참조.
 
 ### 설정 항목 (`appsettings.json` 기준값)
 
@@ -114,7 +110,7 @@ dotnet run --project src/FileGateway.Api
 - `Authentication__ApiKeys__0__Key` / `Authentication__ApiKeys__0__CallerId` — API Key(복수 호출자는 인덱스 `1`, `2`...로 추가)
 - `ConnectionStrings__ReferenceData` — MSSQL 기준정보 연결 문자열
 - `FileGateway__Ftp__UserName` / `FileGateway__Ftp__Password` — FTP 계정
-- `DataProtection__KeyDirectory` — DataProtection 키 저장 디렉터리(미설정 시 개발용 ephemeral 경고 로그)
+- `DataProtection__KeyDirectory` — DataProtection 키 저장 디렉터리. Development 환경은 미설정 시 ephemeral 경고 로그만 남기지만, **Development 외 환경은 미설정 시 기동 자체가 실패**합니다(`InvalidOperationException`). IIS 배포 시 필수 값입니다.
 
 API Key 회전 예시(overlap 배포):
 
@@ -264,6 +260,8 @@ X-Api-Key: <caller-key>
 
 전체 계약(query 상세, 정렬, pagination, `fileId` 오류 구분 등)은 [`docs/05-api-interface.md`](docs/05-api-interface.md)가 기준입니다. 아래는 실제 호출 예시입니다.
 
+> `from`/`to` 값의 UTC offset `+09:00`은 query string에서 `%2B09:00`으로 URL-encoding해야 합니다(그대로 `+`를 보내면 공백으로 디코딩되어 파싱 실패). curl 예시는 이미 encoding된 형태입니다.
+
 ### 1. 설비별 제공 파일 종류 조회
 
 ```bash
@@ -289,7 +287,7 @@ FTP를 스캔하지 않고 DB 기준정보 snapshot만 반환합니다. `equipme
 ### 2. 로그 목록 조회 (Hourly/Daily)
 
 ```bash
-curl -s "https://gateway.example/api/v1/logs?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T00:00:00+09:00&to=2026-08-21T00:00:00+09:00&limit=50" \
+curl -s "https://gateway.example/api/v1/logs?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T00:00:00%2B09:00&to=2026-08-21T00:00:00%2B09:00&limit=50" \
   -H "X-Api-Key: $API_KEY"
 ```
 
@@ -312,14 +310,15 @@ curl -s "https://gateway.example/api/v1/logs?equipmentId=EQ-001&logType=EventLog
 }
 ```
 
-- `from`/`to` 생략 시 최근 24시간, `from`만 있으면 `[from, from+2일)`.
-- 다음 페이지: 같은 조회조건에 `continuationToken`만 추가(`limit`은 페이지마다 바꿔도 됨).
+- `from`/`to` 생략 시 최근 24시간, `from`만 있으면 `[from, from+2일)`. `to`만 단독으로 주거나 `from >= to`이면 `400 InvalidRequest`.
+- 다음 페이지: 같은 조회조건에 `continuationToken`만 추가(`limit`은 페이지마다 바꿔도 됨). **`continuationToken`을 유지한 채 `equipmentId`/`logType`/`from`/`to`/`subtype`/`attr.*` 등 결과 집합을 바꾸는 조건을 변경하면 `400 InvalidRequest`** — 조건을 바꾸려면 토큰 없이 첫 페이지부터 새로 조회합니다.
 - Continuous `logType`은 `from`/`to`를 주면 `400 InvalidRequest`.
+- 조회 범위가 `Logs.MaxQueryRange`(기본 31일)를 초과해도 `400 InvalidRequest`.
 
 ### 3. 로그 조건 기반 직접 다운로드
 
 ```bash
-curl -s -OJ "https://gateway.example/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T09:00:00+09:00&to=2026-08-20T10:00:00+09:00" \
+curl -s -OJ "https://gateway.example/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T09:00:00%2B09:00&to=2026-08-20T10:00:00%2B09:00" \
   -H "X-Api-Key: $API_KEY"
 ```
 
@@ -337,10 +336,12 @@ curl -s -OJ "https://gateway.example/api/v1/configurations/current/download?equi
 
 동일 `equipmentId + configurationType`에 여러 파일(PM1~PM4 등)이 있으면 직접 다운로드는 `409 MultipleFilesMatched` — 목록에서 `fileId`를 골라 공통 다운로드 endpoint를 사용합니다.
 
+Current 목록 응답은 로그와 달리 `{items, continuationToken}` envelope가 **아닌 단순 배열**입니다(`limit`/`continuationToken` 미적용).
+
 ### 5. Configuration History 조회
 
 ```bash
-curl -s "https://gateway.example/api/v1/configurations/history?equipmentId=EQ-001&configurationType=PM&from=2026-08-01T00:00:00+09:00&to=2026-08-24T00:00:00+09:00" \
+curl -s "https://gateway.example/api/v1/configurations/history?equipmentId=EQ-001&configurationType=PM&from=2026-08-01T00:00:00%2B09:00&to=2026-08-24T00:00:00%2B09:00" \
   -H "X-Api-Key: $API_KEY"
 ```
 
