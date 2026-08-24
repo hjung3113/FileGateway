@@ -6,11 +6,12 @@
 - 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개
 - 코드: Foundation(PR #2) + 기준정보(PR #3) + **Logs(PR #4, squash `af01bad`) merge 완료**. 게이트 green — 빌드 0 경고, 단위 148/148 + 통합 16/16. 사용자 inline 리뷰 P2 5건(range drift 커서 고정, subtype 진입 정규화, offset 명시적 분류, cross-directory identity 검사, 중복 range 코멘트) `9a03b2e`로 해소 후 merge. glm-5.3 high PR 리뷰(본문+diff) APPROVED 전제
 - 브랜치: **Configurations(Task 12~13) merge 완료 (PR #5 squash `6283349`)**. 게이트 green — 빌드 0 경고, 단위 166/166 + 통합 16/16. 사용자 inline P2 3건(marker glob 제외, limit 최댓값, Current fileId stat — Logs에도 limitMaximum 대칭 적용) `848c4fc`로 해소 후 merge. glm-5.3 high 리뷰 APPROVED(P1/P2 0건, P3 7건 중 2건 fix·5건 deferred).
-- 브랜치: **Api(Task 14~18) 구현 완료** — `implement/api` (HEAD `e064725`). 게이트 green — 빌드 0 경고, 단위 166/166 + 통합 59/59. Task별 omp subagent 디스패치(judgment→glm-5.3 low/구현·high/리뷰, mechanical fix→gpt-5.6-luna max) + task review + fix loop 전부 통과. Task 16/17에서 동일 패턴(plan-mandated Audit.FileId 누락)이 반복 발견·수정됨 — Task 18은 사전 룰링으로 회피(ITokenCodec purpose 3종 순차 시도). PR 오픈 예정, glm-5.3 high(diff+PR body만) 리뷰 대기. 다음: PR merge 후 Task 19~20(검증/배포 준비)부터 새 브랜치. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
+- 브랜치: **Api(Task 14~18) merge 완료 (PR #6 squash `c58ca27`)**. 게이트 green — 빌드 0 경고, 단위 166/166 + 통합 63/63. Task별 omp subagent 디스패치(judgment→glm-5.3 low/구현·high/리뷰, mechanical fix→gpt-5.6-luna max) + task review + fix loop 전부 통과. Task 16/17에서 동일 패턴(plan-mandated Audit.FileId 누락)이 반복 발견·수정됨 — Task 18은 사전 룰링으로 회피(ITokenCodec purpose 3종 순차 시도), 그런데 **Task 18 자신의 Audit.FileSize/EquipmentId/LogType 누락**이 세 번째 반복으로 PR 레벨 리뷰(Opus5, diff+PR body만)에서 Critical로 발견됨 — fix wave(`0cc0003`)로 해소, glm-5.3 high 재검토 5/5 ADDRESSED. Opus5 리뷰 Important 4건 중 1건(subtype/attr path traversal)은 컨트롤러 검증 결과 **false positive**(ApplyFilters가 listing 이후 순수 필터링, path 조합 미관여) — 반박 근거 ledger 기록. 나머지 3건(appsettings.json Logging 누락, IFileAccess 수명 오기재, Content-Disposition backslash 미이스케이프)도 fix wave에 포함해 해소.
+- 다음: Task 19~20 (검증/배포 준비) — `implement/verification` 브랜치. SDD ledger: `.superpowers/sdd/2026-08-23-filegateway-mvp/progress.md`
 
 ## 다음 작업: 계획 실행
 
-`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~18 완료**. 다음 세션 순서: **Api PR merge 후 Task 19 (검증/배포 준비)부터 새 브랜치로 계속**.
+`docs/superpowers/plans/2026-08-23-filegateway-mvp.md`를 Task 0 → 21 순서로 실행. **Task 0~18 완료**. 다음 세션 순서: **Task 19 (End-to-End 통합테스트) → Task 20 (배포 준비)**.
 
 **보강 3건 해소 내역 (구현 브랜치 커밋):**
 
@@ -54,8 +55,8 @@
 | 기준정보 (SP/cache) | 6–7 | ✅ 완료 (보강 3건 포함, 리뷰 통과, `implement/reference-data` PR) |
 | Logs | 8–11 | ✅ 완료 (PR #4 `af01bad` merge — luna max/glm-5.3 혼합 디스패치, task 리뷰+glm-5.3 high PR 리뷰+사용자 inline 5건 해소) |
 | Configurations | 12–13 | ✅ 완료 (PR #5 `6283349` merge — task 리뷰 2건 + glm-5.3 high APPROVED + 사용자 inline P2 3건 해소) |
-| Api | 14–18 | ✅ 구현 완료 (`e064725`, PR 오픈 예정) — task 리뷰 5건(Task16/17 fix loop 각 2라운드 포함), 단위 166 + 통합 59 |
-| 검증/배포 준비 | 19–20 | 미시작 |
+| Api | 14–18 | ✅ 완료 (PR #6 `c58ca27` merge — task 리뷰 5건 + Opus5 PR 리뷰 Request changes→fix wave→재검토 clean, 단위 166 + 통합 63) |
+| 검증/배포 준비 | 19–20 | 미시작 (`implement/verification` 브랜치 생성됨) |
 | MVP 수동 게이트 | 21 | 미시작 |
 
 ## 환경 (2026-08-23 확인)
