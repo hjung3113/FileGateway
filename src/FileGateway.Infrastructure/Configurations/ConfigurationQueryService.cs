@@ -46,7 +46,9 @@ public sealed class ConfigurationQueryService(
         {
             0 => new(null, MatchCount.Zero),
             1 => new(new LocatedFile(def.Server, files[0].RelativePath, files[0].Entry.Name, files[0].Entry.Size),
-                MatchCount.One),
+                MatchCount.One,
+                IssueFileId(ConfigurationTokenKinds.FileIdCurrentPurpose,
+                    equipmentId, configurationType, null, files[0].Entry.Name)),
             _ => new(null, MatchCount.Many),
         };
     }

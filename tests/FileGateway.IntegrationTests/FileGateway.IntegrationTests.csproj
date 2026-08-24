@@ -30,7 +30,8 @@
     <ProjectReference Include="..\..\src\FileGateway.Api\FileGateway.Api.csproj" />
     <ProjectReference Include="..\..\src\FileGateway.Logs\FileGateway.Logs.csproj" />
     <ProjectReference Include="..\..\src\FileGateway.Configurations\FileGateway.Configurations.csproj" />
-    <ProjectReference Include="..\..\src\FileGateway.Infrastructure\FileGateway.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.0" />
+    <ProjectReference Include="..\FileGateway.UnitTests\FileGateway.UnitTests.csproj" />
   </ItemGroup>
 
 </Project>
