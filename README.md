@@ -395,6 +395,7 @@ curl -s -OJ https://gateway.example/api/v1/files/$FILE_ID/download \
 ### Python (requests)
 
 ```python
+import os
 import requests
 
 GATEWAY = "https://gateway.example"
@@ -407,46 +408,72 @@ def list_logs(equipment_id: str, log_type: str, **params) -> dict:
         f"{GATEWAY}/api/v1/logs",
         headers=HEADERS,
         params={"equipmentId": equipment_id, "logType": log_type, **params},
-        timeout=10,
+        timeout=30,  # 목록 조회는 서버측 FTP 탐색을 동반하므로 다운로드보다 넉넉하게
     )
-    resp.raise_for_status()  # 4xx/5xx는 여기서 예외 -> resp.json()["code"]로 분기 가능
+    resp.raise_for_status()  # 4xx/5xx -> requests.HTTPError, err.response.json()["code"]로 분기
     return resp.json()
+    # 다음 페이지: list_logs(..., continuationToken=result["continuationToken"])로 같은 조건 유지
+    # (조건을 바꾸면서 continuationToken을 같이 보내면 400 InvalidRequest)
 
 
-def download_by_file_id(file_id: str, dest_path: str) -> None:
+def download_by_file_id(file_id: str, file_name: str, dest_dir: str = ".") -> str:
+    dest_path = os.path.join(dest_dir, os.path.basename(file_name))  # 서버 파일명이라도 경로요소는 제거
     with requests.get(
         f"{GATEWAY}/api/v1/files/{file_id}/download",
         headers=HEADERS,
         stream=True,
-        timeout=(10, 60),  # (connect, read) timeout
+        timeout=(10, 60),  # (connect, read) — read는 청크당 idle timeout이지 전체 다운로드 상한이 아님
     ) as resp:
         resp.raise_for_status()
+        expected = int(resp.headers.get("Content-Length", -1))
+        written = 0
         with open(dest_path, "wb") as f:
             for chunk in resp.iter_content(chunk_size=1024 * 64):
                 f.write(chunk)
+                written += len(chunk)
+        if expected >= 0 and written != expected:
+            # 다운로드 시작 후 원격 I/O 오류는 JSON 오류로 전환되지 않고 스트림이 그냥 끊긴다(05 문서 참조).
+            # Content-Length와 실제 기록 바이트 수를 비교해야 잘린 파일을 놓치지 않는다.
+            raise IOError(f"truncated download: expected {expected} bytes, got {written}")
+    return dest_path
 
 
 if __name__ == "__main__":
-    result = list_logs("EQ-001", "EventLog", **{
-        "from": "2026-08-20T00:00:00+09:00",  # requests가 자동으로 %2B 인코딩함
-        "to": "2026-08-21T00:00:00+09:00",
-    })
+    try:
+        result = list_logs(
+            "EQ-001",
+            "EventLog",
+            **{
+                "from": "2026-08-20T00:00:00+09:00",  # requests가 %2B로 자동 encoding
+                "to": "2026-08-21T00:00:00+09:00",
+            },
+        )
+    except requests.HTTPError as err:
+        body = err.response.json()  # {"type","title","status","code","traceId"}
+        raise SystemExit(f"list failed: {body['code']} (traceId={body['traceId']})") from err
+
     items = result["items"]
     if not items:
         raise SystemExit("no matching log")
 
     first = items[0]
-    download_by_file_id(first["fileId"], first["fileName"])
-    print(f"saved {first['fileName']} ({first['size']} bytes)")
+    try:
+        saved_path = download_by_file_id(first["fileId"], first["fileName"])
+    except requests.HTTPError as err:
+        body = err.response.json()
+        raise SystemExit(f"download failed: {body['code']} (traceId={body['traceId']})") from err
+
+    print(f"saved {saved_path} ({first['size']} bytes)")
 ```
 
 - `requests`는 `params=` dict를 넘기면 `+`를 자동으로 `%2B`로 인코딩합니다(README curl 예시처럼 수동 encoding 불필요).
-- 오류 처리: `requests.HTTPError` catch 후 `resp.json()["code"]`로 `InvalidFileId`/`FileIdExpired`/`FileNotFound` 등을 분기하세요.
+- 오류는 `requests.HTTPError`로 던져지며, 실제 응답 body는 예외를 던진 `resp`가 아니라 **`err.response`**에 있습니다(`resp.json()`이 아니라 `err.response.json()`).
+- `Content-Length`와 실제로 받은 바이트 수를 비교하세요. 다운로드 시작 후 원격 파일이 잘리거나 회전되면 서버는 JSON 오류로 전환하지 않고 스트림을 그냥 끊습니다.
 
 ### C# (HttpClient)
 
 ```csharp
-using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 var apiKey = Environment.GetEnvironmentVariable("FILEGATEWAY_API_KEY")
@@ -455,17 +482,31 @@ var apiKey = Environment.GetEnvironmentVariable("FILEGATEWAY_API_KEY")
 using var client = new HttpClient { BaseAddress = new Uri("https://gateway.example") };
 client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
 
-// 1. 목록 조회
+static async Task<InvalidOperationException> ProblemException(HttpResponseMessage resp)
+{
+    // 서버가 항상 JSON 오류 body를 주는 건 아니다(IIS/ARR 레벨 502/503 등은 HTML/빈 body일 수 있음).
+    // ReadFromJsonAsync를 바로 걸면 그 경우 진짜 원인 대신 JsonException이 던져진다.
+    var raw = await resp.Content.ReadAsStringAsync();
+    try
+    {
+        var problem = JsonSerializer.Deserialize<JsonElement>(raw);
+        return new InvalidOperationException(
+            $"{problem.GetProperty("code")}: {problem.GetProperty("title")}");
+    }
+    catch (JsonException)
+    {
+        return new InvalidOperationException($"{(int)resp.StatusCode} {resp.StatusCode}: {raw}");
+    }
+}
+
+// 1. 목록 조회 (다음 페이지는 같은 query + &continuationToken=... — 조건을 바꾸면 400 InvalidRequest)
 var query = "equipmentId=EQ-001&logType=EventLog"
     + "&from=" + Uri.EscapeDataString("2026-08-20T00:00:00+09:00")
     + "&to=" + Uri.EscapeDataString("2026-08-21T00:00:00+09:00");
 
 using var listResponse = await client.GetAsync($"/api/v1/logs?{query}");
 if (!listResponse.IsSuccessStatusCode)
-{
-    var problem = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
-    throw new InvalidOperationException($"{problem.GetProperty("code")}: {problem.GetProperty("title")}");
-}
+    throw await ProblemException(listResponse);
 
 var listBody = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
 var items = listBody.GetProperty("items");
@@ -474,28 +515,31 @@ if (items.GetArrayLength() == 0)
 
 var first = items[0];
 var fileId = first.GetProperty("fileId").GetString();
-var fileName = first.GetProperty("fileName").GetString()!;
+var fileName = Path.GetFileName(first.GetProperty("fileName").GetString()!); // 경로요소 제거
 
 // 2. fileId로 streaming download
 using var downloadResponse = await client.GetAsync(
     $"/api/v1/files/{fileId}/download", HttpCompletionOption.ResponseHeadersRead);
-
 if (!downloadResponse.IsSuccessStatusCode)
-{
-    var problem = await downloadResponse.Content.ReadFromJsonAsync<JsonElement>();
-    throw new InvalidOperationException($"{problem.GetProperty("code")}: {problem.GetProperty("title")}");
-}
+    throw await ProblemException(downloadResponse);
 
 await using var remoteStream = await downloadResponse.Content.ReadAsStreamAsync();
 await using var fileStream = File.Create(fileName);
 await remoteStream.CopyToAsync(fileStream);
 
-Console.WriteLine($"saved {fileName} ({downloadResponse.Content.Headers.ContentLength} bytes)");
+// Content-Length는 서버가 보낸 "예정" 크기다. 실제 기록 바이트(fileStream.Length)와 비교해야
+// 스트림 시작 후 끊긴 다운로드(짧게 받고 그냥 연결 종료)를 놓치지 않는다.
+var expected = downloadResponse.Content.Headers.ContentLength;
+if (expected is { } n && fileStream.Length != n)
+    throw new IOException($"truncated download: expected {n} bytes, got {fileStream.Length}");
+
+Console.WriteLine($"saved {fileName} ({fileStream.Length} bytes)");
 ```
 
-- `Uri.EscapeDataString`으로 `+`를 `%2B`로 인코딩해야 합니다(그대로 보내면 공백으로 디코딩되어 서버 파싱 실패).
-- `HttpCompletionOption.ResponseHeadersRead`로 응답 본문 전체를 버퍼링하지 않고 헤더 수신 즉시 스트림을 열어 그대로 `CopyToAsync`합니다 — 대용량 파일에서 메모리 사용을 낮게 유지합니다.
-- 오류 body는 Problem Details JSON(`code`/`title`/`traceId`)이므로 `code` 필드로 분기하세요.
+- `System.Net.Http.Json`의 `ReadFromJsonAsync` 확장 메서드를 쓰려면 `using System.Net.Http.Json;`이 필요합니다(implicit usings에 기본 포함되지 않음).
+- 오류 body가 항상 JSON이라고 가정하지 마세요 — IIS/ARR 레벨 오류(502/503 등)는 HTML이나 빈 body로 올 수 있어 `ReadFromJsonAsync`를 바로 걸면 원래 상태코드 대신 `JsonException`이 뜹니다. 문자열로 먼저 읽고 방어적으로 파싱하세요.
+- `HttpCompletionOption.ResponseHeadersRead`로 응답 본문 전체를 버퍼링하지 않고 헤더 수신 즉시 스트림을 열어 그대로 `CopyToAsync`합니다 — 대용량 파일에서 메모리 사용을 낮게 유지합니다. 기본 `HttpClient.Timeout`(100초)은 헤더 수신까지만 적용되고 이후 body copy는 시간 제한이 없습니다(오래 걸리는 다운로드에서 정상). 응답이 없는 채로 멈춘 연결까지 끊고 싶으면 `CopyToAsync(fileStream, cancellationToken)`에 타임아웃용 `CancellationToken`을 넘기세요.
+- 오류 body는 Problem Details 형태(`code`/`title`/`traceId`) JSON이지만 `Content-Type`은 `application/json`이며 `application/problem+json`이 아닙니다 — 미디어 타입으로 매칭하는 역직렬화기를 쓴다면 유의하세요.
 
 ## 구조
 
