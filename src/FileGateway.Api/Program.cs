@@ -26,11 +26,13 @@ builder.Services.Configure<AuthenticationOptions>(builder.Configuration.GetSecti
 // DataProtection 키 내구성: 미설정 시 기본 키 링은 프로세스/IIS App Pool 재시작과 무관하지 않으나
 // 배포 환경(프로필 없는 App Pool identity)에서는 휘발성이므로 명시적 디렉터리를 요구한다.
 var keyDir = builder.Configuration["DataProtection:KeyDirectory"];
+var dp = builder.Services.AddDataProtection(o => o.ApplicationDiscriminator = "FileGateway");
 if (!string.IsNullOrEmpty(keyDir))
-    builder.Services.AddDataProtection(o => o.ApplicationDiscriminator = "FileGateway")
-        .PersistKeysToFileSystem(new DirectoryInfo(keyDir));
-else
-    builder.Services.AddDataProtection(o => o.ApplicationDiscriminator = "FileGateway");
+{
+    dp.PersistKeysToFileSystem(new DirectoryInfo(keyDir));
+    if (OperatingSystem.IsWindows())
+        dp.ProtectKeysWithDpapi(protectToLocalMachine: true); // App Pool 서비스 계정(프로필 없는 local machine 범위)으로 복호화 제한
+}
 builder.Services.AddSingleton<ITokenCodec, DataProtectionTokenCodec>();
 builder.Services.AddSingleton<FtpConcurrencyLimiter>();
 builder.Services.AddSingleton<FtpOptions>(sp => sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value.Ftp
