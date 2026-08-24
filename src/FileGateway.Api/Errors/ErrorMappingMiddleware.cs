@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using FileGateway.Core.Errors;
+using FileGateway.Core.Files;
 
 namespace FileGateway.Api.Errors;
 
@@ -22,6 +23,19 @@ public sealed class ErrorMappingMiddleware(RequestDelegate next)
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
             context.Items["Audit.ErrorCode"] = "ClientCancelled"; // 연결 종료에 맡긴다(새 응답 없음)
+        }
+        catch (FileAccessException ex)
+        {
+            var code = ex.Error switch
+            {
+                FileAccessError.ProtocolError => "FileServerProtocolError",
+                FileAccessError.FileNotFound => "FileNotFound",
+                _ => "FileServerUnavailable",
+            };
+            var (status, title) = FileGatewayErrors.Map(code);
+            context.Items["Audit.ErrorCode"] = code;
+            if (context.Response.HasStarted) { /* 다운로드 중 오류: 응답 불가, 분류만 감사에 남긴다 */ }
+            else await WriteProblem(context, status, code, title);
         }
         catch (Exception ex)
         {

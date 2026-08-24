@@ -163,6 +163,28 @@ public class LogEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
+    public async Task Download_audit_records_open_time_size_not_resolve_time_size()
+    {
+        const int resolveSize = 999, actualSize = 8;
+        var logs = new CollectingLoggerProvider();
+        using var factory = new ApiFactory(s => s.AddSingleton<ILoggerProvider>(logs));
+        factory.SetSnapshot(Snapshot());
+        factory.UseFakeFtp(ftp =>
+        {
+            ftp.AddFile("Logs/all/2026082218_Event.zip", new byte[actualSize]);
+            ftp.OverrideListingSize("Logs/all/2026082218_Event.zip", resolveSize); // resolve/open 사이 크기 변동 race
+        });
+        using var response = await factory.CreateClient()
+            .GetAsync("/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2026-08-22T18:00:00%2B09:00&to=2026-08-22T19:00:00%2B09:00");
+        Assert.Equal(200, (int)response.StatusCode);
+        Assert.Equal(actualSize, response.Content.Headers.ContentLength);
+
+        var entry = logs.Entries.Single(e => e.Category == "FileGateway.Audit");
+        var fileSize = long.Parse(Regex.Match(entry.Message, @"fileSize (\S+) status").Groups[1].Value);
+        Assert.Equal(actualSize, fileSize); // open 시점 크기, 목록 시점 크기 아님
+    }
+
+    [Fact]
     public async Task Error_body_has_no_physical_path()
     {
         using var response = await _factory.CreateClient()
