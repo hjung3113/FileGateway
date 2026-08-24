@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using FileGateway.Core.Files;
 using FileGateway.Infrastructure.ReferenceData;
@@ -19,7 +21,53 @@ public class FileAccessErrorMappingTests
         ],
         []));
 
-    /// <summary>resolve(목록)는 성공하고 open에서 지정한 FileAccessError로 실패하는 IFileAccess.</summary>
+    /// <summary>open에서 지정한 FileAccessError로 실패하며, 원본 예외를 감싸 로그 비노출 검증에 쓴다.</summary>
+    private sealed class FailingOpenFileAccessWithInner(FileAccessError error) : IFileAccess
+    {
+        public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
+            => Task.FromResult(new RemoteDirectoryListing(true,
+                [new RemoteFileEntry("2026082218_Event.zip", 8)]));
+
+        public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+            => Task.FromResult(8L);
+
+        public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
+            => Task.FromResult(true);
+
+        public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string path, CancellationToken ct)
+            => throw new FileAccessException(error, $"simulated {error}",
+                new Exception("secret-host ftp.example.internal:21 raw socket detail"));
+    }
+
+    public static TheoryData<FileAccessError> AllErrors => new()
+    {
+        FileAccessError.ConnectionFailed,
+        FileAccessError.AuthenticationFailed,
+        FileAccessError.Timeout,
+        FileAccessError.ProtocolError,
+        FileAccessError.FileNotFound,
+        FileAccessError.IoFailure,
+    };
+
+    [Theory]
+    [MemberData(nameof(AllErrors))]
+    public async Task Open_failure_logs_sanitized_error_and_traceId(FileAccessError error)
+    {
+        var logs = new CollectingLoggerProvider();
+        using var factory = new ApiFactory(s => s.AddSingleton<ILoggerProvider>(logs));
+        factory.SetSnapshot(Snapshot());
+        factory.SetFileAccess(new FailingOpenFileAccessWithInner(error));
+        using var response = await factory.CreateClient().GetAsync(DownloadPath);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        var entry = Assert.Single(logs.Entries,
+            e => e.Category == "FileGateway.Api.Errors.ErrorMappingMiddleware" && e.Level == LogLevel.Warning);
+        Assert.Contains(error.ToString(), entry.Message);
+        Assert.Contains(body.GetProperty("traceId").GetString()!, entry.Message); // traceId 상관관계
+        Assert.DoesNotContain("secret-host", entry.Message); // 원본 예외 세부정보 비노출
+    }
+
+    /// <summary>기존: resolve(목록)는 성공하고 open에서 지정한 FileAccessError로 실패하는 IFileAccess.</summary>
     private sealed class FailingOpenFileAccess(FileAccessError error) : IFileAccess
     {
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
