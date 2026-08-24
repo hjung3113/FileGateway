@@ -388,6 +388,115 @@ curl -s -OJ https://gateway.example/api/v1/files/$FILE_ID/download \
 
 `code`로 분기하고, 원인 추적은 `traceId`로 서버 로그와 연계합니다. 물리 경로/credential/DB 진단 정보는 오류 응답에 포함되지 않습니다.
 
+## 클라이언트 샘플 코드
+
+목록 조회 → `fileId` 선택 → streaming download까지 end-to-end 예시입니다. 전체 파일을 메모리에 올리지 않고 스트림 그대로 디스크에 씁니다.
+
+### Python (requests)
+
+```python
+import requests
+
+GATEWAY = "https://gateway.example"
+API_KEY = "..."  # 환경변수/Secret에서 로드, 코드에 하드코딩 금지
+HEADERS = {"X-Api-Key": API_KEY}
+
+
+def list_logs(equipment_id: str, log_type: str, **params) -> dict:
+    resp = requests.get(
+        f"{GATEWAY}/api/v1/logs",
+        headers=HEADERS,
+        params={"equipmentId": equipment_id, "logType": log_type, **params},
+        timeout=10,
+    )
+    resp.raise_for_status()  # 4xx/5xx는 여기서 예외 -> resp.json()["code"]로 분기 가능
+    return resp.json()
+
+
+def download_by_file_id(file_id: str, dest_path: str) -> None:
+    with requests.get(
+        f"{GATEWAY}/api/v1/files/{file_id}/download",
+        headers=HEADERS,
+        stream=True,
+        timeout=(10, 60),  # (connect, read) timeout
+    ) as resp:
+        resp.raise_for_status()
+        with open(dest_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=1024 * 64):
+                f.write(chunk)
+
+
+if __name__ == "__main__":
+    result = list_logs("EQ-001", "EventLog", **{
+        "from": "2026-08-20T00:00:00+09:00",  # requests가 자동으로 %2B 인코딩함
+        "to": "2026-08-21T00:00:00+09:00",
+    })
+    items = result["items"]
+    if not items:
+        raise SystemExit("no matching log")
+
+    first = items[0]
+    download_by_file_id(first["fileId"], first["fileName"])
+    print(f"saved {first['fileName']} ({first['size']} bytes)")
+```
+
+- `requests`는 `params=` dict를 넘기면 `+`를 자동으로 `%2B`로 인코딩합니다(README curl 예시처럼 수동 encoding 불필요).
+- 오류 처리: `requests.HTTPError` catch 후 `resp.json()["code"]`로 `InvalidFileId`/`FileIdExpired`/`FileNotFound` 등을 분기하세요.
+
+### C# (HttpClient)
+
+```csharp
+using System.Net.Http.Headers;
+using System.Text.Json;
+
+var apiKey = Environment.GetEnvironmentVariable("FILEGATEWAY_API_KEY")
+    ?? throw new InvalidOperationException("FILEGATEWAY_API_KEY not set");
+
+using var client = new HttpClient { BaseAddress = new Uri("https://gateway.example") };
+client.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+
+// 1. 목록 조회
+var query = "equipmentId=EQ-001&logType=EventLog"
+    + "&from=" + Uri.EscapeDataString("2026-08-20T00:00:00+09:00")
+    + "&to=" + Uri.EscapeDataString("2026-08-21T00:00:00+09:00");
+
+using var listResponse = await client.GetAsync($"/api/v1/logs?{query}");
+if (!listResponse.IsSuccessStatusCode)
+{
+    var problem = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+    throw new InvalidOperationException($"{problem.GetProperty("code")}: {problem.GetProperty("title")}");
+}
+
+var listBody = await listResponse.Content.ReadFromJsonAsync<JsonElement>();
+var items = listBody.GetProperty("items");
+if (items.GetArrayLength() == 0)
+    throw new InvalidOperationException("no matching log");
+
+var first = items[0];
+var fileId = first.GetProperty("fileId").GetString();
+var fileName = first.GetProperty("fileName").GetString()!;
+
+// 2. fileId로 streaming download
+using var downloadResponse = await client.GetAsync(
+    $"/api/v1/files/{fileId}/download", HttpCompletionOption.ResponseHeadersRead);
+
+if (!downloadResponse.IsSuccessStatusCode)
+{
+    var problem = await downloadResponse.Content.ReadFromJsonAsync<JsonElement>();
+    throw new InvalidOperationException($"{problem.GetProperty("code")}: {problem.GetProperty("title")}");
+}
+
+await using var remoteStream = await downloadResponse.Content.ReadAsStreamAsync();
+await using var fileStream = File.Create(fileName);
+await remoteStream.CopyToAsync(fileStream);
+
+Console.WriteLine($"saved {fileName} ({downloadResponse.Content.Headers.ContentLength} bytes)");
+```
+
+- `Uri.EscapeDataString`으로 `+`를 `%2B`로 인코딩해야 합니다(그대로 보내면 공백으로 디코딩되어 서버 파싱 실패).
+- `HttpCompletionOption.ResponseHeadersRead`로 응답 본문 전체를 버퍼링하지 않고 헤더 수신 즉시 스트림을 열어 그대로 `CopyToAsync`합니다 — 대용량 파일에서 메모리 사용을 낮게 유지합니다.
+- 오류 body는 Problem Details JSON(`code`/`title`/`traceId`)이므로 `code` 필드로 분기하세요.
+
 ## 구조
 
 레이어 다이어그램은 위 "아키텍처 한눈에 보기" 참조. 계층별 책임:
