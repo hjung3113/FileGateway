@@ -35,6 +35,8 @@ public sealed class HistoryResolver(IFileAccess fileAccess)
             foreach (var e in listing.Files)
             {
                 if (!glob.Matches(e.Name)) continue;
+                // 완료 marker 자체는 결과에 포함하지 않는다(04b) — glob이 marker와 일치해도 제외.
+                if (FileNameComparison.Same(dir + "/" + e.Name, markerRel)) continue;
                 if (!seen.Add($"{date:O}|{e.Name}"))
                     throw new FileGatewayException("FileDefinitionConflict", $"duplicate: {e.Name}");
                 files.Add(new(date, dir + "/" + e.Name, e));

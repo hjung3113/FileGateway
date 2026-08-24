@@ -29,8 +29,8 @@ public class ConfigurationQueryServiceTests
 
     private static ConfigurationQueryService Service(FakeFileAccess ftp)
         => new(new FixedView(Snapshot()), new CurrentResolver(ftp), new HistoryResolver(ftp), ftp,
-               Codec, TimeProvider.System, TimeSpan.FromDays(366), 50,
-               TimeSpan.FromHours(24), TimeSpan.FromMinutes(30));
+            Codec, TimeProvider.System, TimeSpan.FromDays(366), 50, 200,
+            TimeSpan.FromHours(24), TimeSpan.FromMinutes(30));
 
     private static void SeedSnapshot(FakeFileAccess ftp, int day, params string[] files)
     {
@@ -54,6 +54,15 @@ public class ConfigurationQueryServiceTests
             new ConfigurationHistoryQuery("EQ-001", "PM", From, From.AddDays(367), null, null),
             CancellationToken.None));
         Assert.Equal("InvalidRequest", tooWide.Code);
+    }
+
+    [Fact]
+    public async Task History_limit_above_maximum_is_invalid()
+    {
+        var svc = Service(new FakeFileAccess());
+        var ex = await Assert.ThrowsAsync<FileGatewayException>(() => svc.GetHistoryAsync(
+            new ConfigurationHistoryQuery("EQ-001", "PM", From, To, 201, null), CancellationToken.None));
+        Assert.Equal("InvalidRequest", ex.Code);
     }
 
     [Fact]

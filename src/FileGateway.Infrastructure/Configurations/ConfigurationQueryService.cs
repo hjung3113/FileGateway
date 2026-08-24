@@ -23,6 +23,7 @@ public sealed class ConfigurationQueryService(
     TimeProvider clock,
     TimeSpan historyMaxQueryRange,
     int limitDefault,
+    int limitMaximum,
     TimeSpan fileTtl,
     TimeSpan pageTtl) : IConfigurationQueryService
 {
@@ -54,6 +55,8 @@ public sealed class ConfigurationQueryService(
     {
         if (q.Limit is < 1)
             throw new FileGatewayException("InvalidRequest", "limit must be at least 1");
+        if (q.Limit is int cfgLimit && cfgLimit > limitMaximum)
+            throw new FileGatewayException("InvalidRequest", $"limit exceeds maximum of {limitMaximum}");
         // from/to 필수·범위 검증은 Api 파싱 후에도 서비스가 방어한다(Global Constraints).
         if (q.From >= q.To)
             throw new FileGatewayException("InvalidRequest", "from must be before to");
@@ -102,7 +105,8 @@ public sealed class ConfigurationQueryService(
             var match = (await currentResolver.ResolveAsync(def, ct))
                 .SingleOrDefault(f => FileNameComparison.Same(f.Entry.Name, fileName))
                 ?? throw new FileGatewayException("FileNotFound", "current configuration file no longer exists");
-            return new(def.Server, match.RelativePath, match.Entry.Name, match.Entry.Size);
+        var currentSize = await fileAccess.StatFileAsync(def.Server, match.RelativePath, ct);
+        return new(def.Server, match.RelativePath, match.Entry.Name, currentSize);
         }
 
         var ts = payload.Claims.TryGetValue("ts", out var t) && t.Length > 0

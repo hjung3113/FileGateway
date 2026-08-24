@@ -42,6 +42,21 @@ public class HistoryResolverTests
     }
 
     [Fact]
+    public async Task Marker_matching_broad_glob_is_excluded_from_results()
+    {
+        // FilePattern이 marker와도 일치하는 경우 — marker 자체는 결과가 아니다(04b).
+        var def = new ResolvedConfigurationDefinition(new EquipmentConfigurationDefinition("EQ-001", "PM", "SRV1",
+            new CurrentRule("PM/current", "*"),
+            new HistoryRule("PM/history/{yyyy}/{MM}/{dd}", "*", "PM/history/{yyyy}/{MM}/{dd}/_DONE")),
+            Srv);
+        var ftp = new FakeFileAccess();
+        Seed(ftp, 22, "PM1.cfg");
+        var files = await new HistoryResolver(ftp).ResolveAsync(def, Range(22), CancellationToken.None);
+        var name = Assert.Single(files).Entry.Name;
+        Assert.Equal("PM1.cfg", name); // _DONE은 glob 일치에도 제외
+    }
+
+    [Fact]
     public async Task Marker_file_itself_is_not_a_result()
     {
         var ftp = new FakeFileAccess();
