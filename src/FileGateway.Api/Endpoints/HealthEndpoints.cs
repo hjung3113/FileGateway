@@ -18,9 +18,16 @@ public static class HealthEndpoints
             try
             {
                 await view.GetSnapshotAsync(timeout.Token);
-                return view is ReferenceDataCache cache
+                // refresh 실패 후 stale last-known-good을 조용히 서빙 중인지 확인:
+                // 마지막 시도(성공/실패)가 실패라면 stale=true로 Degraded 보고.
+                if (view is ReferenceDataCache cache &&
+                    cache.LastRefreshFailedAt is { } failedAt &&
+                    (cache.LastGoodRefreshAt?.UtcDateTime ?? DateTime.MinValue) < failedAt)
+                    return Results.Ok(new { status = "Degraded", stale = true,
+                        lastGoodRefreshAt = cache.LastGoodRefreshAt });
+                return view is ReferenceDataCache c
                     ? Results.Ok(new { status = "Healthy", stale = false,
-                        lastGoodRefreshAt = cache.LastGoodRefreshAt })
+                        lastGoodRefreshAt = c.LastGoodRefreshAt })
                     : Results.Ok(new { status = "Healthy", stale = false });
             }
             catch (Exception ex) when (ex is FileGatewayException or OperationCanceledException)

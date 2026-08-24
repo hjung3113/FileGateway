@@ -10,7 +10,8 @@ public sealed class DownloadResult(LocatedFile file, IFileAccess fileAccess) : I
     {
         var open = await fileAccess.OpenReadAsync(file.Server, file.RelativePath, ctx.RequestAborted);
         ctx.Response.StatusCode = 200;
-        ctx.Response.ContentLength = open.Length;                       // 시작 직전 크기 = 전송 상한
+        ctx.Response.ContentLength = open.Length;                     // 시작 직전 크기 = 전송 상한
+        ctx.Items["Audit.FileSize"] = open.Length;                    // 감사에는 open 시점 크기(권위적)를 남긴다
         ctx.Response.ContentType = "application/octet-stream";
         ctx.Response.Headers.ContentDisposition =
             ContentDispositionHelper.Attachment(file.FileName);
