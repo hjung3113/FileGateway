@@ -1,7 +1,10 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using FileGateway.Infrastructure.ReferenceData;
 using FileGateway.UnitTests.TestUtils;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace FileGateway.IntegrationTests.Api;
 
@@ -139,6 +142,22 @@ public class LogEndpointTests : IClassFixture<ApiFactory>
     {
         var error = await GetError("/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2020-01-01T00:00:00%2B09:00&to=2020-01-02T00:00:00%2B09:00");
         Assert.Equal("FileNotFound", error.code);
+    }
+
+    [Fact]
+    public async Task Download_audit_log_carries_fileId()
+    {
+        var logs = new CollectingLoggerProvider();
+        using var factory = new ApiFactory(s => s.AddSingleton<ILoggerProvider>(logs));
+        factory.SetSnapshot(Snapshot());
+        factory.SetFileAccess(FakeFtp());
+        using var response = await factory.CreateClient()
+            .GetAsync("/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2026-08-22T18:00:00%2B09:00&to=2026-08-22T19:00:00%2B09:00");
+        Assert.Equal(200, (int)response.StatusCode);
+
+        var entry = logs.Entries.Single(e => e.Category == "FileGateway.Audit");
+        var fileId = Regex.Match(entry.Message, @"fileId (\S+) fileName").Groups[1].Value;
+        Assert.False(string.IsNullOrEmpty(fileId), $"audit message missing fileId: {entry.Message}");
     }
 
     [Fact]

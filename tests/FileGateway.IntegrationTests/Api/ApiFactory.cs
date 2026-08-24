@@ -15,6 +15,11 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     private readonly MutableTimeProvider _clock = new(new DateTimeOffset(2026, 8, 23, 3, 0, 0, TimeSpan.Zero));
     private readonly SwitchableFileAccess _fileAccess = new(new ThrowingFileAccess());
     private readonly FixedSnapshotView _view = new(null);
+    public ApiFactory() { }
+
+    internal ApiFactory(Action<IServiceCollection>? extraServices) => _extraServices = extraServices;
+
+    private readonly Action<IServiceCollection>? _extraServices;
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -31,6 +36,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
                 [new() { Key = "test-key", CallerId = "caller-1" }]);
             services.AddSingleton<IReferenceDataView>(_view);
             services.AddSingleton<IFileAccess>(_fileAccess);
+            _extraServices?.Invoke(services);
             services.AddSingleton<TimeProvider>(_clock);
         });
     }

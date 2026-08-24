@@ -7,5 +7,5 @@ public sealed record PagedResult<T>(IReadOnlyList<T> Items, string? Continuation
 
 public enum MatchCount { Zero, One, Many }
 
-/// <summary>단일 논리 파일 식별 결과. File은 Count가 One일 때만 채워진다.</summary>
-public sealed record SingleFileMatch(LocatedFile? File, MatchCount Count);
+/// <summary>단일 논리 파일 식별 결과. File/FileId는 Count가 One일 때만 채워진다(FileId는 ToDescriptor와 동일 규칙으로 발급한 보호 토큰).</summary>
+public sealed record SingleFileMatch(LocatedFile? File, MatchCount Count, string? FileId = null);

@@ -74,7 +74,7 @@ public sealed class LogQueryService(
         {
             0 => new(null, MatchCount.Zero),
             1 => new(new LocatedFile(def.Server, files[0].RelativePath, files[0].Entry.Name, files[0].Entry.Size),
-                MatchCount.One),
+                MatchCount.One, MintFileId(files[0], query)),
             _ => new(null, MatchCount.Many),
         };
     }
@@ -116,6 +116,15 @@ public sealed class LogQueryService(
 
     private LogFileDescriptor ToDescriptor(ResolvedLogDefinition def, ResolvedLogFile f, LogListQuery q)
     {
+        var fileId = MintFileId(f, q);
+        return new(fileId, q.EquipmentId, q.LogType, f.Metadata.Subtype, f.Metadata.Timestamp,
+            f.Entry.Name, f.Entry.Size, def.Definition.GenerationType == GenerationType.Continuous,
+            f.Metadata.Attributes);
+    }
+
+    // fileId 발급(목록/단일 다운로드 공통): LocateByFileIdAsync가 재해석 가능한 동일 claim 구조.
+    private string MintFileId(ResolvedLogFile f, LogListQuery q)
+    {
         var claims = new Dictionary<string, string>
         {
             ["equipmentId"] = q.EquipmentId,
@@ -123,11 +132,8 @@ public sealed class LogQueryService(
             ["ts"] = f.Metadata.Timestamp?.ToString("O", CultureInfo.InvariantCulture) ?? "",
             ["fileName"] = f.Entry.Name,
         };
-        var fileId = tokens.Protect(new TokenPayload(LogTokenKinds.FileIdPurpose, claims,
+        return tokens.Protect(new TokenPayload(LogTokenKinds.FileIdPurpose, claims,
             clock.GetUtcNow(), fileTtl));
-        return new(fileId, q.EquipmentId, q.LogType, f.Metadata.Subtype, f.Metadata.Timestamp,
-            f.Entry.Name, f.Entry.Size, def.Definition.GenerationType == GenerationType.Continuous,
-            f.Metadata.Attributes);
     }
 
     // 진입부 1회 정규화: 빈 subtype는 미지정과 같은 의미로 바인딩(Canonical)·필터(ApplyFilters)
