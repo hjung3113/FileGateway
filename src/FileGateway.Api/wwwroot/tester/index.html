@@ -1396,6 +1396,7 @@
           endpoint: "/api/v1/logs",
           mode: "json",
           form: "logs",
+          inputGroup: "logs",
           note: "Hourly/Daily use from and to; Continuous logs reject time filters."
         },
         {
@@ -1406,6 +1407,7 @@
           endpoint: "/api/v1/logs/download",
           mode: "download",
           form: "logs",
+          inputGroup: "logs",
           note: "The same logical log criteria resolve one downloadable file."
         },
         {
@@ -1436,6 +1438,7 @@
           endpoint: "/api/v1/configurations/current",
           mode: "json",
           form: "current",
+          inputGroup: "current",
           note: "Current returns the complete file set without pagination."
         },
         {
@@ -1446,6 +1449,7 @@
           endpoint: "/api/v1/configurations/current/download",
           mode: "download",
           form: "current",
+          inputGroup: "current",
           note: "This endpoint downloads only when the current criteria match one file."
         },
         {
@@ -1460,13 +1464,18 @@
         }
       ];
 
-      const operations = new Map(operationDefinitions.map((definition) => [
-        definition.id,
-        { ...definition, values: {}, criteria: null, busy: false, rawJson: "" }
-      ]));
+      const sharedValuesByGroup = new Map();
+      const operations = new Map(operationDefinitions.map((definition) => {
+        const values = definition.inputGroup
+          ? sharedValuesByGroup.get(definition.inputGroup) || {}
+          : {};
+        if (definition.inputGroup) {
+          sharedValuesByGroup.set(definition.inputGroup, values);
+        }
+        return [definition.id, { ...definition, values, criteria: null, busy: false, responseState: null }];
+      }));
       let activeOperation = null;
       let activeOperationId = "";
-      let requestSequence = 0;
 
       gatewayOrigin.textContent = window.location.origin;
 
@@ -1556,6 +1565,13 @@
         copyJson.disabled = true;
         copyJson.setAttribute("data-copy-value", "");
         copyJson.textContent = "Copy JSON";
+      }
+
+      function storeResponseState(operation, state) {
+        operation.responseState = state;
+        if (activeOperationId === operation.id) {
+          renderResponseState(operation, state);
+        }
       }
 
       function showEmptyResponse() {
@@ -1841,11 +1857,10 @@
       }
 
       function collectFormValues(operation) {
-        const values = { ...operation.values };
+        const values = operation.values;
         operationForm.querySelectorAll("[data-field]").forEach((input) => {
           values[input.dataset.field] = input.value.trim();
         });
-        operation.values = values;
         syncAttributes(operation);
         values.attributes = Array.isArray(operation.values.attributes)
           ? operation.values.attributes.map((attribute) => ({ ...attribute }))
@@ -1859,7 +1874,7 @@
         if (value) {
           return value;
         }
-        showClientError(`${label} is required.`, input);
+        showClientError(operation, `${label} is required.`, input);
         return null;
       }
 
@@ -1910,25 +1925,29 @@
         parent.append(container);
       }
 
-      function showClientError(message, focusTarget) {
+      function renderClientErrorState(state) {
         responseBody.replaceChildren();
         setResponseMetrics("Not sent", "error", null, null);
         clearJsonCopy();
         const panel = createElement("div", "error-message");
         panel.append(
           createElement("strong", null, "Request validation"),
-          createElement("p", null, message)
+          createElement("p", null, state.message)
         );
         responseBody.append(panel);
+      }
+
+      function showClientError(operation, message, focusTarget) {
+        storeResponseState(operation, { kind: "client-error", message });
         if (focusTarget) {
           focusTarget.focus();
         }
       }
 
-      function showLoading(url) {
+      function renderLoadingState(state) {
         responseBody.replaceChildren();
         setResponseMetrics("Sending…", "loading", null, null);
-        appendRequestUrl(responseBody, url);
+        appendRequestUrl(responseBody, state.url);
         const panel = createElement("div", "loading-message");
         panel.append(
           createElement("strong", null, "Sending…"),
@@ -1938,10 +1957,14 @@
         clearJsonCopy();
       }
 
-      function showNetworkError(url, duration) {
+      function showLoading(operation, url) {
+        storeResponseState(operation, { kind: "loading", url });
+      }
+
+      function renderNetworkErrorState(state) {
         responseBody.replaceChildren();
-        setResponseMetrics("Network error", "error", duration, null);
-        appendRequestUrl(responseBody, url);
+        setResponseMetrics("Network error", "error", state.duration, null);
+        appendRequestUrl(responseBody, state.url);
         const panel = createElement("div", "error-message");
         panel.append(
           createElement("strong", null, "Network error"),
@@ -1949,6 +1972,10 @@
         );
         responseBody.append(panel);
         clearJsonCopy();
+      }
+
+      function showNetworkError(operation, url, duration) {
+        storeResponseState(operation, { kind: "network-error", url, duration });
       }
 
       function isJsonContentType(contentType) {
@@ -2311,43 +2338,96 @@
         parent.append(actions);
       }
 
-      function renderJsonSuccess(operation, response, data, rawText, duration, url) {
-        const size = responseBodySize(response, rawText);
-        responseBody.replaceChildren();
-        setResponseMetrics(statusText(response), "success", duration, size);
-        appendRequestUrl(responseBody, url);
-
-        if (data && typeof data === "object" && !Array.isArray(data) && typeof data.fileId === "string" && data.fileId.length > 0) {
-          appendFileIdActions(responseBody, data.fileId);
+      function renderResponseState(operation, state) {
+        switch (state.kind) {
+          case "loading":
+            renderLoadingState(state);
+            break;
+          case "client-error":
+            renderClientErrorState(state);
+            break;
+          case "network-error":
+            renderNetworkErrorState(state);
+            break;
+          case "json-success":
+            renderJsonSuccessState(operation, state);
+            break;
+          case "non-json-success":
+            renderNonJsonSuccessState(state);
+            break;
+          case "http-error":
+            renderHttpErrorState(state);
+            break;
+          case "download-success":
+            renderDownloadState(state);
+            break;
+          case "json-parse-error":
+            renderJsonParseErrorState(state);
+            break;
+          default:
+            showEmptyResponse();
+            break;
         }
-        if (operation.form === "equipment") {
-          appendCatalogCollections(responseBody, data);
-        } else {
-          appendItems(responseBody, data);
-        }
-        if (data && typeof data === "object" && !Array.isArray(data)) {
-          const token = typeof data.continuationToken === "string" ? data.continuationToken : "";
-          appendPagination(operation, responseBody, token);
-        }
-        appendJsonSection(responseBody, data, rawText);
       }
 
-      function renderNonJsonSuccess(response, body, duration, url) {
-        const size = responseBodySize(response, body);
+      function renderJsonSuccessState(operation, state) {
         responseBody.replaceChildren();
-        setResponseMetrics(statusText(response), "success", duration, size);
+        setResponseMetrics(state.status, "success", state.duration, state.size);
+        appendRequestUrl(responseBody, state.url);
+
+        if (state.data && typeof state.data === "object" && !Array.isArray(state.data) && typeof state.data.fileId === "string" && state.data.fileId.length > 0) {
+          appendFileIdActions(responseBody, state.data.fileId);
+        }
+        if (operation.form === "equipment") {
+          appendCatalogCollections(responseBody, state.data);
+        } else {
+          appendItems(responseBody, state.data);
+        }
+        if (state.data && typeof state.data === "object" && !Array.isArray(state.data)) {
+          const token = typeof state.data.continuationToken === "string" ? state.data.continuationToken : "";
+          appendPagination(operation, responseBody, token);
+        }
+        appendJsonSection(responseBody, state.data, state.rawText);
+      }
+
+      function renderJsonSuccess(operation, response, data, rawText, duration, url) {
+        storeResponseState(operation, {
+          kind: "json-success",
+          status: statusText(response),
+          duration,
+          size: responseBodySize(response, rawText),
+          url,
+          data,
+          rawText
+        });
+      }
+
+      function renderNonJsonSuccessState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics(state.status, "success", state.duration, state.size);
         clearJsonCopy();
-        appendRequestUrl(responseBody, url);
+        appendRequestUrl(responseBody, state.url);
         const message = createElement("div", "download-state");
         message.append(
           createElement("h3", null, "Non-JSON success response"),
           createElement("p", null, "The endpoint returned a successful response without a JSON content type.")
         );
         responseBody.append(message);
-        appendRawJson(responseBody, body);
+        appendRawJson(responseBody, state.body);
       }
 
-      function renderProblemDetails(responseBodyData, rawText) {
+      function renderNonJsonSuccess(operation, response, body, duration, url) {
+        storeResponseState(operation, {
+          kind: "non-json-success",
+          status: statusText(response),
+          duration,
+          size: responseBodySize(response, body),
+          url,
+          body
+        });
+      }
+
+      function renderProblemDetails(parent, responseBodyData, rawText) {
         const fragment = document.getElementById("problem-details-template").content.cloneNode(true);
         const section = fragment.firstElementChild;
         section.querySelector("#problem-status").textContent = responseBodyData.status == null ? "—" : String(responseBodyData.status);
@@ -2356,10 +2436,10 @@
         section.querySelector("#problem-detail").textContent = responseBodyData.detail == null ? "—" : String(responseBodyData.detail);
         section.querySelector("#problem-trace").textContent = responseBodyData.traceId == null ? "—" : String(responseBodyData.traceId);
         section.querySelector("#problem-raw-response").textContent = rawText || "(empty body)";
-        responseBody.append(section);
+        parent.append(section);
       }
 
-      function appendRecoveryGuidance(data) {
+      function appendRecoveryGuidance(parent, data) {
         if (!data || data.code !== "MultipleFilesMatched") {
           return;
         }
@@ -2368,7 +2448,7 @@
           createElement("strong", null, "Choose a fileId"),
           createElement("p", null, "Run a list operation, then use a result's Metadata or Download action for the intended file.")
         );
-        responseBody.append(panel);
+        parent.append(panel);
       }
 
       function isProblemDetails(contentType, data) {
@@ -2382,52 +2462,32 @@
         ));
       }
 
-      async function renderHttpError(response, url, startedAt, isActive) {
-        let body;
-        try {
-          body = await response.text();
-        } catch {
-          if (isActive()) {
-            showNetworkError(url, performance.now() - startedAt);
-          }
-          return;
-        }
-
-        if (!isActive()) {
-          return;
-        }
-
-        const duration = performance.now() - startedAt;
-        const size = responseBodySize(response, body);
+      function renderHttpErrorState(state) {
         responseBody.replaceChildren();
-        setResponseMetrics(statusText(response), "error", duration, size);
+        setResponseMetrics(state.status, "error", state.duration, state.size);
         clearJsonCopy();
-        appendRequestUrl(responseBody, url);
+        appendRequestUrl(responseBody, state.url);
 
-        const contentType = response.headers.get("Content-Type") || "";
-        if (isJsonContentType(contentType)) {
-          let data;
-          try {
-            data = JSON.parse(body);
-          } catch {
-            const panel = createElement("div", "error-message");
-            panel.append(
-              createElement("strong", null, "JSON parse failed"),
-              createElement("p", null, "The API error body could not be parsed as JSON.")
-            );
-            responseBody.append(panel);
-            appendRawJson(responseBody, body);
-            clearJsonCopy();
-            return;
-          }
+        if (state.errorKind === "json-parse") {
+          const panel = createElement("div", "error-message");
+          panel.append(
+            createElement("strong", null, "JSON parse failed"),
+            createElement("p", null, "The API error body could not be parsed as JSON.")
+          );
+          responseBody.append(panel);
+          appendRawJson(responseBody, state.rawText);
+          return;
+        }
 
-          if (isProblemDetails(contentType, data)) {
-            renderProblemDetails(data, body);
-            appendRecoveryGuidance(data);
-          } else {
-            appendJsonSection(responseBody, data, body, "API error JSON");
-            appendRecoveryGuidance(data);
-          }
+        if (state.errorKind === "problem") {
+          renderProblemDetails(responseBody, state.data, state.rawText);
+          appendRecoveryGuidance(responseBody, state.data);
+          return;
+        }
+
+        if (state.errorKind === "json") {
+          appendJsonSection(responseBody, state.data, state.rawText, "API error JSON");
+          appendRecoveryGuidance(responseBody, state.data);
           return;
         }
 
@@ -2437,13 +2497,103 @@
           createElement("p", null, "The API returned an error body without a JSON content type.")
         );
         responseBody.append(panel);
-        appendRawJson(responseBody, body);
+        appendRawJson(responseBody, state.rawText);
+      }
+
+      async function renderHttpError(operation, response, url, startedAt) {
+        let body;
+        try {
+          body = await response.text();
+        } catch {
+          showNetworkError(operation, url, performance.now() - startedAt);
+          return;
+        }
+
+        const duration = performance.now() - startedAt;
+        const size = responseBodySize(response, body);
+        const contentType = response.headers.get("Content-Type") || "";
+        if (isJsonContentType(contentType)) {
+          let data;
+          try {
+            data = JSON.parse(body);
+          } catch {
+            storeResponseState(operation, {
+              kind: "http-error",
+              errorKind: "json-parse",
+              status: statusText(response),
+              duration,
+              size,
+              url,
+              rawText: body
+            });
+            return;
+          }
+
+          if (isProblemDetails(contentType, data)) {
+            storeResponseState(operation, {
+              kind: "http-error",
+              errorKind: "problem",
+              status: statusText(response),
+              duration,
+              size,
+              url,
+              data,
+              rawText: body
+            });
+          } else {
+            storeResponseState(operation, {
+              kind: "http-error",
+              errorKind: "json",
+              status: statusText(response),
+              duration,
+              size,
+              url,
+              data,
+              rawText: body
+            });
+          }
+          return;
+        }
+
+        storeResponseState(operation, {
+          kind: "http-error",
+          errorKind: "non-json",
+          status: statusText(response),
+          duration,
+          size,
+          url,
+          rawText: body
+        });
+      }
+
+      function renderDownloadState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics(state.status, "success", state.duration, state.size);
+        appendRequestUrl(responseBody, state.url);
+        const message = createElement("div", "download-state");
+        message.append(
+          createElement("h3", null, "Download started"),
+          createElement("p", null, "The browser download action was requested for this response.")
+        );
+        const details = createElement("div", "download-details");
+        for (const [label, value] of [
+          ["File name", state.fileName],
+          ["Content-Type", state.contentType],
+          ["Content-Length", state.contentLength]
+        ]) {
+          const detail = createElement("div", "download-detail");
+          detail.append(
+            createElement("span", "download-detail-label", label),
+            createElement("span", "download-detail-value", value)
+          );
+          details.append(detail);
+        }
+        message.append(details);
+        responseBody.append(message);
         clearJsonCopy();
       }
 
-      function renderDownloadSuccess(response, blob, duration, url) {
-        const fileName = parseFileName(response.headers.get("Content-Disposition"));
-        const contentLength = response.headers.get("Content-Length") || formatBytes(blob.size);
+      function startBrowserDownload(blob, fileName) {
         const objectUrl = URL.createObjectURL(blob);
         try {
           const link = createElement("a");
@@ -2456,45 +2606,48 @@
         } finally {
           URL.revokeObjectURL(objectUrl);
         }
-
-        responseBody.replaceChildren();
-        setResponseMetrics(statusText(response), "success", duration, blob.size);
-        appendRequestUrl(responseBody, url);
-        const state = createElement("div", "download-state");
-        state.append(
-          createElement("h3", null, "Download started"),
-          createElement("p", null, "The browser download action was requested for this response.")
-        );
-        const details = createElement("div", "download-details");
-        for (const [label, value] of [
-          ["File name", fileName],
-          ["Content-Type", response.headers.get("Content-Type") || "unknown"],
-          ["Content-Length", contentLength]
-        ]) {
-          const detail = createElement("div", "download-detail");
-          detail.append(
-            createElement("span", "download-detail-label", label),
-            createElement("span", "download-detail-value", value)
-          );
-          details.append(detail);
-        }
-        state.append(details);
-        responseBody.append(state);
-        clearJsonCopy();
       }
 
-      function renderJsonParseError(response, body, duration, url) {
+      function renderDownloadSuccess(operation, response, blob, duration, url) {
+        const fileName = parseFileName(response.headers.get("Content-Disposition"));
+        const contentType = response.headers.get("Content-Type") || "unknown";
+        const contentLength = response.headers.get("Content-Length") || formatBytes(blob.size);
+        startBrowserDownload(blob, fileName);
+        storeResponseState(operation, {
+          kind: "download-success",
+          status: statusText(response),
+          duration,
+          size: blob.size,
+          url,
+          fileName,
+          contentType,
+          contentLength
+        });
+      }
+
+      function renderJsonParseErrorState(state) {
         responseBody.replaceChildren();
-        setResponseMetrics(statusText(response), "error", duration, responseBodySize(response, body));
-        appendRequestUrl(responseBody, url);
+        setResponseMetrics(state.status, "error", state.duration, state.size);
+        appendRequestUrl(responseBody, state.url);
         const panel = createElement("div", "error-message");
         panel.append(
           createElement("strong", null, "JSON parse failed"),
           createElement("p", null, "The successful response could not be parsed as JSON.")
         );
         responseBody.append(panel);
-        appendRawJson(responseBody, body);
+        appendRawJson(responseBody, state.rawText);
         clearJsonCopy();
+      }
+
+      function renderJsonParseError(operation, response, body, duration, url) {
+        storeResponseState(operation, {
+          kind: "json-parse-error",
+          status: statusText(response),
+          duration,
+          size: responseBodySize(response, body),
+          url,
+          rawText: body
+        });
       }
 
       async function executeRequest(operation, request, triggerButton) {
@@ -2503,16 +2656,14 @@
         }
 
         operation.busy = true;
-        const callId = ++requestSequence;
         const button = triggerButton || sendOperation;
-        const isActive = () => activeOperationId === operation.id && callId === requestSequence;
 
         if (activeOperationId === operation.id) {
           button.disabled = true;
           sendOperation.disabled = true;
           sendOperation.textContent = "Sending…";
-          showLoading(request.url);
         }
+        showLoading(operation, request.url);
 
         const startedAt = performance.now();
         try {
@@ -2520,12 +2671,8 @@
             method: operation.method,
             headers: requestHeaders()
           });
-          if (!isActive()) {
-            return;
-          }
-
           if (!response.ok) {
-            await renderHttpError(response, request.url, startedAt, isActive);
+            await renderHttpError(operation, response, request.url, startedAt);
             return;
           }
 
@@ -2534,14 +2681,10 @@
             try {
               blob = await response.blob();
             } catch {
-              if (isActive()) {
-                showNetworkError(request.url, performance.now() - startedAt);
-              }
+              showNetworkError(operation, request.url, performance.now() - startedAt);
               return;
             }
-            if (isActive()) {
-              renderDownloadSuccess(response, blob, performance.now() - startedAt, request.url);
-            }
+            renderDownloadSuccess(operation, response, blob, performance.now() - startedAt, request.url);
             return;
           }
 
@@ -2549,20 +2692,14 @@
           try {
             body = await response.text();
           } catch {
-            if (isActive()) {
-              showNetworkError(request.url, performance.now() - startedAt);
-            }
-            return;
-          }
-
-          if (!isActive()) {
+            showNetworkError(operation, request.url, performance.now() - startedAt);
             return;
           }
 
           const duration = performance.now() - startedAt;
           const contentType = response.headers.get("Content-Type") || "";
           if (!isJsonContentType(contentType)) {
-            renderNonJsonSuccess(response, body, duration, request.url);
+            renderNonJsonSuccess(operation, response, body, duration, request.url);
             return;
           }
 
@@ -2570,14 +2707,12 @@
           try {
             data = JSON.parse(body);
           } catch {
-            renderJsonParseError(response, body, duration, request.url);
+            renderJsonParseError(operation, response, body, duration, request.url);
             return;
           }
           renderJsonSuccess(operation, response, data, body, duration, request.url);
         } catch {
-          if (isActive()) {
-            showNetworkError(request.url, performance.now() - startedAt);
-          }
+          showNetworkError(operation, request.url, performance.now() - startedAt);
         } finally {
           operation.busy = false;
           if (activeOperationId === operation.id) {
@@ -2617,7 +2752,11 @@
         renderOperationForm(nextOperation);
         sendOperation.disabled = nextOperation.busy;
         sendOperation.textContent = nextOperation.busy ? "Sending…" : "Send";
-        showEmptyResponse();
+        if (nextOperation.responseState) {
+          renderResponseState(nextOperation, nextOperation.responseState);
+        } else {
+          showEmptyResponse();
+        }
       }
 
       operationForm.addEventListener("submit", (event) => {
