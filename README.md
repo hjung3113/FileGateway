@@ -390,7 +390,9 @@ curl -s -OJ "https://gateway.example/api/v1/files/download?fileId=$FILE_ID" \
 
 ## 클라이언트 샘플 코드
 
-목록 조회 → `fileId` 선택 → streaming download까지 end-to-end 예시입니다. 전체 파일을 메모리에 올리지 않고 스트림 그대로 디스크에 씁니다.
+목록 조회 → `fileId` 선택 → streaming download 등 8개 유즈케이스별 Python(`requests`)/C#(`HttpClient`) 예제는 [`samples/`](samples/README.md)를 참조하세요.
+
+아래는 가장 기본적인 목록 조회 → 다운로드 흐름의 요약 예시입니다.
 
 ### Python (requests)
 
