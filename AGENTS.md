@@ -107,6 +107,17 @@ Superpowers 출처, 기준 버전 및 프로젝트 로컬 조정 내용은 `.sup
 - OpenCode: `.opencode/skills/mattpocock`
 - OMP: `.omp/skills/mattpocock`
 
+### Impeccable
+
+Impeccable frontend design/audit skill은 각 에이전트 runtime에 프로젝트 로컬 산출물로 포함합니다.
+
+- Claude Code: `.claude/skills/impeccable`
+- Codex: `.agents/skills/impeccable`
+- OpenCode: `.opencode/skills/impeccable`
+- UI detector hooks: `.claude/settings.local.json`, `.codex/hooks.json`
+
+프로젝트 규칙과 `docs/INDEX.md`/역할별 문서가 skill 기본 지침보다 우선합니다.
+
 **프로젝트 규칙 우선순위:** vendored skill의 기본 문서 구조보다 이 `AGENTS.md`와 `docs/INDEX.md`가 우선합니다. 특히 `domain-modeling`이 제안하는 루트 `CONTEXT.md`/`docs/adr/` 자동 생성은 FileGateway에서 기본 동작으로 채택하지 않습니다. 기존 역할별 설계 문서에 먼저 반영하고, 새 문서가 정말 필요할 때만 생성한 뒤 `docs/INDEX.md`에 등록합니다.
 
 출처, 기준 커밋, 포함/제외 범위는 `.mattpocock/UPSTREAM.md`를 참조합니다.

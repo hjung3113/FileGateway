@@ -1,0 +1,2787 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FileGateway API Tester</title>
+  <style>
+    :root {
+      --page-background: #f4f7fb;
+      --surface: #ffffff;
+      --surface-muted: #eef3f8;
+      --surface-subtle: #f8fafc;
+      --text: #17212b;
+      --muted-text: #5d6b79;
+      --faint-text: #5d6b79;
+      --border: #cbd5e1;
+      --border-strong: #aebdcd;
+      --primary: #175cd3;
+      --primary-hover: #1249a8;
+      --primary-soft: #eaf2ff;
+      --success: #087443;
+      --success-soft: #eaf8f0;
+      --danger: #b42318;
+      --danger-soft: #fff1f0;
+      --warning: #9a6700;
+      --warning-soft: #fff8e6;
+      --radius: 10px;
+      --small-radius: 6px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-7: 32px;
+      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --code-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-width: 320px;
+      background: var(--page-background);
+    }
+
+    body {
+      min-width: 320px;
+      margin: 0;
+      color: var(--text);
+      background: var(--page-background);
+      font-family: var(--font);
+      line-height: 1.45;
+    }
+
+    button,
+    input {
+      font: inherit;
+    }
+
+    button {
+      border: 1px solid transparent;
+      border-radius: var(--small-radius);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.58;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid #8db8ff;
+      outline-offset: 2px;
+    }
+
+    input {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--small-radius);
+      color: var(--text);
+      background: var(--surface);
+      font-size: 13px;
+    }
+
+    input::placeholder {
+      color: var(--faint-text);
+    }
+
+    input:hover:not(:focus) {
+      border-color: var(--border-strong);
+    }
+
+    code,
+    pre,
+    .opaque-input,
+    .method-badge,
+    .response-metric {
+      font-family: var(--code-font);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1,
+    h2,
+    h3 {
+      letter-spacing: -0.02em;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-6);
+      padding: 18px clamp(18px, 4vw, 48px);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .brand-block {
+      min-width: 0;
+    }
+
+    .brand-block h1 {
+      margin-bottom: 4px;
+      font-size: clamp(22px, 3vw, 30px);
+      line-height: 1.1;
+    }
+
+    .brand-copy,
+    .context-copy,
+    .sidebar-copy,
+    .operation-note,
+    .field-hint,
+    .response-copy,
+    .empty-state p,
+    .problem-field p {
+      color: var(--muted-text);
+      font-size: 12px;
+    }
+
+    .brand-copy {
+      margin-bottom: 0;
+    }
+
+    .environment {
+      display: grid;
+      flex: 0 1 340px;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 2px var(--space-3);
+      align-items: center;
+      min-width: 230px;
+      color: var(--muted-text);
+      font-size: 11px;
+      text-align: right;
+    }
+
+    .environment-label {
+      grid-column: 1;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .environment-badge {
+      justify-self: end;
+      padding: 3px 7px;
+      border: 1px solid #b9d4ff;
+      border-radius: 999px;
+      color: var(--primary);
+      background: var(--primary-soft);
+      font-size: 11px;
+    }
+
+    .environment code {
+      grid-column: 1 / -1;
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-size: 12px;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      width: min(1680px, 100%);
+      min-height: calc(100vh - 89px);
+      margin: 0 auto;
+    }
+
+    .api-sidebar {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: calc(100vh - 1px);
+      overflow: auto;
+      padding: var(--space-6) 14px;
+      border-right: 1px solid var(--border);
+      background: var(--surface-subtle);
+    }
+
+    .sidebar-heading {
+      padding: 0 8px var(--space-5);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .sidebar-heading h2 {
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
+    .sidebar-copy {
+      margin-bottom: 0;
+      line-height: 1.5;
+    }
+
+    #api-navigation {
+      display: grid;
+      gap: var(--space-6);
+      padding-top: var(--space-5);
+    }
+
+    .nav-group h3 {
+      margin: 0 8px 4px;
+      color: var(--text);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .nav-group-copy {
+      margin: 0 8px var(--space-2);
+      color: var(--faint-text);
+      font-size: 11px;
+    }
+
+    .operation-list {
+      display: grid;
+      gap: 2px;
+    }
+
+    .operation-link {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: var(--space-2);
+      align-items: start;
+      width: 100%;
+      padding: 9px 8px;
+      border-color: transparent;
+      color: var(--text);
+      background: transparent;
+      text-align: left;
+    }
+
+    .operation-link:hover {
+      border-color: var(--border);
+      background: var(--surface-muted);
+    }
+
+    .operation-link.active {
+      border-color: #b9d4ff;
+      color: #123b80;
+      background: var(--primary-soft);
+    }
+
+    .operation-copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .operation-copy strong {
+      overflow-wrap: anywhere;
+      font-size: 12px;
+    }
+
+    .operation-copy code {
+      overflow: hidden;
+      color: var(--muted-text);
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .method-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 38px;
+      padding: 3px 5px;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    .method-get {
+      color: #175cd3;
+      background: #edf4ff;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: var(--space-4);
+      min-width: 0;
+      padding: var(--space-6) clamp(16px, 3vw, 36px) var(--space-7);
+    }
+
+    .request-context,
+    .request-panel,
+    .response-panel {
+      min-width: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .request-context {
+      padding: var(--space-4) var(--space-5);
+    }
+
+    .context-header,
+    .panel-header,
+    .request-header,
+    .response-header,
+    .context-controls,
+    .response-metrics,
+    .request-identity,
+    .form-actions,
+    .input-with-action,
+    .file-id-actions,
+    .pagination-actions,
+    .response-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .context-header,
+    .panel-header,
+    .request-header,
+    .response-header {
+      justify-content: space-between;
+      gap: var(--space-4);
+    }
+
+    .context-header {
+      margin-bottom: var(--space-3);
+    }
+
+    .context-header h2,
+    .panel-heading h2 {
+      margin-bottom: 2px;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    .context-copy,
+    .panel-copy {
+      margin-bottom: 0;
+    }
+
+    .context-badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: var(--success);
+      background: var(--success-soft);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .context-controls {
+      align-items: end;
+    }
+
+    .api-key-field {
+      flex: 1 1 280px;
+      max-width: 520px;
+    }
+
+    .context-controls > .remember-control {
+      align-self: end;
+    }
+
+    .field-label,
+    .context-label {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-2);
+      margin-bottom: var(--space-1);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .field-label small,
+    .context-label small,
+    .section-heading small {
+      color: var(--faint-text);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .required-mark {
+      color: var(--danger);
+    }
+
+    .input-with-action {
+      align-items: stretch;
+    }
+
+    .input-with-action input {
+      min-width: 0;
+    }
+
+    .context-controls .input-with-action {
+      display: block;
+    }
+
+    .remember-control {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+      min-height: 38px;
+      color: var(--muted-text);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .remember-control input {
+      width: 16px;
+      min-height: 16px;
+      accent-color: var(--primary);
+    }
+
+    .context-note {
+      margin: var(--space-3) 0 0;
+      color: var(--faint-text);
+      font-size: 11px;
+    }
+
+    .workbench {
+      display: grid;
+      grid-template-rows: minmax(300px, auto) minmax(340px, 1fr);
+      gap: var(--space-4);
+      min-height: 0;
+    }
+
+    .request-panel,
+    .response-panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .request-header {
+      align-items: flex-start;
+    }
+
+    .panel-heading {
+      min-width: 0;
+    }
+
+    .heading-path {
+      margin-bottom: 5px;
+      color: var(--muted-text);
+      font-size: 11px;
+    }
+
+    .heading-path strong {
+      color: var(--text);
+    }
+
+    .request-identity {
+      align-items: flex-start;
+      min-width: 0;
+      margin-top: var(--space-3);
+    }
+
+    #request-endpoint {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: #263b53;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .primary-button,
+    .secondary-button,
+    .danger-button,
+    .link-button {
+      min-height: 36px;
+      padding: 7px 12px;
+    }
+
+    .primary-button {
+      color: #ffffff;
+      background: var(--primary);
+    }
+
+    .primary-button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .secondary-button,
+    .link-button {
+      border-color: var(--border);
+      color: var(--text);
+      background: var(--surface);
+    }
+
+    .secondary-button:hover:not(:disabled),
+    .link-button:hover:not(:disabled) {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .danger-button {
+      border-color: #e7b8b2;
+      color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .request-form {
+      display: grid;
+      align-content: start;
+      gap: var(--space-5);
+      min-height: 0;
+      overflow: auto;
+      padding: var(--space-5);
+    }
+
+    .form-description {
+      margin-bottom: 0;
+      color: var(--muted-text);
+      font-size: 12px;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: var(--space-4) var(--space-3);
+    }
+
+    .field {
+      grid-column: span 4;
+      display: block;
+      min-width: 0;
+    }
+
+    .field.field-wide {
+      grid-column: 1 / -1;
+    }
+
+    .field-hint {
+      margin: var(--space-1) 0 0;
+      line-height: 1.4;
+    }
+
+    .opaque-input {
+      letter-spacing: 0.01em;
+    }
+
+    .copy-control {
+      flex: 0 0 auto;
+      min-height: 38px;
+      padding-inline: 10px;
+      border-color: var(--border);
+      color: var(--primary);
+      background: var(--surface);
+      font-size: 12px;
+    }
+
+    .copy-control:hover:not(:disabled) {
+      border-color: var(--primary);
+    }
+
+    .optional-details,
+    .token-details,
+    .raw-response {
+      border: 1px solid var(--border);
+      border-radius: var(--small-radius);
+      background: var(--surface-subtle);
+    }
+
+    .optional-details {
+      grid-column: 1 / -1;
+      padding: 10px;
+    }
+
+    .optional-details summary,
+    .token-details summary,
+    .raw-response summary {
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .optional-details[open] .token-field-content {
+      margin-top: var(--space-3);
+    }
+
+    .attribute-section {
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .section-heading h3 {
+      margin-bottom: 0;
+      font-size: 12px;
+    }
+
+    .attribute-list {
+      display: grid;
+      gap: var(--space-2);
+    }
+
+    .attribute-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+      gap: var(--space-2);
+      align-items: end;
+    }
+
+    .attribute-row .field-label {
+      margin-bottom: 2px;
+    }
+
+    .attribute-row input {
+      min-height: 36px;
+    }
+
+    .attribute-row button {
+      min-height: 36px;
+      padding-inline: 9px;
+    }
+
+    .response-panel {
+      min-height: 340px;
+    }
+
+    .response-header {
+      align-items: center;
+    }
+
+    .response-heading h2 {
+      margin-bottom: 2px;
+    }
+
+    .response-copy {
+      margin-bottom: 0;
+    }
+
+    .response-metrics {
+      flex: 0 1 auto;
+      justify-content: flex-end;
+      gap: 7px;
+      color: var(--muted-text);
+      font-size: 12px;
+    }
+
+    .response-metric {
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .response-metric.success {
+      color: var(--success);
+    }
+
+    .response-metric.error {
+      color: var(--danger);
+    }
+
+    .response-metric.loading {
+      color: var(--primary);
+    }
+
+    .response-metric.neutral {
+      color: var(--muted-text);
+    }
+
+    .response-body {
+      min-height: 0;
+      overflow: auto;
+      padding: var(--space-5);
+    }
+
+    .empty-state {
+      display: grid;
+      place-items: center;
+      min-height: 180px;
+      padding: var(--space-6);
+      color: var(--muted-text);
+      text-align: center;
+    }
+
+    .empty-state strong {
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .empty-state p {
+      margin: 4px 0 0;
+    }
+
+    .request-url {
+      margin-bottom: var(--space-4);
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--small-radius);
+      background: var(--surface-muted);
+    }
+
+    .request-url-label {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted-text);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .request-url code {
+      display: block;
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-size: 11px;
+    }
+
+    .response-toolbar {
+      justify-content: space-between;
+      margin-bottom: var(--space-3);
+    }
+
+    .response-toolbar h3,
+    .item-list h3,
+    .download-state h3 {
+      margin-bottom: 0;
+      font-size: 13px;
+    }
+
+    .json-body,
+    pre {
+      max-width: 100%;
+      margin: 0;
+      overflow: auto;
+      padding: var(--space-4);
+      border-radius: var(--small-radius);
+      color: #213047;
+      background: #f5f7fa;
+      font-family: var(--code-font);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      tab-size: 2;
+    }
+
+    .json-section {
+      margin-top: var(--space-5);
+    }
+
+    .item-list {
+      display: grid;
+      gap: 0;
+      margin-top: var(--space-5);
+      border-top: 1px solid var(--border);
+    }
+
+    .item-list > h3 {
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .result-item {
+      display: grid;
+      gap: var(--space-3);
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .result-item-header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .result-item-header strong {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 13px;
+    }
+
+    .result-fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: var(--space-2);
+    }
+
+    .result-field {
+      min-width: 0;
+      padding: 8px;
+      border-radius: var(--small-radius);
+      background: var(--surface-muted);
+    }
+
+    .result-field-label {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted-text);
+      font-size: 10px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .result-field-value {
+      display: block;
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-family: var(--code-font);
+      font-size: 11px;
+    }
+
+    .file-id-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: var(--space-2);
+      align-items: center;
+      padding: 9px;
+      border: 1px solid #b9d4ff;
+      border-radius: var(--small-radius);
+      background: var(--primary-soft);
+    }
+
+    .file-id-label {
+      color: #174ea6;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .file-id-value {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: #123b80;
+      font-family: var(--code-font);
+      font-size: 11px;
+    }
+
+    .file-id-actions {
+      justify-content: flex-end;
+    }
+
+    .file-id-actions button,
+    .pagination-actions button {
+      min-height: 32px;
+      padding: 5px 9px;
+      font-size: 11px;
+    }
+
+    .pagination-actions {
+      align-items: stretch;
+      margin-top: var(--space-5);
+    }
+
+    .token-details {
+      flex: 1 1 100%;
+      padding: 9px 10px;
+    }
+
+    .token-details[open] pre {
+      margin-top: var(--space-3);
+    }
+
+    .problem-details {
+      padding: var(--space-4);
+      border: 1px solid #e7b8b2;
+      border-radius: var(--small-radius);
+      background: var(--danger-soft);
+    }
+
+    .problem-details h3 {
+      margin-bottom: var(--space-4);
+      color: var(--danger);
+      font-size: 14px;
+    }
+
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+
+    .problem-field {
+      min-width: 0;
+      padding: 9px;
+      border: 1px solid #efcbc7;
+      border-radius: var(--small-radius);
+      background: #ffffff;
+    }
+
+    .problem-field.wide {
+      grid-column: 1 / -1;
+    }
+
+    .problem-field strong {
+      display: block;
+      overflow-wrap: anywhere;
+      color: var(--danger);
+      font-family: var(--code-font);
+      font-size: 12px;
+    }
+
+    .problem-field p {
+      margin: 3px 0 0;
+    }
+
+    .raw-response {
+      padding: 10px;
+      background: #ffffff;
+    }
+
+    .raw-response[open] pre {
+      margin-top: var(--space-3);
+    }
+
+    .error-message,
+    .loading-message,
+    .download-state {
+      padding: var(--space-4);
+      border-radius: var(--small-radius);
+      background: var(--surface-muted);
+    }
+
+    .error-message {
+      color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .loading-message {
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .error-message strong,
+    .loading-message strong,
+    .download-state h3 {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .error-message p,
+    .loading-message p,
+    .download-state p {
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .download-state {
+      border: 1px solid #b7dfc7;
+      background: var(--success-soft);
+    }
+
+    .download-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--space-2);
+      margin-top: var(--space-4);
+    }
+
+    .download-detail {
+      min-width: 0;
+      padding: 9px;
+      border-radius: var(--small-radius);
+      background: #ffffff;
+    }
+
+    .download-detail-label {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted-text);
+      font-size: 10px;
+      font-weight: 750;
+    }
+
+    .download-detail-value {
+      display: block;
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-family: var(--code-font);
+      font-size: 11px;
+    }
+
+    @media (max-width: 900px) {
+      .app-shell {
+        display: block;
+      }
+
+      .api-sidebar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        height: auto;
+        padding: var(--space-3) var(--space-4);
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .sidebar-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: 0 0 var(--space-3);
+      }
+
+      .sidebar-copy {
+        margin: 0;
+      }
+
+      #api-navigation {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+        padding-top: var(--space-3);
+      }
+
+      .operation-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .workspace {
+        min-height: 0;
+        padding: var(--space-4);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: var(--space-3);
+        padding: var(--space-4);
+      }
+
+      .environment {
+        width: 100%;
+        min-width: 0;
+        text-align: left;
+      }
+
+      .environment-badge {
+        justify-self: start;
+      }
+
+      #api-navigation,
+      .operation-list {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace {
+        padding: var(--space-3);
+      }
+
+      .request-context,
+      .panel-header,
+      .request-form,
+      .response-body {
+        padding: var(--space-4);
+      }
+
+      .workbench {
+        grid-template-rows: minmax(360px, auto) minmax(360px, 1fr);
+      }
+
+      .request-header,
+      .response-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      #send-operation {
+        width: 100%;
+      }
+
+      .response-metrics {
+        justify-content: flex-start;
+      }
+
+      .fields {
+        grid-template-columns: 1fr;
+        gap: var(--space-3);
+      }
+
+      .field,
+      .field.field-wide {
+        grid-column: 1;
+      }
+
+      .attribute-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .attribute-row button {
+        grid-column: 1 / -1;
+        justify-self: start;
+      }
+
+      .file-id-row {
+        grid-template-columns: 1fr;
+      }
+
+      .file-id-actions {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand-block">
+      <h1>FileGateway API Tester</h1>
+      <p class="brand-copy">Scalar-style navigation for same-origin API contract checks.</p>
+    </div>
+    <div class="environment" aria-label="Environment">
+      <span class="environment-label">Environment</span>
+      <strong class="environment-badge">Development tool</strong>
+      <code id="gateway-origin"></code>
+    </div>
+  </header>
+
+  <div class="app-shell">
+    <aside class="api-sidebar" aria-label="API navigation">
+      <div class="sidebar-heading">
+        <div>
+          <h2>API catalog</h2>
+          <p class="sidebar-copy">Choose an operation to inspect its request and response.</p>
+        </div>
+      </div>
+
+      <nav id="api-navigation">
+        <section class="nav-group" aria-labelledby="nav-catalog-title">
+          <h3 id="nav-catalog-title">Catalog</h3>
+          <p class="nav-group-copy">Reference data</p>
+          <div class="operation-list">
+            <button class="operation-link active" data-operation="catalog-file-types" aria-current="page" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Equipment File Types</strong><code>/api/v1/equipments/{id}/file-types</code></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-logs-title">
+          <h3 id="nav-logs-title">Logs</h3>
+          <p class="nav-group-copy">Discover and retrieve logs</p>
+          <div class="operation-list">
+            <button class="operation-link" data-operation="logs-list" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>List logs</strong><code>/api/v1/logs</code></span>
+            </button>
+            <button class="operation-link" data-operation="logs-download" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Conditional download</strong><code>/api/v1/logs/download</code></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-files-title">
+          <h3 id="nav-files-title">Files</h3>
+          <p class="nav-group-copy">Use an opaque fileId</p>
+          <div class="operation-list">
+            <button class="operation-link" data-operation="files-metadata" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Metadata by fileId</strong><code>/api/v1/files?fileId=...</code></span>
+            </button>
+            <button class="operation-link" data-operation="files-download" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Download by fileId</strong><code>/api/v1/files/download</code></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-configurations-title">
+          <h3 id="nav-configurations-title">Configurations</h3>
+          <p class="nav-group-copy">Current and historical files</p>
+          <div class="operation-list">
+            <button class="operation-link" data-operation="config-current" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Current</strong><code>/api/v1/configurations/current</code></span>
+            </button>
+            <button class="operation-link" data-operation="config-current-download" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Current download</strong><code>/api/v1/configurations/current/download</code></span>
+            </button>
+            <button class="operation-link" data-operation="config-history" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>History</strong><code>/api/v1/configurations/history</code></span>
+            </button>
+          </div>
+        </section>
+      </nav>
+    </aside>
+
+    <main class="workspace">
+      <section class="request-context" aria-labelledby="request-context-title">
+        <div class="context-header">
+          <div>
+            <h2 id="request-context-title">Request context</h2>
+            <p class="context-copy">Shared settings apply to every operation in this tester.</p>
+          </div>
+          <span class="context-badge">Same-origin</span>
+        </div>
+        <div class="context-controls">
+          <label class="api-key-field">
+            <span class="context-label">X-Api-Key <small>shared header</small></span>
+            <div class="input-with-action">
+              <input id="api-key" class="opaque-input" type="password" autocomplete="off" spellcheck="false" aria-label="X-Api-Key">
+            </div>
+          </label>
+          <label class="remember-control">
+            <input id="remember-key" type="checkbox">
+            Remember in this browser
+          </label>
+          <button id="clear-key" class="danger-button" type="button">Clear key</button>
+        </div>
+        <p class="context-note">The API key is sent only in the X-Api-Key HTTP header. It is stored in sessionStorage by default and uses localStorage when enabled.</p>
+      </section>
+
+      <div class="workbench">
+        <section class="request-panel" aria-labelledby="request-title">
+          <header class="panel-header request-header">
+            <div class="panel-heading">
+              <p class="heading-path"><span id="active-group-label">Catalog</span> / <strong id="active-operation-label">Equipment File Types</strong></p>
+              <h2 id="request-title">Request</h2>
+              <div class="request-identity">
+                <span id="request-method" class="method-badge method-get">GET</span>
+                <code id="request-endpoint">/api/v1/equipments/{equipmentId}/file-types</code>
+              </div>
+            </div>
+            <button id="send-operation" class="primary-button" type="submit" form="operation-form">Send</button>
+          </header>
+          <form id="operation-form" class="request-form" novalidate></form>
+        </section>
+
+        <section class="response-panel" aria-labelledby="response-title">
+          <header class="panel-header response-header">
+            <div class="panel-heading response-heading">
+              <h2 id="response-title">Response</h2>
+              <p class="response-copy">Status is shown before the response body.</p>
+            </div>
+            <div class="response-metrics" aria-live="polite" aria-atomic="true">
+              <span id="response-status" class="response-metric neutral">Ready to send</span>
+              <span aria-hidden="true">·</span>
+              <span id="response-time" class="response-metric">—</span>
+              <span aria-hidden="true">·</span>
+              <span id="response-size" class="response-metric">—</span>
+              <div class="response-toolbar">
+                <button id="copy-json" class="copy-control" type="button" data-copy-value="" data-copy-label="Copy JSON" disabled>Copy JSON</button>
+              </div>
+            </div>
+          </header>
+          <div id="response-body" class="response-body" aria-live="polite">
+            <div class="empty-state">
+              <div>
+                <strong>No response yet</strong>
+                <p>Complete the request fields and press Send.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <template id="problem-details-template">
+    <section class="problem-details">
+      <h3>Problem Details</h3>
+      <div class="problem-grid">
+        <div class="problem-field">
+          <span class="result-field-label">status</span>
+          <strong id="problem-status">—</strong>
+        </div>
+        <div class="problem-field">
+          <span class="result-field-label">Code</span>
+          <strong id="problem-code">—</strong>
+        </div>
+        <div class="problem-field wide">
+          <span class="result-field-label">Title</span>
+          <strong id="problem-title">—</strong>
+        </div>
+        <div class="problem-field wide">
+          <span class="result-field-label">Detail</span>
+          <strong id="problem-detail">—</strong>
+        </div>
+        <div class="problem-field wide">
+          <span class="result-field-label">traceId</span>
+          <strong id="problem-trace">—</strong>
+        </div>
+      </div>
+      <details class="raw-response">
+        <summary>Raw response JSON</summary>
+        <pre id="problem-raw-response"></pre>
+      </details>
+    </section>
+  </template>
+
+  <template id="request-token-template">
+    <details class="token-details">
+      <summary>Continuation token</summary>
+      <div class="token-field-content"></div>
+    </details>
+  </template>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const apiKeyStorageKey = "filegateway.tester.apiKey";
+      const gatewayOrigin = document.getElementById("gateway-origin");
+      const apiKeyInput = document.getElementById("api-key");
+      const rememberKey = document.getElementById("remember-key");
+      const clearKey = document.getElementById("clear-key");
+      const operationForm = document.getElementById("operation-form");
+      const sendOperation = document.getElementById("send-operation");
+      const responseBody = document.getElementById("response-body");
+      const responseStatus = document.getElementById("response-status");
+      const responseTime = document.getElementById("response-time");
+      const responseSize = document.getElementById("response-size");
+      const copyJson = document.getElementById("copy-json");
+      const activeGroupLabel = document.getElementById("active-group-label");
+      const activeOperationLabel = document.getElementById("active-operation-label");
+      const requestMethod = document.getElementById("request-method");
+      const requestEndpoint = document.getElementById("request-endpoint");
+
+      const operationDefinitions = [
+        {
+          id: "catalog-file-types",
+          group: "Catalog",
+          label: "Equipment File Types",
+          method: "GET",
+          endpoint: "/api/v1/equipments/{equipmentId}/file-types",
+          mode: "json",
+          form: "equipment",
+          note: "Read the validated file types available for one equipment."
+        },
+        {
+          id: "logs-list",
+          group: "Logs",
+          label: "List logs",
+          method: "GET",
+          endpoint: "/api/v1/logs",
+          mode: "json",
+          form: "logs",
+          inputGroup: "logs",
+          note: "Hourly/Daily use from and to; Continuous logs reject time filters."
+        },
+        {
+          id: "logs-download",
+          group: "Logs",
+          label: "Conditional download",
+          method: "GET",
+          endpoint: "/api/v1/logs/download",
+          mode: "download",
+          form: "logs",
+          inputGroup: "logs",
+          note: "The same logical log criteria resolve one downloadable file."
+        },
+        {
+          id: "files-metadata",
+          group: "Files",
+          label: "Metadata by fileId",
+          method: "GET",
+          endpoint: "/api/v1/files?fileId=...",
+          mode: "json",
+          form: "file",
+          inputGroup: "file",
+          note: "fileId is an opaque value returned by a list operation."
+        },
+        {
+          id: "files-download",
+          group: "Files",
+          label: "Download by fileId",
+          method: "GET",
+          endpoint: "/api/v1/files/download?fileId=...",
+          mode: "download",
+          form: "file",
+          inputGroup: "file",
+          note: "Use the same opaque fileId for the common download endpoint."
+        },
+        {
+          id: "config-current",
+          group: "Configurations",
+          label: "Current",
+          method: "GET",
+          endpoint: "/api/v1/configurations/current",
+          mode: "json",
+          form: "current",
+          inputGroup: "current",
+          note: "Current returns the complete file set without pagination."
+        },
+        {
+          id: "config-current-download",
+          group: "Configurations",
+          label: "Current download",
+          method: "GET",
+          endpoint: "/api/v1/configurations/current/download",
+          mode: "download",
+          form: "current",
+          inputGroup: "current",
+          note: "This endpoint downloads only when the current criteria match one file."
+        },
+        {
+          id: "config-history",
+          group: "Configurations",
+          label: "History",
+          method: "GET",
+          endpoint: "/api/v1/configurations/history",
+          mode: "json",
+          form: "history",
+          note: "History requires an explicit from/to range and supports pagination."
+        }
+      ];
+
+      const sharedValuesByGroup = new Map();
+      const operations = new Map(operationDefinitions.map((definition) => {
+        const values = definition.inputGroup
+          ? sharedValuesByGroup.get(definition.inputGroup) || {}
+          : {};
+        if (definition.inputGroup) {
+          sharedValuesByGroup.set(definition.inputGroup, values);
+        }
+        return [definition.id, { ...definition, values, criteria: null, busy: false, responseState: null }];
+      }));
+      let activeOperation = null;
+      let activeOperationId = "";
+
+      gatewayOrigin.textContent = window.location.origin;
+
+      function readStoredKey(storage) {
+        try {
+          return storage.getItem(apiKeyStorageKey) || "";
+        } catch {
+          return "";
+        }
+      }
+
+      function removeStoredKey(storage) {
+        try {
+          storage.removeItem(apiKeyStorageKey);
+        } catch {
+          // Storage can be unavailable in a restricted browser context.
+        }
+      }
+
+      function storeKey(storage, value) {
+        try {
+          storage.setItem(apiKeyStorageKey, value);
+        } catch {
+          // Storage can be unavailable in a restricted browser context.
+        }
+      }
+
+      function persistApiKey() {
+        const value = apiKeyInput.value;
+        if (rememberKey.checked) {
+          storeKey(window.localStorage, value);
+          removeStoredKey(window.sessionStorage);
+        } else {
+          storeKey(window.sessionStorage, value);
+          removeStoredKey(window.localStorage);
+        }
+      }
+
+      const rememberedKey = readStoredKey(window.localStorage);
+      if (rememberedKey) {
+        apiKeyInput.value = rememberedKey;
+        rememberKey.checked = true;
+        removeStoredKey(window.sessionStorage);
+      } else {
+        apiKeyInput.value = readStoredKey(window.sessionStorage);
+      }
+
+      apiKeyInput.addEventListener("input", persistApiKey);
+      rememberKey.addEventListener("change", persistApiKey);
+      clearKey.addEventListener("click", () => {
+        apiKeyInput.value = "";
+        rememberKey.checked = false;
+        removeStoredKey(window.sessionStorage);
+        removeStoredKey(window.localStorage);
+        apiKeyInput.focus();
+      });
+
+      function requestHeaders() {
+        const value = apiKeyInput.value;
+        return value.length > 0 ? { "X-Api-Key": value } : {};
+      }
+
+      function buildUrl(path, query) {
+        const queryString = query.toString();
+        return `${window.location.origin}${path}${queryString ? `?${queryString}` : ""}`;
+      }
+
+      function createElement(tagName, className, text) {
+        const element = document.createElement(tagName);
+        if (className) {
+          element.className = className;
+        }
+        if (text !== undefined) {
+          element.textContent = text;
+        }
+        return element;
+      }
+
+      function setResponseMetrics(status, kind, duration, size) {
+        responseStatus.textContent = status;
+        responseStatus.className = `response-metric ${kind}`;
+        responseTime.textContent = duration == null ? "—" : `${Math.max(0, Math.round(duration))} ms`;
+        responseSize.textContent = size == null ? "—" : formatBytes(size);
+      }
+
+      function clearJsonCopy() {
+        copyJson.disabled = true;
+        copyJson.setAttribute("data-copy-value", "");
+        copyJson.textContent = "Copy JSON";
+      }
+
+      function storeResponseState(operation, state) {
+        operation.responseState = state;
+        if (activeOperationId === operation.id) {
+          renderResponseState(operation, state);
+        }
+      }
+
+      function showEmptyResponse() {
+        responseBody.replaceChildren();
+        const empty = createElement("div", "empty-state");
+        const content = createElement("div");
+        content.append(
+          createElement("strong", null, "No response yet"),
+          createElement("p", null, "Complete the request fields and press Send.")
+        );
+        empty.append(content);
+        responseBody.append(empty);
+        setResponseMetrics("Ready to send", "neutral", null, null);
+        clearJsonCopy();
+      }
+
+      function copyText(value, button, successLabel = "Copied") {
+        if (!value) {
+          button.textContent = "Nothing to copy";
+          return;
+        }
+
+        const originalLabel = button.dataset.copyLabel || button.textContent;
+        const restoreLabel = () => {
+          button.textContent = originalLabel;
+        };
+
+        const finish = () => {
+          button.textContent = successLabel;
+          window.setTimeout(restoreLabel, 1400);
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(value).then(finish).catch(() => {
+            button.textContent = "Copy unavailable";
+          });
+          return;
+        }
+
+        const fallback = createElement("textarea");
+        fallback.value = value;
+        fallback.setAttribute("readonly", "");
+        fallback.style.position = "fixed";
+        fallback.style.opacity = "0";
+        document.body.append(fallback);
+        fallback.select();
+        try {
+          if (document.execCommand("copy")) {
+            finish();
+          } else {
+            button.textContent = "Copy unavailable";
+          }
+        } catch {
+          button.textContent = "Copy unavailable";
+        } finally {
+          fallback.remove();
+        }
+      }
+
+      function createCopyButton(label, valueOrGetter, successLabel = "Copied") {
+        const button = createElement("button", "copy-control", label);
+        button.type = "button";
+        button.dataset.copyLabel = label;
+        button.setAttribute("data-copy-value", "");
+        button.addEventListener("click", () => {
+          const value = typeof valueOrGetter === "function" ? valueOrGetter() : valueOrGetter;
+          button.setAttribute("data-copy-value", value || "");
+          copyText(value, button, successLabel);
+        });
+        return button;
+      }
+
+      function createField(operation, specification) {
+        const field = createElement("label", `field${specification.wide ? " field-wide" : ""}`);
+        const label = createElement("span", "field-label");
+        const labelText = createElement("span", null, specification.label);
+        const availability = createElement(
+          "small",
+          specification.required ? "required-mark" : null,
+          specification.required ? "required" : "optional"
+        );
+        label.append(labelText, availability);
+        field.append(label);
+
+        const input = createElement("input");
+        input.id = specification.name === "fileId" ? "common-file-id" : `input-${specification.name}`;
+        input.dataset.field = specification.name;
+        input.type = specification.type || "text";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        input.placeholder = specification.placeholder || "";
+        if (specification.inputmode) {
+          input.inputMode = specification.inputmode;
+        }
+        if (specification.required) {
+          input.setAttribute("aria-required", "true");
+        }
+        if (specification.opaque) {
+          input.classList.add("opaque-input");
+        }
+        input.value = operation.values[specification.name] || "";
+        input.addEventListener("input", () => {
+          operation.values[specification.name] = input.value;
+        });
+
+        if (specification.copy) {
+          const controls = createElement("div", "input-with-action");
+          const copy = createCopyButton("Copy", () => input.value.trim());
+          controls.append(input, copy);
+          field.append(controls);
+        } else {
+          field.append(input);
+        }
+
+        if (specification.hint) {
+          field.append(createElement("span", "field-hint", specification.hint));
+        }
+        return field;
+      }
+
+      function appendTokenField(operation, fields) {
+        const fragment = document.getElementById("request-token-template").content.cloneNode(true);
+        const details = fragment.firstElementChild;
+        details.classList.add("optional-details");
+        details.querySelector(".token-field-content").append(createField(operation, {
+          name: "continuationToken",
+          label: "continuationToken",
+          opaque: true,
+          copy: true,
+          wide: true,
+          hint: "Opaque cursor; copy it from a previous response when loading another page."
+        }));
+        fields.append(details);
+      }
+
+      function syncAttributes(operation) {
+        if (operation.form !== "logs") {
+          return;
+        }
+        operation.values.attributes = Array.from(operationForm.querySelectorAll("#log-attributes .attribute-row"))
+          .map((row) => ({
+            name: row.querySelector(".attribute-name").value.trim(),
+            value: row.querySelector(".attribute-value").value.trim()
+          }))
+          .filter((attribute) => attribute.name && attribute.value);
+      }
+
+      function createAttributeRow(operation, initial = {}) {
+        const row = createElement("div", "attribute-row");
+
+        const nameCell = createElement("label");
+        nameCell.append(createElement("span", "field-label", "Name"));
+        const nameInput = createElement("input");
+        nameInput.className = "attribute-name";
+        nameInput.type = "text";
+        nameInput.autocomplete = "off";
+        nameInput.placeholder = "name";
+        nameInput.setAttribute("aria-label", "Attribute name");
+        nameInput.value = initial.name || "";
+        nameCell.append(nameInput);
+
+        const valueCell = createElement("label");
+        valueCell.append(createElement("span", "field-label", "Value"));
+        const valueInput = createElement("input");
+        valueInput.className = "attribute-value";
+        valueInput.type = "text";
+        valueInput.autocomplete = "off";
+        valueInput.placeholder = "value";
+        valueInput.setAttribute("aria-label", "Attribute value");
+        valueInput.value = initial.value || "";
+        valueCell.append(valueInput);
+
+        const removeButton = createElement("button", "secondary-button", "Remove");
+        removeButton.type = "button";
+        removeButton.addEventListener("click", () => {
+          row.remove();
+          syncAttributes(operation);
+        });
+
+        nameInput.addEventListener("input", () => syncAttributes(operation));
+        valueInput.addEventListener("input", () => syncAttributes(operation));
+        row.append(nameCell, valueCell, removeButton);
+        return row;
+      }
+
+      function appendAttributeSection(operation, form) {
+        const section = createElement("section", "attribute-section");
+        const heading = createElement("div", "section-heading");
+        heading.append(
+          createElement("h3", null, "Attribute filters"),
+          createElement("small", null, "optional")
+        );
+        section.append(heading);
+        section.append(createElement("p", "field-hint", "Each row becomes attr.<name>=<value> in the request."));
+
+        const list = createElement("div", "attribute-list");
+        list.id = "log-attributes";
+        const attributes = Array.isArray(operation.values.attributes) ? operation.values.attributes : [];
+        if (attributes.length === 0) {
+          list.append(createAttributeRow(operation));
+        } else {
+          attributes.forEach((attribute) => list.append(createAttributeRow(operation, attribute)));
+        }
+        section.append(list);
+
+        const actions = createElement("div", "form-actions");
+        const add = createElement("button", "secondary-button", "Add attribute");
+        add.id = "add-log-attribute";
+        add.type = "button";
+        add.addEventListener("click", () => {
+          const row = createAttributeRow(operation);
+          list.append(row);
+          row.querySelector(".attribute-name").focus();
+        });
+        actions.append(add);
+        section.append(actions);
+        form.append(section);
+      }
+
+      function renderOperationForm(operation) {
+        operationForm.replaceChildren();
+        operationForm.append(createElement("p", "form-description", operation.note));
+        const fields = createElement("div", "fields");
+
+        if (operation.form === "equipment") {
+          fields.append(createField(operation, {
+            name: "equipmentId",
+            label: "Equipment ID",
+            required: true,
+            placeholder: "EQ-001"
+          }));
+        }
+
+        if (operation.form === "logs") {
+          fields.append(
+            createField(operation, { name: "equipmentId", label: "Equipment ID", required: true, placeholder: "EQ-001" }),
+            createField(operation, { name: "logType", label: "logType", required: true, placeholder: "EventLog" }),
+            createField(operation, { name: "from", label: "from", placeholder: "2026-08-28T00:00:00+09:00" }),
+            createField(operation, { name: "to", label: "to", placeholder: "2026-08-29T00:00:00+09:00" }),
+            createField(operation, { name: "subtype", label: "subtype" }),
+            createField(operation, { name: "limit", label: "limit", inputmode: "numeric", placeholder: "50" })
+          );
+          if (operation.id === "logs-list") {
+            appendTokenField(operation, fields);
+          }
+        }
+
+        if (operation.form === "file") {
+          fields.append(createField(operation, {
+            name: "fileId",
+            label: "fileId",
+            required: true,
+            opaque: true,
+            copy: true,
+            wide: true,
+            placeholder: "Paste an opaque fileId from a list response"
+          }));
+        }
+
+        if (operation.form === "current") {
+          fields.append(
+            createField(operation, { name: "equipmentId", label: "Equipment ID", required: true, placeholder: "EQ-001" }),
+            createField(operation, { name: "configurationType", label: "configurationType", required: true, placeholder: "PM" })
+          );
+        }
+
+        if (operation.form === "history") {
+          fields.append(
+            createField(operation, { name: "equipmentId", label: "Equipment ID", required: true, placeholder: "EQ-001" }),
+            createField(operation, { name: "configurationType", label: "configurationType", required: true, placeholder: "PM" }),
+            createField(operation, { name: "from", label: "from", required: true, placeholder: "2026-08-01T00:00:00+09:00" }),
+            createField(operation, { name: "to", label: "to", required: true, placeholder: "2026-09-01T00:00:00+09:00" }),
+            createField(operation, { name: "limit", label: "limit", inputmode: "numeric", placeholder: "50" })
+          );
+          appendTokenField(operation, fields);
+        }
+
+        operationForm.append(fields);
+        if (operation.form === "logs") {
+          appendAttributeSection(operation, operationForm);
+        }
+        operationForm.append(createElement("p", "field-hint", "The Send action is above; only this operation's request controls are changed while navigating."));
+      }
+
+      function collectFormValues(operation) {
+        const values = operation.values;
+        operationForm.querySelectorAll("[data-field]").forEach((input) => {
+          values[input.dataset.field] = input.value.trim();
+        });
+        syncAttributes(operation);
+        values.attributes = Array.isArray(operation.values.attributes)
+          ? operation.values.attributes.map((attribute) => ({ ...attribute }))
+          : [];
+        return values;
+      }
+
+      function requiredValue(operation, name, label) {
+        const input = operationForm.querySelector(`[data-field="${name}"]`);
+        const value = input ? input.value.trim() : "";
+        if (value) {
+          return value;
+        }
+        showClientError(operation, `${label} is required.`, input);
+        return null;
+      }
+
+      function formatBytes(bytes) {
+        if (bytes == null || Number.isNaN(bytes)) {
+          return "—";
+        }
+        if (bytes < 1024) {
+          return `${bytes} B`;
+        }
+        const units = ["KB", "MB", "GB"];
+        let value = bytes / 1024;
+        let unit = 0;
+        while (value >= 1024 && unit < units.length - 1) {
+          value /= 1024;
+          unit += 1;
+        }
+        return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
+      }
+
+      function measureBody(body) {
+        if (typeof body !== "string") {
+          return null;
+        }
+        if (window.TextEncoder) {
+          return new TextEncoder().encode(body).length;
+        }
+        return new Blob([body]).size;
+      }
+
+      function responseBodySize(response, body) {
+        const contentLength = response.headers.get("Content-Length");
+        if (contentLength && /^\d+$/.test(contentLength)) {
+          return Number(contentLength);
+        }
+        if (body instanceof Blob) {
+          return body.size;
+        }
+        return measureBody(body);
+      }
+
+      function appendRequestUrl(parent, url) {
+        const container = createElement("div", "request-url");
+        container.append(
+          createElement("span", "request-url-label", "Request URL"),
+          createElement("code", null, url)
+        );
+        parent.append(container);
+      }
+
+      function renderClientErrorState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics("Not sent", "error", null, null);
+        clearJsonCopy();
+        const panel = createElement("div", "error-message");
+        panel.append(
+          createElement("strong", null, "Request validation"),
+          createElement("p", null, state.message)
+        );
+        responseBody.append(panel);
+      }
+
+      function showClientError(operation, message, focusTarget) {
+        storeResponseState(operation, { kind: "client-error", message });
+        if (focusTarget) {
+          focusTarget.focus();
+        }
+      }
+
+      function renderLoadingState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics("Sending…", "loading", null, null);
+        appendRequestUrl(responseBody, state.url);
+        const panel = createElement("div", "loading-message");
+        panel.append(
+          createElement("strong", null, "Sending…"),
+          createElement("p", null, "The request is in progress. Other operations remain available.")
+        );
+        responseBody.append(panel);
+        clearJsonCopy();
+      }
+
+      function showLoading(operation, url) {
+        storeResponseState(operation, { kind: "loading", url });
+      }
+
+      function renderNetworkErrorState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics("Network error", "error", state.duration, null);
+        appendRequestUrl(responseBody, state.url);
+        const panel = createElement("div", "error-message");
+        panel.append(
+          createElement("strong", null, "Network error"),
+          createElement("p", null, "The server could not be reached or its response could not be read.")
+        );
+        responseBody.append(panel);
+        clearJsonCopy();
+      }
+
+      function showNetworkError(operation, url, duration) {
+        storeResponseState(operation, { kind: "network-error", url, duration });
+      }
+
+      function isJsonContentType(contentType) {
+        const normalized = (contentType || "").toLowerCase();
+        return normalized.includes("application/json") || normalized.includes("+json");
+      }
+
+      function statusText(response) {
+        const fallback = {
+          200: "OK",
+          201: "Created",
+          204: "No Content",
+          400: "Bad Request",
+          401: "Unauthorized",
+          404: "Not Found",
+          409: "Conflict",
+          410: "Gone",
+          500: "Internal Server Error",
+          502: "Bad Gateway"
+        };
+        const reason = response.statusText || fallback[response.status] || "";
+        return `${response.status}${reason ? ` ${reason}` : ""}`;
+      }
+
+      function safeFileName(value) {
+        const cleaned = String(value || "")
+          .replace(/[\u0000-\u001f\u007f]/g, "")
+          .replace(/[\\/:*?"<>|]/g, "_")
+          .trim();
+        if (!cleaned || cleaned === "." || cleaned === "..") {
+          return "filegateway-download.bin";
+        }
+        return cleaned.slice(0, 180);
+      }
+
+      function parseFileName(contentDisposition) {
+        if (!contentDisposition) {
+          return "filegateway-download.bin";
+        }
+
+        const encodedMatch = contentDisposition.match(/(?:^|;)\s*filename\*\s*=\s*([^;]+)/i);
+        if (encodedMatch) {
+          let value = encodedMatch[1].trim();
+          value = value.replace(/^UTF-8''/i, "");
+          try {
+            value = decodeURIComponent(value);
+          } catch {
+            // Fall back to the raw header value when percent-decoding fails.
+          }
+          return safeFileName(value.replace(/^"|"$/g, ""));
+        }
+
+        const plainMatch = contentDisposition.match(/(?:^|;)\s*filename\s*=\s*(?:"([^"]*)"|([^;]+))/i);
+        if (plainMatch) {
+          return safeFileName(plainMatch[1] || plainMatch[2]);
+        }
+        return "filegateway-download.bin";
+      }
+
+      function buildLogQuery(criteria, continuationToken) {
+        const query = new URLSearchParams();
+        query.set("equipmentId", criteria.equipmentId);
+        query.set("logType", criteria.logType);
+        if (criteria.from) query.set("from", criteria.from);
+        if (criteria.to) query.set("to", criteria.to);
+        if (criteria.subtype) query.set("subtype", criteria.subtype);
+        if (criteria.limit) query.set("limit", criteria.limit);
+        const token = continuationToken === undefined ? criteria.continuationToken : continuationToken;
+        if (token) query.set("continuationToken", token);
+        for (const attribute of criteria.attributes) {
+          query.set(`attr.${attribute.name}`, attribute.value);
+        }
+        return query;
+      }
+
+      function buildHistoryQuery(criteria, continuationToken) {
+        const query = new URLSearchParams();
+        query.set("equipmentId", criteria.equipmentId);
+        query.set("configurationType", criteria.configurationType);
+        query.set("from", criteria.from);
+        query.set("to", criteria.to);
+        if (criteria.limit) query.set("limit", criteria.limit);
+        const token = continuationToken === undefined ? criteria.continuationToken : continuationToken;
+        if (token) query.set("continuationToken", token);
+        return query;
+      }
+
+      function buildRequest(operation, continuationToken) {
+        const values = collectFormValues(operation);
+
+        if (operation.form === "equipment") {
+          const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
+          if (!equipmentId) return null;
+          return {
+            url: buildUrl(`/api/v1/equipments/${encodeURIComponent(equipmentId)}/file-types`, new URLSearchParams()),
+            mode: operation.mode
+          };
+        }
+
+        if (operation.form === "logs") {
+          const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
+          if (!equipmentId) return null;
+          const logType = requiredValue(operation, "logType", "logType");
+          if (!logType) return null;
+          const criteria = {
+            equipmentId,
+            logType,
+            from: values.from || "",
+            to: values.to || "",
+            subtype: values.subtype || "",
+            limit: values.limit || "",
+            continuationToken: values.continuationToken || "",
+            attributes: Array.isArray(values.attributes) ? values.attributes : []
+          };
+          operation.criteria = criteria;
+          return {
+            url: buildUrl(operation.mode === "download" ? "/api/v1/logs/download" : "/api/v1/logs", buildLogQuery(criteria, continuationToken)),
+            mode: operation.mode
+          };
+        }
+
+        if (operation.form === "file") {
+          const fileId = requiredValue(operation, "fileId", "fileId");
+          if (!fileId) return null;
+          const query = new URLSearchParams();
+          query.set("fileId", fileId);
+          return {
+            url: buildUrl(operation.mode === "download" ? "/api/v1/files/download" : "/api/v1/files", query),
+            mode: operation.mode
+          };
+        }
+
+        if (operation.form === "current") {
+          const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
+          if (!equipmentId) return null;
+          const configurationType = requiredValue(operation, "configurationType", "configurationType");
+          if (!configurationType) return null;
+          const query = new URLSearchParams();
+          query.set("equipmentId", equipmentId);
+          query.set("configurationType", configurationType);
+          return {
+            url: buildUrl(operation.mode === "download" ? "/api/v1/configurations/current/download" : "/api/v1/configurations/current", query),
+            mode: operation.mode
+          };
+        }
+
+        if (operation.form === "history") {
+          const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
+          if (!equipmentId) return null;
+          const configurationType = requiredValue(operation, "configurationType", "configurationType");
+          if (!configurationType) return null;
+          const from = requiredValue(operation, "from", "from");
+          if (!from) return null;
+          const to = requiredValue(operation, "to", "to");
+          if (!to) return null;
+          const criteria = {
+            equipmentId,
+            configurationType,
+            from,
+            to,
+            limit: values.limit || "",
+            continuationToken: values.continuationToken || ""
+          };
+          operation.criteria = criteria;
+          return {
+            url: buildUrl("/api/v1/configurations/history", buildHistoryQuery(criteria, continuationToken)),
+            mode: operation.mode
+          };
+        }
+
+        return null;
+      }
+
+      function buildNextPageRequest(operation, token) {
+        if (!operation.criteria) {
+          return null;
+        }
+        if (operation.form === "logs") {
+          return {
+            url: buildUrl("/api/v1/logs", buildLogQuery(operation.criteria, token)),
+            mode: "json"
+          };
+        }
+        if (operation.form === "history") {
+          return {
+            url: buildUrl("/api/v1/configurations/history", buildHistoryQuery(operation.criteria, token)),
+            mode: "json"
+          };
+        }
+        return null;
+      }
+
+      function setJsonCopy(value) {
+        const serialized = value || "";
+        copyJson.disabled = !serialized;
+        copyJson.setAttribute("data-copy-value", serialized);
+        copyJson.textContent = "Copy JSON";
+      }
+
+      function appendRawJson(parent, rawText) {
+        const raw = createElement("details", "raw-response");
+        raw.open = true;
+        raw.append(
+          createElement("summary", null, "Raw response JSON"),
+          createElement("pre", null, rawText || "(empty body)")
+        );
+        parent.append(raw);
+      }
+
+      function appendJsonSection(parent, data, rawText, title = "JSON body") {
+        const section = createElement("section", "json-section");
+        const toolbar = createElement("div", "response-toolbar");
+        const pretty = JSON.stringify(data, null, 2);
+        toolbar.append(createElement("h3", null, title));
+        section.append(toolbar);
+        const pre = createElement("pre", "json-body", pretty === undefined ? String(data) : pretty);
+        section.append(pre);
+        if (rawText && rawText !== pretty) {
+          appendRawJson(section, rawText);
+        }
+        parent.append(section);
+        setJsonCopy(pretty === undefined ? String(data) : pretty);
+      }
+
+      function appendResultField(parent, label, value) {
+        if (value == null || value === "") {
+          return;
+        }
+        const field = createElement("div", "result-field");
+        field.append(
+          createElement("span", "result-field-label", label),
+          createElement("span", "result-field-value", String(value))
+        );
+        parent.append(field);
+      }
+
+      function selectFileOperation(fileId, operationId) {
+        const target = operations.get(operationId);
+        if (!target) {
+          return;
+        }
+        target.values.fileId = fileId;
+        renderOperation(operationId);
+        const input = operationForm.querySelector('[data-field="fileId"]');
+        if (input) {
+          input.value = fileId;
+          input.focus();
+        }
+      }
+
+      function appendFileIdActions(parent, fileId) {
+        const row = createElement("div", "file-id-row");
+        row.append(
+          createElement("span", "file-id-label", "fileId"),
+          createElement("code", "file-id-value", fileId)
+        );
+        const actions = createElement("div", "file-id-actions");
+        actions.append(
+          createCopyButton("Copy", fileId),
+          createElement("button", "link-button", "Metadata"),
+          createElement("button", "link-button", "Download")
+        );
+        const metadataButton = actions.children[1];
+        metadataButton.type = "button";
+        metadataButton.addEventListener("click", () => selectFileOperation(fileId, "files-metadata"));
+        const downloadButton = actions.children[2];
+        downloadButton.type = "button";
+        downloadButton.addEventListener("click", () => selectFileOperation(fileId, "files-download"));
+        row.append(actions);
+        parent.append(row);
+      }
+
+      function appendResultItem(list, item, index) {
+        const result = createElement("article", "result-item");
+        const header = createElement("div", "result-item-header");
+        const title = item && typeof item === "object" && item.fileName
+          ? String(item.fileName)
+          : item && typeof item === "object" && item.logType
+            ? String(item.logType)
+            : `item ${index + 1}`;
+        header.append(createElement("strong", null, title));
+        result.append(header);
+
+        if (item && typeof item === "object") {
+          const fields = createElement("div", "result-fields");
+          for (const key of ["equipmentId", "logType", "configurationType", "subtype", "timestamp", "snapshotTimestamp", "size", "generationType"]) {
+            appendResultField(fields, key, item[key]);
+          }
+          if (fields.children.length > 0) {
+            result.append(fields);
+          }
+          if (typeof item.fileId === "string" && item.fileId.length > 0) {
+            appendFileIdActions(result, item.fileId);
+          }
+          const details = createElement("details", "raw-response");
+          details.append(
+            createElement("summary", null, "Item JSON"),
+            createElement("pre", null, JSON.stringify(item, null, 2))
+          );
+          result.append(details);
+        }
+        list.append(result);
+      }
+
+      function appendItems(parent, data, heading = "Items") {
+        const items = Array.isArray(data)
+          ? data
+          : data && typeof data === "object" && Array.isArray(data.items)
+            ? data.items
+            : null;
+        if (!items) {
+          return;
+        }
+
+        const list = createElement("section", "item-list");
+        list.append(createElement("h3", null, `${heading} (${items.length})`));
+        if (items.length === 0) {
+          list.append(createElement("p", "field-hint", "No items returned."));
+        } else {
+          items.forEach((item, index) => appendResultItem(list, item, index));
+        }
+        parent.append(list);
+      }
+
+      function appendCatalogCollections(parent, data) {
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+          return;
+        }
+        if (Array.isArray(data.logs)) {
+          appendItems(parent, data.logs, "Logs");
+        }
+        if (Array.isArray(data.configurations)) {
+          appendItems(parent, data.configurations, "Configurations");
+        }
+      }
+
+      function appendPagination(operation, parent, token) {
+        if (!token || !operation.criteria) {
+          return;
+        }
+
+        const actions = createElement("div", "pagination-actions");
+        const next = createElement("button", "primary-button", "Load next page");
+        next.type = "button";
+        next.addEventListener("click", () => {
+          const request = buildNextPageRequest(operation, token);
+          if (request) {
+            executeRequest(operation, request, next);
+          }
+        });
+        actions.append(next);
+
+        const fragment = document.getElementById("request-token-template").content.cloneNode(true);
+        const details = fragment.firstElementChild;
+        details.querySelector(".token-field-content").append(
+          createElement("pre", null, token),
+          createCopyButton("Copy token", token)
+        );
+        actions.append(details);
+        parent.append(actions);
+      }
+
+      function renderResponseState(operation, state) {
+        switch (state.kind) {
+          case "loading":
+            renderLoadingState(state);
+            break;
+          case "client-error":
+            renderClientErrorState(state);
+            break;
+          case "network-error":
+            renderNetworkErrorState(state);
+            break;
+          case "json-success":
+            renderJsonSuccessState(operation, state);
+            break;
+          case "non-json-success":
+            renderNonJsonSuccessState(state);
+            break;
+          case "http-error":
+            renderHttpErrorState(state);
+            break;
+          case "download-success":
+            renderDownloadState(state);
+            break;
+          case "json-parse-error":
+            renderJsonParseErrorState(state);
+            break;
+          default:
+            showEmptyResponse();
+            break;
+        }
+      }
+
+      function renderJsonSuccessState(operation, state) {
+        responseBody.replaceChildren();
+        setResponseMetrics(state.status, "success", state.duration, state.size);
+        appendRequestUrl(responseBody, state.url);
+
+        if (state.data && typeof state.data === "object" && !Array.isArray(state.data) && typeof state.data.fileId === "string" && state.data.fileId.length > 0) {
+          appendFileIdActions(responseBody, state.data.fileId);
+        }
+        if (operation.form === "equipment") {
+          appendCatalogCollections(responseBody, state.data);
+        } else {
+          appendItems(responseBody, state.data);
+        }
+        if (state.data && typeof state.data === "object" && !Array.isArray(state.data)) {
+          const token = typeof state.data.continuationToken === "string" ? state.data.continuationToken : "";
+          appendPagination(operation, responseBody, token);
+        }
+        appendJsonSection(responseBody, state.data, state.rawText);
+      }
+
+      function renderJsonSuccess(operation, response, data, rawText, duration, url) {
+        storeResponseState(operation, {
+          kind: "json-success",
+          status: statusText(response),
+          duration,
+          size: responseBodySize(response, rawText),
+          url,
+          data,
+          rawText
+        });
+      }
+
+      function renderNonJsonSuccessState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics(state.status, "success", state.duration, state.size);
+        clearJsonCopy();
+        appendRequestUrl(responseBody, state.url);
+        const message = createElement("div", "download-state");
+        message.append(
+          createElement("h3", null, "Non-JSON success response"),
+          createElement("p", null, "The endpoint returned a successful response without a JSON content type.")
+        );
+        responseBody.append(message);
+        appendRawJson(responseBody, state.body);
+      }
+
+      function renderNonJsonSuccess(operation, response, body, duration, url) {
+        storeResponseState(operation, {
+          kind: "non-json-success",
+          status: statusText(response),
+          duration,
+          size: responseBodySize(response, body),
+          url,
+          body
+        });
+      }
+
+      function renderProblemDetails(parent, responseBodyData, rawText) {
+        const fragment = document.getElementById("problem-details-template").content.cloneNode(true);
+        const section = fragment.firstElementChild;
+        section.querySelector("#problem-status").textContent = responseBodyData.status == null ? "—" : String(responseBodyData.status);
+        section.querySelector("#problem-code").textContent = responseBodyData.code == null ? "—" : String(responseBodyData.code);
+        section.querySelector("#problem-title").textContent = responseBodyData.title == null ? "—" : String(responseBodyData.title);
+        section.querySelector("#problem-detail").textContent = responseBodyData.detail == null ? "—" : String(responseBodyData.detail);
+        section.querySelector("#problem-trace").textContent = responseBodyData.traceId == null ? "—" : String(responseBodyData.traceId);
+        section.querySelector("#problem-raw-response").textContent = rawText || "(empty body)";
+        parent.append(section);
+      }
+
+      function appendRecoveryGuidance(parent, data) {
+        if (!data || data.code !== "MultipleFilesMatched") {
+          return;
+        }
+        const panel = createElement("div", "loading-message");
+        panel.append(
+          createElement("strong", null, "Choose a fileId"),
+          createElement("p", null, "Run a list operation, then use a result's Metadata or Download action for the intended file.")
+        );
+        parent.append(panel);
+      }
+
+      function isProblemDetails(contentType, data) {
+        if ((contentType || "").toLowerCase().includes("application/problem+json")) {
+          return true;
+        }
+        return Boolean(data && typeof data === "object" && !Array.isArray(data) && (
+          Object.prototype.hasOwnProperty.call(data, "title") ||
+          Object.prototype.hasOwnProperty.call(data, "detail") ||
+          Object.prototype.hasOwnProperty.call(data, "code")
+        ));
+      }
+
+      function renderHttpErrorState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics(state.status, "error", state.duration, state.size);
+        clearJsonCopy();
+        appendRequestUrl(responseBody, state.url);
+
+        if (state.errorKind === "json-parse") {
+          const panel = createElement("div", "error-message");
+          panel.append(
+            createElement("strong", null, "JSON parse failed"),
+            createElement("p", null, "The API error body could not be parsed as JSON.")
+          );
+          responseBody.append(panel);
+          appendRawJson(responseBody, state.rawText);
+          return;
+        }
+
+        if (state.errorKind === "problem") {
+          renderProblemDetails(responseBody, state.data, state.rawText);
+          appendRecoveryGuidance(responseBody, state.data);
+          return;
+        }
+
+        if (state.errorKind === "json") {
+          appendJsonSection(responseBody, state.data, state.rawText, "API error JSON");
+          appendRecoveryGuidance(responseBody, state.data);
+          return;
+        }
+
+        const panel = createElement("div", "error-message");
+        panel.append(
+          createElement("strong", null, "Non-JSON API error"),
+          createElement("p", null, "The API returned an error body without a JSON content type.")
+        );
+        responseBody.append(panel);
+        appendRawJson(responseBody, state.rawText);
+      }
+
+      async function renderHttpError(operation, response, url, startedAt) {
+        let body;
+        try {
+          body = await response.text();
+        } catch {
+          showNetworkError(operation, url, performance.now() - startedAt);
+          return;
+        }
+
+        const duration = performance.now() - startedAt;
+        const size = responseBodySize(response, body);
+        const contentType = response.headers.get("Content-Type") || "";
+        if (isJsonContentType(contentType)) {
+          let data;
+          try {
+            data = JSON.parse(body);
+          } catch {
+            storeResponseState(operation, {
+              kind: "http-error",
+              errorKind: "json-parse",
+              status: statusText(response),
+              duration,
+              size,
+              url,
+              rawText: body
+            });
+            return;
+          }
+
+          if (isProblemDetails(contentType, data)) {
+            storeResponseState(operation, {
+              kind: "http-error",
+              errorKind: "problem",
+              status: statusText(response),
+              duration,
+              size,
+              url,
+              data,
+              rawText: body
+            });
+          } else {
+            storeResponseState(operation, {
+              kind: "http-error",
+              errorKind: "json",
+              status: statusText(response),
+              duration,
+              size,
+              url,
+              data,
+              rawText: body
+            });
+          }
+          return;
+        }
+
+        storeResponseState(operation, {
+          kind: "http-error",
+          errorKind: "non-json",
+          status: statusText(response),
+          duration,
+          size,
+          url,
+          rawText: body
+        });
+      }
+
+      function renderDownloadState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics(state.status, "success", state.duration, state.size);
+        appendRequestUrl(responseBody, state.url);
+        const message = createElement("div", "download-state");
+        message.append(
+          createElement("h3", null, "Download started"),
+          createElement("p", null, "The browser download action was requested for this response.")
+        );
+        const details = createElement("div", "download-details");
+        for (const [label, value] of [
+          ["File name", state.fileName],
+          ["Content-Type", state.contentType],
+          ["Content-Length", state.contentLength]
+        ]) {
+          const detail = createElement("div", "download-detail");
+          detail.append(
+            createElement("span", "download-detail-label", label),
+            createElement("span", "download-detail-value", value)
+          );
+          details.append(detail);
+        }
+        message.append(details);
+        responseBody.append(message);
+        clearJsonCopy();
+      }
+
+      function startBrowserDownload(blob, fileName) {
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+          const link = createElement("a");
+          link.href = objectUrl;
+          link.download = fileName;
+          link.hidden = true;
+          document.body.append(link);
+          link.click();
+          link.remove();
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      }
+
+      function renderDownloadSuccess(operation, response, blob, duration, url) {
+        const fileName = parseFileName(response.headers.get("Content-Disposition"));
+        const contentType = response.headers.get("Content-Type") || "unknown";
+        const contentLength = response.headers.get("Content-Length") || formatBytes(blob.size);
+        startBrowserDownload(blob, fileName);
+        storeResponseState(operation, {
+          kind: "download-success",
+          status: statusText(response),
+          duration,
+          size: blob.size,
+          url,
+          fileName,
+          contentType,
+          contentLength
+        });
+      }
+
+      function renderJsonParseErrorState(state) {
+        responseBody.replaceChildren();
+        setResponseMetrics(state.status, "error", state.duration, state.size);
+        appendRequestUrl(responseBody, state.url);
+        const panel = createElement("div", "error-message");
+        panel.append(
+          createElement("strong", null, "JSON parse failed"),
+          createElement("p", null, "The successful response could not be parsed as JSON.")
+        );
+        responseBody.append(panel);
+        appendRawJson(responseBody, state.rawText);
+        clearJsonCopy();
+      }
+
+      function renderJsonParseError(operation, response, body, duration, url) {
+        storeResponseState(operation, {
+          kind: "json-parse-error",
+          status: statusText(response),
+          duration,
+          size: responseBodySize(response, body),
+          url,
+          rawText: body
+        });
+      }
+
+      async function executeRequest(operation, request, triggerButton) {
+        if (operation.busy) {
+          return;
+        }
+
+        operation.busy = true;
+        const button = triggerButton || sendOperation;
+
+        if (activeOperationId === operation.id) {
+          button.disabled = true;
+          sendOperation.disabled = true;
+          sendOperation.textContent = "Sending…";
+        }
+        showLoading(operation, request.url);
+
+        const startedAt = performance.now();
+        try {
+          const response = await fetch(request.url, {
+            method: operation.method,
+            headers: requestHeaders()
+          });
+          if (!response.ok) {
+            await renderHttpError(operation, response, request.url, startedAt);
+            return;
+          }
+
+          if (request.mode === "download") {
+            let blob;
+            try {
+              blob = await response.blob();
+            } catch {
+              showNetworkError(operation, request.url, performance.now() - startedAt);
+              return;
+            }
+            renderDownloadSuccess(operation, response, blob, performance.now() - startedAt, request.url);
+            return;
+          }
+
+          let body;
+          try {
+            body = await response.text();
+          } catch {
+            showNetworkError(operation, request.url, performance.now() - startedAt);
+            return;
+          }
+
+          const duration = performance.now() - startedAt;
+          const contentType = response.headers.get("Content-Type") || "";
+          if (!isJsonContentType(contentType)) {
+            renderNonJsonSuccess(operation, response, body, duration, request.url);
+            return;
+          }
+
+          let data;
+          try {
+            data = JSON.parse(body);
+          } catch {
+            renderJsonParseError(operation, response, body, duration, request.url);
+            return;
+          }
+          renderJsonSuccess(operation, response, data, body, duration, request.url);
+        } catch {
+          showNetworkError(operation, request.url, performance.now() - startedAt);
+        } finally {
+          operation.busy = false;
+          if (activeOperationId === operation.id) {
+            sendOperation.disabled = false;
+            sendOperation.textContent = "Send";
+            button.disabled = false;
+          }
+        }
+      }
+
+      function renderOperation(operationId) {
+        const nextOperation = operations.get(operationId);
+        if (!nextOperation) {
+          return;
+        }
+
+        if (activeOperation) {
+          collectFormValues(activeOperation);
+        }
+        activeOperation = nextOperation;
+        activeOperationId = operationId;
+        document.querySelectorAll("[data-operation]").forEach((link) => {
+          const selected = link.dataset.operation === operationId;
+          link.classList.toggle("active", selected);
+          if (selected) {
+            link.setAttribute("aria-current", "page");
+          } else {
+            link.removeAttribute("aria-current");
+          }
+        });
+
+        activeGroupLabel.textContent = nextOperation.group;
+        activeOperationLabel.textContent = nextOperation.label;
+        requestMethod.textContent = nextOperation.method;
+        requestMethod.className = `method-badge method-${nextOperation.method.toLowerCase()}`;
+        requestEndpoint.textContent = nextOperation.endpoint;
+        renderOperationForm(nextOperation);
+        sendOperation.disabled = nextOperation.busy;
+        sendOperation.textContent = nextOperation.busy ? "Sending…" : "Send";
+        if (nextOperation.responseState) {
+          renderResponseState(nextOperation, nextOperation.responseState);
+        } else {
+          showEmptyResponse();
+        }
+      }
+
+      operationForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (!activeOperation || activeOperation.busy) {
+          return;
+        }
+        const request = buildRequest(activeOperation);
+        if (request) {
+          executeRequest(activeOperation, request, sendOperation);
+        }
+      });
+
+      copyJson.addEventListener("click", () => {
+        copyText(copyJson.dataset.copyValue, copyJson);
+      });
+
+      document.querySelectorAll("[data-operation]").forEach((link) => {
+        link.addEventListener("click", () => renderOperation(link.dataset.operation));
+      });
+
+      renderOperation("catalog-file-types");
+    })();
+  </script>
+</body>
+</html>
