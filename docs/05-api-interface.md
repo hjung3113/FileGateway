@@ -173,7 +173,7 @@ Log continuation token은 서버에 이전 FTP 결과 전체를 저장하지 않
 
 탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
 
-조건 기반 존재 여부 전용 HEAD endpoint는 추가하지 않는다. 조건 기반 존재 확인은 목록 조회를 사용하고, 특정 `fileId`의 현재 상태/존재 확인은 공통 `GET /api/v1/files/{fileId}`를 사용한다.
+조건 기반 존재 여부 전용 HEAD endpoint는 추가하지 않는다. 조건 기반 존재 확인은 목록 조회를 사용하고, 특정 `fileId`의 현재 상태/존재 확인은 공통 `GET /api/v1/files?fileId=...`를 사용한다.
 
 ### Current Configuration 조회
 
@@ -213,7 +213,7 @@ Current 조회와 동일한 Resolver 규칙을 사용한다.
 - 1개 일치 → 해당 Current Configuration File 다운로드
 - 2개 이상 일치 → `MultipleFilesMatched` (409)
 
-여러 Current 파일이 있는 경우 목록에서 원하는 파일의 `fileId`를 얻은 뒤 공통 `/api/v1/files/{fileId}/download`를 사용한다. 직접 다운로드 endpoint에 `fileName`이나 Configuration 전용 subtype 조건을 추가하지 않는다.
+여러 Current 파일이 있는 경우 목록에서 원하는 파일의 `fileId`를 얻은 뒤 공통 `/api/v1/files/download?fileId=...`를 사용한다. 직접 다운로드 endpoint에 `fileName`이나 Configuration 전용 subtype 조건을 추가하지 않는다.
 
 ### Configuration History 목록
 
@@ -256,7 +256,7 @@ GET /api/v1/configurations/history
 
 Configuration History continuation token도 stateless cursor이며 원래 조회조건과 마지막 반환 위치인 `snapshotTimestamp + fileName`을 보존한다. cursor의 `fileName` 비교는 case-insensitive다.
 
-Configuration History 전용 조건 기반 직접 다운로드 endpoint는 MVP에서 만들지 않는다. 원하는 Snapshot File의 `fileId`를 얻은 뒤 공통 `/api/v1/files/{fileId}/download`를 사용한다.
+Configuration History 전용 조건 기반 직접 다운로드 endpoint는 MVP에서 만들지 않는다. 원하는 Snapshot File의 `fileId`를 얻은 뒤 공통 `/api/v1/files/download?fileId=...`를 사용한다.
 
 ### continuationToken 공통 계약
 
@@ -270,10 +270,12 @@ Configuration History 전용 조건 기반 직접 다운로드 endpoint는 MVP�
 ### 파일 정보
 
 ```http
-GET /api/v1/files/{fileId}
+GET /api/v1/files?fileId=...
 ```
 
-MVP에서는 `/api/v1/files/{fileId}`에 HEAD endpoint를 두지 않는다. GET metadata가 이미 실제 원격 stat/존재 확인과 파일 크기 조회를 수행하므로 별도 HEAD 계약을 만들지 않는다.
+`fileId`는 URL path segment가 아니라 query parameter로 전달한다. opaque token 특성상 서명된 claim을 담아 260자를 쉽게 넘기므로, path segment로 두면 HTTP.sys/IIS의 기본 URL 세그먼트 길이 제한(260자)에 걸려 요청이 서버에 도달하기 전에 거부된다. query string 길이 한도(기본 2048자)는 이보다 훨씬 여유롭다.
+
+MVP에서는 `/api/v1/files`에 HEAD endpoint를 두지 않는다. GET metadata가 이미 실제 원격 stat/존재 확인과 파일 크기 조회를 수행하므로 별도 HEAD 계약을 만들지 않는다.
 
 GET은 다음 순서로 실제 대상 상태를 검증한다.
 
@@ -282,7 +284,7 @@ GET은 다음 순서로 실제 대상 상태를 검증한다.
 3. 현재 기준정보로 논리 identity 재해석
 4. 실제 원격 파일 stat/존재 여부 확인
 
-공통 `/files/{fileId}` endpoint는 feature 업무 metadata를 재구성하는 API가 아니라 공통 파일 상태 확인 용도다.
+공통 `/files?fileId=...` endpoint는 feature 업무 metadata를 재구성하는 API가 아니라 공통 파일 상태 확인 용도다.
 
 GET JSON의 핵심 필드는 다음 최소 공통 정보만 둔다.
 
@@ -297,7 +299,7 @@ GET JSON의 핵심 필드는 다음 최소 공통 정보만 둔다.
 ### fileId 다운로드
 
 ```http
-GET /api/v1/files/{fileId}/download
+GET /api/v1/files/download?fileId=...
 ```
 
 - `fileId`는 서명된 opaque 토큰
@@ -360,7 +362,7 @@ FileGateway는 **저장소에서 읽을 수 있는 파일을 제공하는 역할
 
 `fileId` 처리 오류는 다음 원인을 구분한다.
 
-- 형식 오류 또는 서명 검증 실패 → `InvalidFileId` (400)
+- `fileId` query parameter 누락/빈 값, 형식 오류, 서명 검증 실패 → `InvalidFileId` (400)
 - TTL 24시간 경과 → `FileIdExpired` (410)
 - 로그 기준정보가 삭제되어 재해석 불가 → `LogDefinitionNotFound` (404)
 - Configuration 기준정보가 삭제되어 재해석 불가 → `ConfigurationDefinitionNotFound` (404)

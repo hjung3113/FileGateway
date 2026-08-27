@@ -141,7 +141,7 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 ## 다운로드/스트리밍 운영
 
 - metadata의 파일 크기는 조회 시점 관측값이다.
-- 공통 `GET /api/v1/files/{fileId}` metadata 조회도 실제 원격 stat을 수행한다.
+- 공통 `GET /api/v1/files?fileId=...` metadata 조회도 실제 원격 stat을 수행한다.
 - 다운로드는 스트림 시작 직전에 확인한 파일 크기를 `Content-Length`로 사용한다.
 - Continuous 로그와 Current Configuration처럼 변경 가능한 파일도 시작 시점 크기를 해당 응답의 전송 기준으로 사용한다.
 - Continuous 파일이 다운로드 중 커지는 것은 오류가 아니며 시작 시점 크기까지만 전송한다.

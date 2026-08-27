@@ -123,9 +123,9 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 - History 목록 응답이 `{ items, continuationToken }` envelope인지 검증
 - 페이지 중 조회조건 변경 거부 및 `limit` 변경 허용
 - 페이지 사이 원격 파일 집합 변경 시 완전 snapshot을 보장하지 않는 동작
-- 공통 `GET /files/{fileId}`가 `fileId`, `fileName`, `size` 최소 metadata만 반환하고 실제 원격 stat을 수행하는지 검증
+- 공통 `GET /files?fileId=...`가 `fileId`, `fileName`, `size` 최소 metadata만 반환하고 실제 원격 stat을 수행하는지 검증
 - Snapshot `fileId` 접근 시 완료 marker 재검증
-- `/files/{fileId}` HEAD endpoint가 MVP API에 존재하지 않는지 검증
+- `/files?fileId=...` HEAD endpoint가 MVP API에 존재하지 않는지 검증
 - fileId 다운로드
 - 조건 기반 직접 다운로드
 - Problem Details 기반 공통 오류 body와 안정적인 `code`, `traceId`

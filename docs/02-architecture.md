@@ -120,7 +120,7 @@ ASP.NET Core/.NET 기본 기능으로 충분한 영역은 기본 기능을 우�
 - Logs: `Log` logical identity와 Log cursor/조회조건 의미
 - Configurations: `ConfigurationCurrent`/`ConfigurationSnapshot` logical identity와 History cursor/조회조건 의미
 
-`fileId`에는 외부에서 보이지 않는 보호된 `resourceKind`를 포함해 공통 `/files/{fileId}`가 해당 feature resolver로 위임할 수 있게 한다.
+`fileId`에는 외부에서 보이지 않는 보호된 `resourceKind`를 포함해 공통 `/files?fileId=...`가 해당 feature resolver로 위임할 수 있게 한다.
 
 ```text
 resourceKind

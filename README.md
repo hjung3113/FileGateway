@@ -182,7 +182,7 @@ flowchart LR
     A4 --> A6{"조건에 맞는 파일<br/>1건으로 확정되는가?"}
     A5 --> A6
     A6 -- 예 --> A7["/logs/download 또는<br/>/configurations/current/download<br/>(조건 기반 직접 다운로드)"]
-    A6 -- 아니오, 목록에서 선택 --> A8["목록의 fileId로<br/>/files/{fileId}/download"]
+    A6 -- 아니오, 목록에서 선택 --> A8["목록의 fileId로<br/>/files/download?fileId=..."]
 ```
 
 - 파일 1건이 확실하면 조건 기반 직접 다운로드가 왕복을 줄여줍니다. 2건 이상 걸리면 `409 MultipleFilesMatched`이므로 목록 조회로 전환하세요.
@@ -210,7 +210,7 @@ sequenceDiagram
 
     Note over C,A: fileId는 최대 24시간 재사용 가능
 
-    C->>A: GET /api/v1/files/{fileId}/download (X-Api-Key)
+    C->>A: GET /api/v1/files/download?fileId=... (X-Api-Key)
     A->>S: fileId → resourceKind별 identity 재해석
     S->>R: 현재 기준정보로 물리 위치 재계산
     S->>F: stat + OpenRead
@@ -223,7 +223,7 @@ sequenceDiagram
 
 ```mermaid
 flowchart TD
-    Start["GET /files/{fileId} 또는 /download"] --> V{"형식/서명 검증"}
+    Start["GET /files?fileId=... 또는 /files/download?fileId=..."] --> V{"형식/서명 검증"}
     V -- 실패 --> E1["400 InvalidFileId"]
     V -- 통과 --> T{"TTL 24h 경과?"}
     T -- 예 --> E2["410 FileIdExpired"]
@@ -322,7 +322,7 @@ curl -s -OJ "https://gateway.example/api/v1/logs/download?equipmentId=EQ-001&log
   -H "X-Api-Key: $API_KEY"
 ```
 
-0건 → `404 FileNotFound`, 2건 이상 일치 → `409 MultipleFilesMatched`(이 경우 목록 조회로 `fileId`를 얻어 `/files/{fileId}/download` 사용).
+0건 → `404 FileNotFound`, 2건 이상 일치 → `409 MultipleFilesMatched`(이 경우 목록 조회로 `fileId`를 얻어 `/files/download?fileId=...` 사용).
 
 ### 4. Current Configuration 조회/다운로드
 
@@ -350,10 +350,10 @@ curl -s "https://gateway.example/api/v1/configurations/history?equipmentId=EQ-00
 ### 6. 공통 파일 조회/다운로드 (`fileId`)
 
 ```bash
-curl -s https://gateway.example/api/v1/files/$FILE_ID \
+curl -s "https://gateway.example/api/v1/files?fileId=$FILE_ID" \
   -H "X-Api-Key: $API_KEY"
 
-curl -s -OJ https://gateway.example/api/v1/files/$FILE_ID/download \
+curl -s -OJ "https://gateway.example/api/v1/files/download?fileId=$FILE_ID" \
   -H "X-Api-Key: $API_KEY"
 ```
 
@@ -419,8 +419,10 @@ def list_logs(equipment_id: str, log_type: str, **params) -> dict:
 def download_by_file_id(file_id: str, file_name: str, dest_dir: str = ".") -> str:
     dest_path = os.path.join(dest_dir, os.path.basename(file_name))  # 서버 파일명이라도 경로요소는 제거
     with requests.get(
-        f"{GATEWAY}/api/v1/files/{file_id}/download",
+        f"{GATEWAY}/api/v1/files/download",
         headers=HEADERS,
+        params={"fileId": file_id},  # path segment가 아닌 query — opaque token 길이가
+        # URL 세그먼트 제한(예: IIS/HTTP.sys 260자)을 넘을 수 있음
         stream=True,
         timeout=(10, 60),  # (connect, read) — read는 청크당 idle timeout이지 전체 다운로드 상한이 아님
     ) as resp:
@@ -517,9 +519,10 @@ var first = items[0];
 var fileId = first.GetProperty("fileId").GetString();
 var fileName = Path.GetFileName(first.GetProperty("fileName").GetString()!); // 경로요소 제거
 
-// 2. fileId로 streaming download
+// 2. fileId로 streaming download (fileId는 query parameter — path segment로 넣으면
+//    opaque token 길이 때문에 서버 URL 세그먼트 제한(예: IIS/HTTP.sys 260자)에 걸릴 수 있다)
 using var downloadResponse = await client.GetAsync(
-    $"/api/v1/files/{fileId}/download", HttpCompletionOption.ResponseHeadersRead);
+    $"/api/v1/files/download?fileId={Uri.EscapeDataString(fileId!)}", HttpCompletionOption.ResponseHeadersRead);
 if (!downloadResponse.IsSuccessStatusCode)
     throw await ProblemException(downloadResponse);
 
