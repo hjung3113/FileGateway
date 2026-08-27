@@ -1,24 +1,38 @@
 <!doctype html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FileGateway API Tester</title>
   <style>
     :root {
-      --page-background: #f3f7fe;
-      --card-background: #fbfdff;
-      --muted-background: #edf3fb;
-      --primary: #1428a0;
-      --primary-hover: #101f80;
-      --text: #101828;
-      --muted-text: #687386;
-      --border: #cbd6e6;
+      --page-background: #f4f7fb;
+      --surface: #ffffff;
+      --surface-muted: #eef3f8;
+      --surface-subtle: #f8fafc;
+      --text: #17212b;
+      --muted-text: #5d6b79;
+      --faint-text: #5d6b79;
+      --border: #cbd5e1;
+      --border-strong: #aebdcd;
+      --primary: #175cd3;
+      --primary-hover: #1249a8;
+      --primary-soft: #eaf2ff;
+      --success: #087443;
+      --success-soft: #eaf8f0;
       --danger: #b42318;
-      --success: #067647;
-      --radius: 6px;
-      --gap: 8px;
-      /* CDN 로드 없이 시스템 sans-serif만 사용(Inter는 로드하지 않으므로 스택에서 제외) */
+      --danger-soft: #fff1f0;
+      --warning: #9a6700;
+      --warning-soft: #fff8e6;
+      --radius: 10px;
+      --small-radius: 6px;
+      --space-1: 4px;
+      --space-2: 8px;
+      --space-3: 12px;
+      --space-4: 16px;
+      --space-5: 20px;
+      --space-6: 24px;
+      --space-7: 32px;
       --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       --code-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
@@ -27,31 +41,70 @@
       box-sizing: border-box;
     }
 
+    html {
+      min-width: 320px;
+      background: var(--page-background);
+    }
+
     body {
+      min-width: 320px;
       margin: 0;
       color: var(--text);
       background: var(--page-background);
       font-family: var(--font);
-      line-height: 1.5;
+      line-height: 1.45;
     }
 
-    .topbar {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      gap: 24px;
-      padding: 28px clamp(16px, 4vw, 48px) 24px;
-      border-bottom: 1px solid var(--border);
-      background: var(--card-background);
+    button,
+    input {
+      font: inherit;
     }
 
-    .eyebrow {
-      margin: 0 0 4px;
-      color: var(--primary);
-      font-size: 12px;
+    button {
+      border: 1px solid transparent;
+      border-radius: var(--small-radius);
+      cursor: pointer;
+      font-size: 13px;
       font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.58;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    summary:focus-visible {
+      outline: 3px solid #8db8ff;
+      outline-offset: 2px;
+    }
+
+    input {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--small-radius);
+      color: var(--text);
+      background: var(--surface);
+      font-size: 13px;
+    }
+
+    input::placeholder {
+      color: var(--faint-text);
+    }
+
+    input:hover:not(:focus) {
+      border-color: var(--border-strong);
+    }
+
+    code,
+    pre,
+    .opaque-input,
+    .method-badge,
+    .response-metric {
+      font-family: var(--code-font);
     }
 
     h1,
@@ -61,177 +114,335 @@
       margin-top: 0;
     }
 
-    h1 {
-      margin-bottom: 4px;
-      font-size: clamp(24px, 4vw, 34px);
-      line-height: 1.15;
-    }
-
-    h2 {
-      margin-bottom: 4px;
-      font-size: 18px;
-      line-height: 1.3;
-    }
-
+    h1,
+    h2,
     h3 {
-      margin-bottom: 0;
-      font-size: 14px;
+      letter-spacing: -0.02em;
     }
 
-    .subtitle,
-    .card-description,
-    .note,
-    .field-hint {
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-6);
+      padding: 18px clamp(18px, 4vw, 48px);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .brand-block {
+      min-width: 0;
+    }
+
+    .brand-block h1 {
+      margin-bottom: 4px;
+      font-size: clamp(22px, 3vw, 30px);
+      line-height: 1.1;
+    }
+
+    .brand-copy,
+    .context-copy,
+    .sidebar-copy,
+    .operation-note,
+    .field-hint,
+    .response-copy,
+    .empty-state p,
+    .problem-field p {
       color: var(--muted-text);
-      font-size: 13px;
-    }
-
-    .subtitle {
-      margin-bottom: 0;
-    }
-
-    .card-description code {
-      color: var(--text);
-      font-family: var(--code-font);
       font-size: 12px;
     }
 
-    .origin {
+    .brand-copy {
+      margin-bottom: 0;
+    }
+
+    .environment {
       display: grid;
-      gap: 2px;
-      min-width: min(100%, 320px);
+      flex: 0 1 340px;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 2px var(--space-3);
+      align-items: center;
+      min-width: 230px;
       color: var(--muted-text);
-      font-size: 12px;
+      font-size: 11px;
       text-align: right;
     }
 
-    .origin code {
+    .environment-label {
+      grid-column: 1;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .environment-badge {
+      justify-self: end;
+      padding: 3px 7px;
+      border: 1px solid #b9d4ff;
+      border-radius: 999px;
+      color: var(--primary);
+      background: var(--primary-soft);
+      font-size: 11px;
+    }
+
+    .environment code {
+      grid-column: 1 / -1;
       overflow-wrap: anywhere;
       color: var(--text);
-      font-family: var(--code-font);
-      font-size: 13px;
+      font-size: 12px;
     }
 
-    main {
+    .app-shell {
       display: grid;
-      gap: 16px;
-      width: min(1400px, 100%);
+      grid-template-columns: 248px minmax(0, 1fr);
+      width: min(1680px, 100%);
+      min-height: calc(100vh - 89px);
       margin: 0 auto;
-      padding: 24px clamp(16px, 4vw, 48px) 48px;
     }
 
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-      gap: 16px;
-      align-items: start;
+    .api-sidebar {
+      position: sticky;
+      top: 0;
+      align-self: start;
+      height: calc(100vh - 1px);
+      overflow: auto;
+      padding: var(--space-6) 14px;
+      border-right: 1px solid var(--border);
+      background: var(--surface-subtle);
     }
 
-    .card {
-      min-width: 0;
-      padding: 20px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--card-background);
-      box-shadow: 0 2px 8px rgb(16 24 40 / 4%);
+    .sidebar-heading {
+      padding: 0 8px var(--space-5);
+      border-bottom: 1px solid var(--border);
     }
 
-    .access-card {
-      display: grid;
-      gap: 16px;
+    .sidebar-heading h2 {
+      margin-bottom: 4px;
+      font-size: 15px;
     }
 
-    .card-heading {
-      margin-bottom: 16px;
-    }
-
-    .card-heading h2 {
-      margin-bottom: 2px;
-    }
-
-    .card-description,
-    .note {
+    .sidebar-copy {
       margin-bottom: 0;
+      line-height: 1.5;
     }
 
-    .request-form {
+    #api-navigation {
       display: grid;
-      gap: 16px;
+      gap: var(--space-6);
+      padding-top: var(--space-5);
     }
 
-    .fields {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
-      gap: var(--gap);
+    .nav-group h3 {
+      margin: 0 8px 4px;
+      color: var(--text);
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
     }
 
-    .field {
+    .nav-group-copy {
+      margin: 0 8px var(--space-2);
+      color: var(--faint-text);
+      font-size: 11px;
+    }
+
+    .operation-list {
       display: grid;
-      align-content: start;
-      gap: 4px;
+      gap: 2px;
+    }
+
+    .operation-link {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: var(--space-2);
+      align-items: start;
+      width: 100%;
+      padding: 9px 8px;
+      border-color: transparent;
+      color: var(--text);
+      background: transparent;
+      text-align: left;
+    }
+
+    .operation-link:hover {
+      border-color: var(--border);
+      background: var(--surface-muted);
+    }
+
+    .operation-link.active {
+      border-color: #b9d4ff;
+      color: #123b80;
+      background: var(--primary-soft);
+    }
+
+    .operation-copy {
+      display: grid;
+      gap: 2px;
       min-width: 0;
     }
 
-    .field-wide {
-      grid-column: 1 / -1;
+    .operation-copy strong {
+      overflow-wrap: anywhere;
+      font-size: 12px;
     }
 
-    label,
-    .field-label {
-      color: var(--text);
-      font-size: 13px;
-      font-weight: 650;
+    .operation-copy code {
+      overflow: hidden;
+      color: var(--muted-text);
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    input {
-      width: 100%;
-      min-height: 38px;
-      padding: 8px 10px;
+    .method-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 38px;
+      padding: 3px 5px;
+      border: 1px solid currentColor;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+    }
+
+    .method-get {
+      color: #175cd3;
+      background: #edf4ff;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: var(--space-4);
+      min-width: 0;
+      padding: var(--space-6) clamp(16px, 3vw, 36px) var(--space-7);
+    }
+
+    .request-context,
+    .request-panel,
+    .response-panel {
+      min-width: 0;
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      color: var(--text);
-      background: #ffffff;
-      font: inherit;
+      background: var(--surface);
     }
 
-    input::placeholder {
-      color: var(--muted-text);
+    .request-context {
+      padding: var(--space-4) var(--space-5);
     }
 
-    input:focus,
-    button:focus-visible,
-    details summary:focus-visible {
-      outline: 3px solid var(--primary);
-      outline-offset: 2px;
-    }
-
-    .password-input {
-      font-family: var(--code-font);
-    }
-
-    .access-controls,
+    .context-header,
+    .panel-header,
+    .request-header,
+    .response-header,
+    .context-controls,
+    .response-metrics,
+    .request-identity,
     .form-actions,
-    .attribute-actions {
+    .input-with-action,
+    .file-id-actions,
+    .pagination-actions,
+    .response-toolbar {
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: var(--gap);
+      gap: var(--space-2);
     }
 
-    .access-controls {
-      align-items: flex-end;
+    .context-header,
+    .panel-header,
+    .request-header,
+    .response-header {
+      justify-content: space-between;
+      gap: var(--space-4);
     }
 
-    .access-key-field {
+    .context-header {
+      margin-bottom: var(--space-3);
+    }
+
+    .context-header h2,
+    .panel-heading h2 {
+      margin-bottom: 2px;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    .context-copy,
+    .panel-copy {
+      margin-bottom: 0;
+    }
+
+    .context-badge {
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: var(--success);
+      background: var(--success-soft);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .context-controls {
+      align-items: end;
+    }
+
+    .api-key-field {
       flex: 1 1 280px;
-      max-width: 420px;
+      max-width: 520px;
+    }
+
+    .context-controls > .remember-control {
+      align-self: end;
+    }
+
+    .field-label,
+    .context-label {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-2);
+      margin-bottom: var(--space-1);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .field-label small,
+    .context-label small,
+    .section-heading small {
+      color: var(--faint-text);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .required-mark {
+      color: var(--danger);
+    }
+
+    .input-with-action {
+      align-items: stretch;
+    }
+
+    .input-with-action input {
+      min-width: 0;
+    }
+
+    .context-controls .input-with-action {
+      display: block;
     }
 
     .remember-control {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: var(--space-2);
       min-height: 38px;
+      color: var(--muted-text);
+      font-size: 12px;
       white-space: nowrap;
     }
 
@@ -241,22 +452,70 @@
       accent-color: var(--primary);
     }
 
-    button {
-      min-height: 38px;
-      padding: 8px 13px;
-      border: 1px solid transparent;
-      border-radius: var(--radius);
-      color: var(--text);
-      background: transparent;
-      cursor: pointer;
-      font: inherit;
-      font-size: 13px;
-      font-weight: 600;
+    .context-note {
+      margin: var(--space-3) 0 0;
+      color: var(--faint-text);
+      font-size: 11px;
     }
 
-    button:disabled {
-      cursor: wait;
-      opacity: 0.65;
+    .workbench {
+      display: grid;
+      grid-template-rows: minmax(300px, auto) minmax(340px, 1fr);
+      gap: var(--space-4);
+      min-height: 0;
+    }
+
+    .request-panel,
+    .response-panel {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: var(--space-4) var(--space-5);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .request-header {
+      align-items: flex-start;
+    }
+
+    .panel-heading {
+      min-width: 0;
+    }
+
+    .heading-path {
+      margin-bottom: 5px;
+      color: var(--muted-text);
+      font-size: 11px;
+    }
+
+    .heading-path strong {
+      color: var(--text);
+    }
+
+    .request-identity {
+      align-items: flex-start;
+      min-width: 0;
+      margin-top: var(--space-3);
+    }
+
+    #request-endpoint {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      color: #263b53;
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .primary-button,
+    .secondary-button,
+    .danger-button,
+    .link-button {
+      min-height: 36px;
+      padding: 7px 12px;
     }
 
     .primary-button {
@@ -268,269 +527,611 @@
       background: var(--primary-hover);
     }
 
-    .secondary-button {
+    .secondary-button,
+    .link-button {
       border-color: var(--border);
-      background: #ffffff;
+      color: var(--text);
+      background: var(--surface);
     }
 
-    .secondary-button:hover:not(:disabled) {
+    .secondary-button:hover:not(:disabled),
+    .link-button:hover:not(:disabled) {
       border-color: var(--primary);
       color: var(--primary);
     }
 
     .danger-button {
-      border-color: #e6b8b3;
+      border-color: #e7b8b2;
       color: var(--danger);
-      background: #fffafa;
+      background: var(--danger-soft);
+    }
+
+    .request-form {
+      display: grid;
+      align-content: start;
+      gap: var(--space-5);
+      min-height: 0;
+      overflow: auto;
+      padding: var(--space-5);
+    }
+
+    .form-description {
+      margin-bottom: 0;
+      color: var(--muted-text);
+      font-size: 12px;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: var(--space-4) var(--space-3);
+    }
+
+    .field {
+      grid-column: span 4;
+      display: block;
+      min-width: 0;
+    }
+
+    .field.field-wide {
+      grid-column: 1 / -1;
+    }
+
+    .field-hint {
+      margin: var(--space-1) 0 0;
+      line-height: 1.4;
+    }
+
+    .opaque-input {
+      letter-spacing: 0.01em;
+    }
+
+    .copy-control {
+      flex: 0 0 auto;
+      min-height: 38px;
+      padding-inline: 10px;
+      border-color: var(--border);
+      color: var(--primary);
+      background: var(--surface);
+      font-size: 12px;
+    }
+
+    .copy-control:hover:not(:disabled) {
+      border-color: var(--primary);
+    }
+
+    .optional-details,
+    .token-details,
+    .raw-response {
+      border: 1px solid var(--border);
+      border-radius: var(--small-radius);
+      background: var(--surface-subtle);
+    }
+
+    .optional-details {
+      grid-column: 1 / -1;
+      padding: 10px;
+    }
+
+    .optional-details summary,
+    .token-details summary,
+    .raw-response summary {
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .optional-details[open] .token-field-content {
+      margin-top: var(--space-3);
     }
 
     .attribute-section {
       display: grid;
-      gap: var(--gap);
+      gap: var(--space-2);
+    }
+
+    .section-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .section-heading h3 {
+      margin-bottom: 0;
+      font-size: 12px;
     }
 
     .attribute-list {
       display: grid;
-      gap: var(--gap);
+      gap: var(--space-2);
     }
 
     .attribute-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
-      gap: var(--gap);
+      gap: var(--space-2);
       align-items: end;
     }
 
-    .attribute-row button {
-      min-width: 54px;
-      padding-inline: 8px;
+    .attribute-row .field-label {
+      margin-bottom: 2px;
     }
 
-    .response {
+    .attribute-row input {
+      min-height: 36px;
+    }
+
+    .attribute-row button {
+      min-height: 36px;
+      padding-inline: 9px;
+    }
+
+    .response-panel {
+      min-height: 340px;
+    }
+
+    .response-header {
+      align-items: center;
+    }
+
+    .response-heading h2 {
+      margin-bottom: 2px;
+    }
+
+    .response-copy {
+      margin-bottom: 0;
+    }
+
+    .response-metrics {
+      flex: 0 1 auto;
+      justify-content: flex-end;
+      gap: 7px;
+      color: var(--muted-text);
+      font-size: 12px;
+    }
+
+    .response-metric {
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .response-metric.success {
+      color: var(--success);
+    }
+
+    .response-metric.error {
+      color: var(--danger);
+    }
+
+    .response-metric.loading {
+      color: var(--primary);
+    }
+
+    .response-metric.neutral {
+      color: var(--muted-text);
+    }
+
+    .response-body {
+      min-height: 0;
+      overflow: auto;
+      padding: var(--space-5);
+    }
+
+    .empty-state {
       display: grid;
-      gap: 10px;
-      margin-top: 16px;
-      padding: 12px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: #ffffff;
+      place-items: center;
+      min-height: 180px;
+      padding: var(--space-6);
+      color: var(--muted-text);
+      text-align: center;
+    }
+
+    .empty-state strong {
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .empty-state p {
+      margin: 4px 0 0;
     }
 
     .request-url {
-      display: grid;
-      gap: 2px;
-      margin: 0;
-      padding: 8px;
+      margin-bottom: var(--space-4);
+      padding: 9px 10px;
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--muted-background);
+      border-radius: var(--small-radius);
+      background: var(--surface-muted);
     }
 
     .request-url-label {
-      color: var(--primary);
-      font-size: 11px;
-      font-weight: 750;
-      letter-spacing: 0.04em;
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted-text);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
     }
 
     .request-url code {
+      display: block;
       overflow-wrap: anywhere;
       color: var(--text);
-      font-family: var(--code-font);
-      font-size: 12px;
-    }
-
-    .response:empty {
-      display: none;
-    }
-
-    .response-status {
-      margin-bottom: 0;
-      font-size: 13px;
-      font-weight: 750;
-    }
-
-    .response-status.success {
-      color: var(--success);
-    }
-
-    .response-status.error {
-      color: var(--danger);
-    }
-
-    .response-status.loading {
-      color: var(--primary);
-    }
-
-    .response-status.neutral {
-      color: var(--muted-text);
-    }
-
-    .response-message {
-      margin-bottom: 0;
-      color: var(--muted-text);
-      font-size: 13px;
-    }
-
-    .error-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px 16px;
-      padding: 10px;
-      border: 1px solid #e6b8b3;
-      border-radius: var(--radius);
-      background: #fffafa;
-    }
-
-    .error-meta-item {
-      display: grid;
-      gap: 1px;
-      min-width: 120px;
-    }
-
-    .error-meta-label {
-      color: var(--muted-text);
       font-size: 11px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
     }
 
-    .error-meta-value {
-      color: var(--danger);
-      font-family: var(--code-font);
-      font-size: 13px;
-      font-weight: 800;
-      overflow-wrap: anywhere;
+    .response-toolbar {
+      justify-content: space-between;
+      margin-bottom: var(--space-3);
     }
 
-    .guidance {
+    .response-toolbar h3,
+    .item-list h3,
+    .download-state h3 {
       margin-bottom: 0;
-      padding: 10px;
-      border-radius: var(--radius);
-      color: var(--primary);
-      background: var(--muted-background);
       font-size: 13px;
-      font-weight: 650;
     }
 
+    .json-body,
     pre {
-      max-height: 360px;
+      max-width: 100%;
       margin: 0;
       overflow: auto;
-      padding: 12px;
-      border-radius: var(--radius);
-      color: var(--text);
-      background: #f7f9fc;
+      padding: var(--space-4);
+      border-radius: var(--small-radius);
+      color: #213047;
+      background: #f5f7fa;
       font-family: var(--code-font);
       font-size: 12px;
       line-height: 1.55;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+      tab-size: 2;
+    }
+
+    .json-section {
+      margin-top: var(--space-5);
     }
 
     .item-list {
       display: grid;
-      gap: var(--gap);
+      gap: 0;
+      margin-top: var(--space-5);
+      border-top: 1px solid var(--border);
     }
 
-    .item-card {
+    .item-list > h3 {
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .result-item {
       display: grid;
-      gap: 8px;
-      padding: 10px;
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      background: var(--card-background);
+      gap: var(--space-3);
+      padding: var(--space-4) 0;
+      border-bottom: 1px solid var(--border);
     }
 
-    .item-json {
+    .result-item-header {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: var(--space-3);
+    }
+
+    .result-item-header strong {
       min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 13px;
     }
 
-    .item-json summary {
+    .result-fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: var(--space-2);
+    }
+
+    .result-field {
+      min-width: 0;
+      padding: 8px;
+      border-radius: var(--small-radius);
+      background: var(--surface-muted);
+    }
+
+    .result-field-label {
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted-text);
+      font-size: 10px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .result-field-value {
+      display: block;
       overflow-wrap: anywhere;
       color: var(--text);
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 650;
+      font-family: var(--code-font);
+      font-size: 11px;
     }
 
-    .item-json[open] pre {
-      margin-top: 8px;
-    }
-
-    .item-heading {
-      display: flex;
+    .file-id-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: var(--space-2);
       align-items: center;
-      justify-content: space-between;
-      gap: var(--gap);
+      padding: 9px;
+      border: 1px solid #b9d4ff;
+      border-radius: var(--small-radius);
+      background: var(--primary-soft);
     }
 
-    .item-heading strong {
+    .file-id-label {
+      color: #174ea6;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .file-id-value {
       min-width: 0;
       overflow-wrap: anywhere;
+      color: #123b80;
+      font-family: var(--code-font);
+      font-size: 11px;
     }
 
-    .copy-file-id {
-      flex: 0 0 auto;
+    .file-id-actions {
+      justify-content: flex-end;
+    }
+
+    .file-id-actions button,
+    .pagination-actions button {
       min-height: 32px;
       padding: 5px 9px;
-      color: var(--primary);
+      font-size: 11px;
+    }
+
+    .pagination-actions {
+      align-items: stretch;
+      margin-top: var(--space-5);
+    }
+
+    .token-details {
+      flex: 1 1 100%;
+      padding: 9px 10px;
+    }
+
+    .token-details[open] pre {
+      margin-top: var(--space-3);
+    }
+
+    .problem-details {
+      padding: var(--space-4);
+      border: 1px solid #e7b8b2;
+      border-radius: var(--small-radius);
+      background: var(--danger-soft);
+    }
+
+    .problem-details h3 {
+      margin-bottom: var(--space-4);
+      color: var(--danger);
+      font-size: 14px;
+    }
+
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+
+    .problem-field {
+      min-width: 0;
+      padding: 9px;
+      border: 1px solid #efcbc7;
+      border-radius: var(--small-radius);
       background: #ffffff;
-      border-color: var(--border);
+    }
+
+    .problem-field.wide {
+      grid-column: 1 / -1;
+    }
+
+    .problem-field strong {
+      display: block;
+      overflow-wrap: anywhere;
+      color: var(--danger);
+      font-family: var(--code-font);
       font-size: 12px;
     }
 
-    .copy-file-id:hover:not(:disabled) {
-      border-color: var(--primary);
+    .problem-field p {
+      margin: 3px 0 0;
+    }
+
+    .raw-response {
+      padding: 10px;
+      background: #ffffff;
+    }
+
+    .raw-response[open] pre {
+      margin-top: var(--space-3);
+    }
+
+    .error-message,
+    .loading-message,
+    .download-state {
+      padding: var(--space-4);
+      border-radius: var(--small-radius);
+      background: var(--surface-muted);
+    }
+
+    .error-message {
+      color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .loading-message {
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .error-message strong,
+    .loading-message strong,
+    .download-state h3 {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .error-message p,
+    .loading-message p,
+    .download-state p {
+      margin: 0;
+      font-size: 12px;
+    }
+
+    .download-state {
+      border: 1px solid #b7dfc7;
+      background: var(--success-soft);
     }
 
     .download-details {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: var(--gap);
+      gap: var(--space-2);
+      margin-top: var(--space-4);
     }
 
     .download-detail {
-      display: grid;
-      gap: 1px;
       min-width: 0;
-      padding: 8px;
-      border-radius: var(--radius);
-      background: var(--muted-background);
+      padding: 9px;
+      border-radius: var(--small-radius);
+      background: #ffffff;
     }
 
     .download-detail-label {
-      color: #55607a;
-      font-size: 11px;
-      font-weight: 700;
+      display: block;
+      margin-bottom: 2px;
+      color: var(--muted-text);
+      font-size: 10px;
+      font-weight: 750;
     }
 
     .download-detail-value {
+      display: block;
       overflow-wrap: anywhere;
+      color: var(--text);
       font-family: var(--code-font);
-      font-size: 12px;
+      font-size: 11px;
     }
 
-    .next-page {
-      justify-self: start;
+    @media (max-width: 900px) {
+      .app-shell {
+        display: block;
+      }
+
+      .api-sidebar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        height: auto;
+        padding: var(--space-3) var(--space-4);
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .sidebar-heading {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: var(--space-3);
+        padding: 0 0 var(--space-3);
+      }
+
+      .sidebar-copy {
+        margin: 0;
+      }
+
+      #api-navigation {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--space-3);
+        padding-top: var(--space-3);
+      }
+
+      .operation-list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .workspace {
+        min-height: 0;
+        padding: var(--space-4);
+      }
     }
 
-    @media (max-width: 720px) {
+    @media (max-width: 640px) {
       .topbar {
         align-items: flex-start;
         flex-direction: column;
-        gap: 12px;
+        gap: var(--space-3);
+        padding: var(--space-4);
       }
 
-      .origin {
+      .environment {
+        width: 100%;
         min-width: 0;
         text-align: left;
       }
 
-      .card {
-        padding: 16px;
+      .environment-badge {
+        justify-self: start;
+      }
+
+      #api-navigation,
+      .operation-list {
+        grid-template-columns: 1fr;
+      }
+
+      .workspace {
+        padding: var(--space-3);
+      }
+
+      .request-context,
+      .panel-header,
+      .request-form,
+      .response-body {
+        padding: var(--space-4);
+      }
+
+      .workbench {
+        grid-template-rows: minmax(360px, auto) minmax(360px, 1fr);
+      }
+
+      .request-header,
+      .response-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      #send-operation {
+        width: 100%;
+      }
+
+      .response-metrics {
+        justify-content: flex-start;
+      }
+
+      .fields {
+        grid-template-columns: 1fr;
+        gap: var(--space-3);
+      }
+
+      .field,
+      .field.field-wide {
+        grid-column: 1;
       }
 
       .attribute-row {
@@ -541,198 +1142,219 @@
         grid-column: 1 / -1;
         justify-self: start;
       }
+
+      .file-id-row {
+        grid-template-columns: 1fr;
+      }
+
+      .file-id-actions {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+      }
     }
   </style>
 </head>
 <body>
   <header class="topbar">
-    <div>
-      <p class="eyebrow">Development tool</p>
+    <div class="brand-block">
       <h1>FileGateway API Tester</h1>
-      <p class="subtitle">same-origin 요청으로 FileGateway API 계약을 수동 확인합니다.</p>
-      <p class="subtitle">다운로드 카드는 blob 전체를 메모리에 올려 소규모 파일만 수동 확인합니다 — 스트리밍 대용량 다운로드 검증 도구가 아닙니다.</p>
+      <p class="brand-copy">Scalar-style navigation for same-origin API contract checks.</p>
     </div>
-    <div class="origin">
-      <span>Gateway 기본 URL</span>
+    <div class="environment" aria-label="Environment">
+      <span class="environment-label">Environment</span>
+      <strong class="environment-badge">Development tool</strong>
       <code id="gateway-origin"></code>
     </div>
   </header>
 
-  <main>
-    <section class="card access-card" aria-labelledby="access-title">
-      <div class="card-heading">
-        <h2 id="access-title">접속 설정</h2>
-        <p class="card-description">API Key는 X-Api-Key 헤더로만 전송됩니다.</p>
-      </div>
-      <div class="access-controls">
-        <label class="access-key-field">
-          API Key
-          <input id="api-key" class="password-input" type="password" autocomplete="off" spellcheck="false">
-        </label>
-        <label class="remember-control">
-          <input id="remember-key" type="checkbox">
-          이 브라우저에 기억
-        </label>
-        <button id="clear-key" class="danger-button" type="button">키 삭제</button>
-      </div>
-      <p class="note">기본 저장 위치는 sessionStorage이며, 체크하면 localStorage로 이동합니다.</p>
-    </section>
-
-    <div class="cards">
-      <section class="card" aria-labelledby="file-types-title">
-        <div class="card-heading">
-          <h2 id="file-types-title">1. 설비 제공 파일 종류</h2>
-          <p class="card-description">설비가 제공하는 로그/구성 종류 조회 — <code>GET /api/v1/equipments/{equipmentId}/file-types</code></p>
+  <div class="app-shell">
+    <aside class="api-sidebar" aria-label="API navigation">
+      <div class="sidebar-heading">
+        <div>
+          <h2>API catalog</h2>
+          <p class="sidebar-copy">Choose an operation to inspect its request and response.</p>
         </div>
-        <form id="file-types-form" class="request-form" novalidate>
-          <div class="fields">
-            <label class="field">
-              설비 ID
-              <input id="file-types-equipment-id" type="text" autocomplete="off" placeholder="EQ-001">
-            </label>
+      </div>
+
+      <nav id="api-navigation">
+        <section class="nav-group" aria-labelledby="nav-catalog-title">
+          <h3 id="nav-catalog-title">Catalog</h3>
+          <p class="nav-group-copy">Reference data</p>
+          <div class="operation-list">
+            <button class="operation-link active" data-operation="catalog-file-types" aria-current="page" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Equipment File Types</strong><code>/api/v1/equipments/{id}/file-types</code></span>
+            </button>
           </div>
-          <div class="form-actions">
-            <button class="primary-button" type="submit">조회</button>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-logs-title">
+          <h3 id="nav-logs-title">Logs</h3>
+          <p class="nav-group-copy">Discover and retrieve logs</p>
+          <div class="operation-list">
+            <button class="operation-link" data-operation="logs-list" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>List logs</strong><code>/api/v1/logs</code></span>
+            </button>
+            <button class="operation-link" data-operation="logs-download" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Conditional download</strong><code>/api/v1/logs/download</code></span>
+            </button>
           </div>
-        </form>
-        <div id="file-types-output" class="response" aria-live="polite"></div>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-files-title">
+          <h3 id="nav-files-title">Files</h3>
+          <p class="nav-group-copy">Use an opaque fileId</p>
+          <div class="operation-list">
+            <button class="operation-link" data-operation="files-metadata" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Metadata by fileId</strong><code>/api/v1/files?fileId=...</code></span>
+            </button>
+            <button class="operation-link" data-operation="files-download" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Download by fileId</strong><code>/api/v1/files/download</code></span>
+            </button>
+          </div>
+        </section>
+
+        <section class="nav-group" aria-labelledby="nav-configurations-title">
+          <h3 id="nav-configurations-title">Configurations</h3>
+          <p class="nav-group-copy">Current and historical files</p>
+          <div class="operation-list">
+            <button class="operation-link" data-operation="config-current" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Current</strong><code>/api/v1/configurations/current</code></span>
+            </button>
+            <button class="operation-link" data-operation="config-current-download" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>Current download</strong><code>/api/v1/configurations/current/download</code></span>
+            </button>
+            <button class="operation-link" data-operation="config-history" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>History</strong><code>/api/v1/configurations/history</code></span>
+            </button>
+          </div>
+        </section>
+      </nav>
+    </aside>
+
+    <main class="workspace">
+      <section class="request-context" aria-labelledby="request-context-title">
+        <div class="context-header">
+          <div>
+            <h2 id="request-context-title">Request context</h2>
+            <p class="context-copy">Shared settings apply to every operation in this tester.</p>
+          </div>
+          <span class="context-badge">Same-origin</span>
+        </div>
+        <div class="context-controls">
+          <label class="api-key-field">
+            <span class="context-label">X-Api-Key <small>shared header</small></span>
+            <div class="input-with-action">
+              <input id="api-key" class="opaque-input" type="password" autocomplete="off" spellcheck="false" aria-label="X-Api-Key">
+            </div>
+          </label>
+          <label class="remember-control">
+            <input id="remember-key" type="checkbox">
+            Remember in this browser
+          </label>
+          <button id="clear-key" class="danger-button" type="button">Clear key</button>
+        </div>
+        <p class="context-note">API Key는 X-Api-Key HTTP header로만 전송됩니다. 기본 저장 위치는 sessionStorage이며, 선택하면 localStorage를 사용합니다.</p>
       </section>
 
-      <section class="card" aria-labelledby="logs-title">
-        <div class="card-heading">
-          <h2 id="logs-title">2. 로그</h2>
-          <p class="card-description">목록과 조건 기반 직접 다운로드는 같은 조건을 사용합니다.</p>
-        </div>
-        <form id="logs-form" class="request-form" novalidate>
-          <div class="fields">
-            <label class="field">
-              설비 ID
-              <input id="logs-equipment-id" type="text" autocomplete="off" placeholder="EQ-001">
-            </label>
-            <label class="field">
-              logType
-              <input id="logs-log-type" type="text" autocomplete="off" placeholder="EventLog">
-            </label>
-            <label class="field">
-              from
-              <input id="logs-from" type="text" autocomplete="off" placeholder="2026-08-28T00:00:00+09:00">
-            </label>
-            <label class="field">
-              to
-              <input id="logs-to" type="text" autocomplete="off" placeholder="2026-08-29T00:00:00+09:00">
-            </label>
-            <label class="field">
-              subtype
-              <input id="logs-subtype" type="text" autocomplete="off">
-            </label>
-            <label class="field">
-              limit
-              <input id="logs-limit" type="text" inputmode="numeric" autocomplete="off" placeholder="50">
-            </label>
-            <label class="field field-wide">
-              continuationToken
-              <input id="logs-continuation-token" type="text" autocomplete="off">
-            </label>
-          </div>
-          <div class="attribute-section">
-            <span class="field-label">속성 필터 (attr.&lt;name&gt;=&lt;value&gt;)</span>
-            <div id="log-attributes" class="attribute-list"></div>
-            <div class="attribute-actions">
-              <button id="add-log-attribute" class="secondary-button" type="button">속성 추가</button>
+      <div class="workbench">
+        <section class="request-panel" aria-labelledby="request-title">
+          <header class="panel-header request-header">
+            <div class="panel-heading">
+              <p class="heading-path"><span id="active-group-label">Catalog</span> / <strong id="active-operation-label">Equipment File Types</strong></p>
+              <h2 id="request-title">Request</h2>
+              <div class="request-identity">
+                <span id="request-method" class="method-badge method-get">GET</span>
+                <code id="request-endpoint">/api/v1/equipments/{equipmentId}/file-types</code>
+              </div>
+            </div>
+            <button id="send-operation" class="primary-button" type="submit" form="operation-form">Send</button>
+          </header>
+          <form id="operation-form" class="request-form" novalidate></form>
+        </section>
+
+        <section class="response-panel" aria-labelledby="response-title">
+          <header class="panel-header response-header">
+            <div class="panel-heading response-heading">
+              <h2 id="response-title">Response</h2>
+              <p class="response-copy">Status is shown before the response body.</p>
+            </div>
+            <div class="response-metrics" aria-live="polite" aria-atomic="true">
+              <span id="response-status" class="response-metric neutral">Ready to send</span>
+              <span aria-hidden="true">·</span>
+              <span id="response-time" class="response-metric">—</span>
+              <span aria-hidden="true">·</span>
+              <span id="response-size" class="response-metric">—</span>
+              <div class="response-toolbar">
+                <button id="copy-json" class="copy-control" type="button" data-copy-value="" disabled>Copy JSON</button>
+              </div>
+            </div>
+          </header>
+          <div id="response-body" class="response-body" aria-live="polite">
+            <div class="empty-state">
+              <div>
+                <strong>No response yet</strong>
+                <p>Complete the request fields and press Send.</p>
+              </div>
             </div>
           </div>
-          <div class="form-actions">
-            <button class="primary-button" type="submit">목록 조회</button>
-            <button id="logs-download" class="secondary-button" type="button">조건으로 다운로드</button>
-          </div>
-        </form>
-        <div id="logs-output" class="response" aria-live="polite"></div>
-      </section>
+        </section>
+      </div>
+    </main>
+  </div>
 
-      <section class="card" aria-labelledby="files-title">
-        <div class="card-heading">
-          <h2 id="files-title">3. 파일 공통</h2>
-          <p class="card-description">fileId로 metadata 조회/다운로드 — <code>GET /api/v1/files?fileId=...</code></p>
+  <template id="problem-details-template">
+    <section class="problem-details">
+      <h3>Problem Details</h3>
+      <div class="problem-grid">
+        <div class="problem-field">
+          <span class="result-field-label">status</span>
+          <strong id="problem-status">—</strong>
         </div>
-        <form id="files-form" class="request-form" novalidate>
-          <div class="fields">
-            <label class="field field-wide">
-              fileId
-              <input id="common-file-id" type="text" autocomplete="off" spellcheck="false" placeholder="목록 응답에서 복사한 fileId">
-            </label>
-          </div>
-          <div class="form-actions">
-            <button class="primary-button" type="submit">파일 정보 조회</button>
-            <button id="files-download" class="secondary-button" type="button">파일 다운로드</button>
-          </div>
-        </form>
-        <div id="files-output" class="response" aria-live="polite"></div>
-      </section>
+        <div class="problem-field">
+          <span class="result-field-label">Code</span>
+          <strong id="problem-code">—</strong>
+        </div>
+        <div class="problem-field wide">
+          <span class="result-field-label">Title</span>
+          <strong id="problem-title">—</strong>
+        </div>
+        <div class="problem-field wide">
+          <span class="result-field-label">Detail</span>
+          <strong id="problem-detail">—</strong>
+        </div>
+        <div class="problem-field wide">
+          <span class="result-field-label">traceId</span>
+          <strong id="problem-trace">—</strong>
+        </div>
+      </div>
+      <details class="raw-response">
+        <summary>Raw response JSON</summary>
+        <pre id="problem-raw-response"></pre>
+      </details>
+    </section>
+  </template>
 
-      <section class="card" aria-labelledby="current-title">
-        <div class="card-heading">
-          <h2 id="current-title">4. Current Configuration</h2>
-          <p class="card-description">현재 파일 목록 조회와 단일 매칭 직접 다운로드</p>
-        </div>
-        <form id="current-form" class="request-form" novalidate>
-          <div class="fields">
-            <label class="field">
-              설비 ID
-              <input id="current-equipment-id" type="text" autocomplete="off" placeholder="EQ-001">
-            </label>
-            <label class="field">
-              configurationType
-              <input id="current-configuration-type" type="text" autocomplete="off" placeholder="PM">
-            </label>
-          </div>
-          <div class="form-actions">
-            <button class="primary-button" type="submit">목록 조회</button>
-            <button id="current-download" class="secondary-button" type="button">조건으로 다운로드</button>
-          </div>
-        </form>
-        <div id="current-output" class="response" aria-live="polite"></div>
-      </section>
-
-      <section class="card" aria-labelledby="history-title">
-        <div class="card-heading">
-          <h2 id="history-title">5. Configuration History</h2>
-          <p class="card-description">from/to는 ISO-8601 텍스트로 입력합니다.</p>
-        </div>
-        <form id="history-form" class="request-form" novalidate>
-          <div class="fields">
-            <label class="field">
-              설비 ID
-              <input id="history-equipment-id" type="text" autocomplete="off" placeholder="EQ-001">
-            </label>
-            <label class="field">
-              configurationType
-              <input id="history-configuration-type" type="text" autocomplete="off" placeholder="PM">
-            </label>
-            <label class="field">
-              from
-              <input id="history-from" type="text" autocomplete="off" placeholder="2026-08-01T00:00:00+09:00">
-            </label>
-            <label class="field">
-              to
-              <input id="history-to" type="text" autocomplete="off" placeholder="2026-09-01T00:00:00+09:00">
-            </label>
-            <label class="field">
-              limit
-              <input id="history-limit" type="text" inputmode="numeric" autocomplete="off" placeholder="50">
-            </label>
-            <label class="field field-wide">
-              continuationToken
-              <input id="history-continuation-token" type="text" autocomplete="off">
-            </label>
-          </div>
-          <div class="form-actions">
-            <button class="primary-button" type="submit">목록 조회</button>
-          </div>
-        </form>
-        <div id="history-output" class="response" aria-live="polite"></div>
-      </section>
-    </div>
-  </main>
+  <template id="request-token-template">
+    <details class="token-details">
+      <summary>Continuation token</summary>
+      <div class="token-field-content"></div>
+    </details>
+  </template>
 
   <script>
     (() => {
@@ -742,7 +1364,109 @@
       const gatewayOrigin = document.getElementById("gateway-origin");
       const apiKeyInput = document.getElementById("api-key");
       const rememberKey = document.getElementById("remember-key");
-      const commonFileIdInput = document.getElementById("common-file-id");
+      const clearKey = document.getElementById("clear-key");
+      const operationForm = document.getElementById("operation-form");
+      const sendOperation = document.getElementById("send-operation");
+      const responseBody = document.getElementById("response-body");
+      const responseStatus = document.getElementById("response-status");
+      const responseTime = document.getElementById("response-time");
+      const responseSize = document.getElementById("response-size");
+      const copyJson = document.getElementById("copy-json");
+      const activeGroupLabel = document.getElementById("active-group-label");
+      const activeOperationLabel = document.getElementById("active-operation-label");
+      const requestMethod = document.getElementById("request-method");
+      const requestEndpoint = document.getElementById("request-endpoint");
+
+      const operationDefinitions = [
+        {
+          id: "catalog-file-types",
+          group: "Catalog",
+          label: "Equipment File Types",
+          method: "GET",
+          endpoint: "/api/v1/equipments/{equipmentId}/file-types",
+          mode: "json",
+          form: "equipment",
+          note: "Read the validated file types available for one equipment."
+        },
+        {
+          id: "logs-list",
+          group: "Logs",
+          label: "List logs",
+          method: "GET",
+          endpoint: "/api/v1/logs",
+          mode: "json",
+          form: "logs",
+          note: "Hourly/Daily use from and to; Continuous logs reject time filters."
+        },
+        {
+          id: "logs-download",
+          group: "Logs",
+          label: "Conditional download",
+          method: "GET",
+          endpoint: "/api/v1/logs/download",
+          mode: "download",
+          form: "logs",
+          note: "The same logical log criteria resolve one downloadable file."
+        },
+        {
+          id: "files-metadata",
+          group: "Files",
+          label: "Metadata by fileId",
+          method: "GET",
+          endpoint: "/api/v1/files?fileId=...",
+          mode: "json",
+          form: "file",
+          note: "fileId is an opaque value returned by a list operation."
+        },
+        {
+          id: "files-download",
+          group: "Files",
+          label: "Download by fileId",
+          method: "GET",
+          endpoint: "/api/v1/files/download?fileId=...",
+          mode: "download",
+          form: "file",
+          note: "Use the same opaque fileId for the common download endpoint."
+        },
+        {
+          id: "config-current",
+          group: "Configurations",
+          label: "Current",
+          method: "GET",
+          endpoint: "/api/v1/configurations/current",
+          mode: "json",
+          form: "current",
+          note: "Current returns the complete file set without pagination."
+        },
+        {
+          id: "config-current-download",
+          group: "Configurations",
+          label: "Current download",
+          method: "GET",
+          endpoint: "/api/v1/configurations/current/download",
+          mode: "download",
+          form: "current",
+          note: "This endpoint downloads only when the current criteria match one file."
+        },
+        {
+          id: "config-history",
+          group: "Configurations",
+          label: "History",
+          method: "GET",
+          endpoint: "/api/v1/configurations/history",
+          mode: "json",
+          form: "history",
+          note: "History requires an explicit from/to range and supports pagination."
+        }
+      ];
+
+      const operations = new Map(operationDefinitions.map((definition) => [
+        definition.id,
+        { ...definition, values: {}, criteria: null, busy: false, rawJson: "" }
+      ]));
+      let activeOperation = null;
+      let activeOperationId = "";
+      let requestSequence = 0;
 
       gatewayOrigin.textContent = window.location.origin;
 
@@ -792,7 +1516,7 @@
 
       apiKeyInput.addEventListener("input", persistApiKey);
       rememberKey.addEventListener("change", persistApiKey);
-      document.getElementById("clear-key").addEventListener("click", () => {
+      clearKey.addEventListener("click", () => {
         apiKeyInput.value = "";
         rememberKey.checked = false;
         removeStoredKey(window.sessionStorage);
@@ -810,83 +1534,421 @@
         return `${window.location.origin}${path}${queryString ? `?${queryString}` : ""}`;
       }
 
-      function requiredValue(inputId, label, output) {
-        const input = document.getElementById(inputId);
-        const value = input.value.trim();
+      function createElement(tagName, className, text) {
+        const element = document.createElement(tagName);
+        if (className) {
+          element.className = className;
+        }
+        if (text !== undefined) {
+          element.textContent = text;
+        }
+        return element;
+      }
+
+      function setResponseMetrics(status, kind, duration, size) {
+        responseStatus.textContent = status;
+        responseStatus.className = `response-metric ${kind}`;
+        responseTime.textContent = duration == null ? "—" : `${Math.max(0, Math.round(duration))} ms`;
+        responseSize.textContent = size == null ? "—" : formatBytes(size);
+      }
+
+      function clearJsonCopy() {
+        copyJson.disabled = true;
+        copyJson.setAttribute("data-copy-value", "");
+        copyJson.textContent = "Copy JSON";
+      }
+
+      function showEmptyResponse() {
+        responseBody.replaceChildren();
+        const empty = createElement("div", "empty-state");
+        const content = createElement("div");
+        content.append(
+          createElement("strong", null, "No response yet"),
+          createElement("p", null, "Complete the request fields and press Send.")
+        );
+        empty.append(content);
+        responseBody.append(empty);
+        setResponseMetrics("Ready to send", "neutral", null, null);
+        clearJsonCopy();
+      }
+
+      function copyText(value, button, successLabel = "Copied") {
+        if (!value) {
+          button.textContent = "Nothing to copy";
+          return;
+        }
+
+        const originalLabel = button.dataset.copyLabel || button.textContent;
+        const restoreLabel = () => {
+          button.textContent = originalLabel;
+        };
+
+        const finish = () => {
+          button.textContent = successLabel;
+          window.setTimeout(restoreLabel, 1400);
+        };
+
+        if (navigator.clipboard && window.isSecureContext) {
+          navigator.clipboard.writeText(value).then(finish).catch(() => {
+            button.textContent = "Copy unavailable";
+          });
+          return;
+        }
+
+        const fallback = createElement("textarea");
+        fallback.value = value;
+        fallback.setAttribute("readonly", "");
+        fallback.style.position = "fixed";
+        fallback.style.opacity = "0";
+        document.body.append(fallback);
+        fallback.select();
+        try {
+          if (document.execCommand("copy")) {
+            finish();
+          } else {
+            button.textContent = "Copy unavailable";
+          }
+        } catch {
+          button.textContent = "Copy unavailable";
+        } finally {
+          fallback.remove();
+        }
+      }
+
+      function createCopyButton(label, valueOrGetter, successLabel = "Copied") {
+        const button = createElement("button", "copy-control", label);
+        button.type = "button";
+        button.dataset.copyLabel = label;
+        button.setAttribute("data-copy-value", "");
+        button.addEventListener("click", () => {
+          const value = typeof valueOrGetter === "function" ? valueOrGetter() : valueOrGetter;
+          button.setAttribute("data-copy-value", value || "");
+          copyText(value, button, successLabel);
+        });
+        return button;
+      }
+
+      function createField(operation, specification) {
+        const field = createElement("label", `field${specification.wide ? " field-wide" : ""}`);
+        const label = createElement("span", "field-label");
+        const labelText = createElement("span", null, specification.label);
+        const availability = createElement(
+          "small",
+          specification.required ? "required-mark" : null,
+          specification.required ? "required" : "optional"
+        );
+        label.append(labelText, availability);
+        field.append(label);
+
+        const input = createElement("input");
+        input.id = specification.name === "fileId" ? "common-file-id" : `input-${specification.name}`;
+        input.dataset.field = specification.name;
+        input.type = specification.type || "text";
+        input.autocomplete = "off";
+        input.spellcheck = false;
+        input.placeholder = specification.placeholder || "";
+        if (specification.inputmode) {
+          input.inputMode = specification.inputmode;
+        }
+        if (specification.required) {
+          input.setAttribute("aria-required", "true");
+        }
+        if (specification.opaque) {
+          input.classList.add("opaque-input");
+        }
+        input.value = operation.values[specification.name] || "";
+        input.addEventListener("input", () => {
+          operation.values[specification.name] = input.value;
+        });
+
+        if (specification.copy) {
+          const controls = createElement("div", "input-with-action");
+          const copy = createCopyButton("Copy", () => input.value.trim());
+          controls.append(input, copy);
+          field.append(controls);
+        } else {
+          field.append(input);
+        }
+
+        if (specification.hint) {
+          field.append(createElement("span", "field-hint", specification.hint));
+        }
+        return field;
+      }
+
+      function appendTokenField(operation, fields) {
+        const fragment = document.getElementById("request-token-template").content.cloneNode(true);
+        const details = fragment.firstElementChild;
+        details.classList.add("optional-details");
+        details.querySelector(".token-field-content").append(createField(operation, {
+          name: "continuationToken",
+          label: "continuationToken",
+          opaque: true,
+          copy: true,
+          wide: true,
+          hint: "Opaque cursor; copy it from a previous response when loading another page."
+        }));
+        fields.append(details);
+      }
+
+      function syncAttributes(operation) {
+        if (operation.form !== "logs") {
+          return;
+        }
+        operation.values.attributes = Array.from(operationForm.querySelectorAll("#log-attributes .attribute-row"))
+          .map((row) => ({
+            name: row.querySelector(".attribute-name").value.trim(),
+            value: row.querySelector(".attribute-value").value.trim()
+          }))
+          .filter((attribute) => attribute.name && attribute.value);
+      }
+
+      function createAttributeRow(operation, initial = {}) {
+        const row = createElement("div", "attribute-row");
+
+        const nameCell = createElement("label", "attribute-cell");
+        nameCell.append(createElement("span", "field-label", "Name"));
+        const nameInput = createElement("input");
+        nameInput.className = "attribute-name";
+        nameInput.type = "text";
+        nameInput.autocomplete = "off";
+        nameInput.placeholder = "name";
+        nameInput.setAttribute("aria-label", "Attribute name");
+        nameInput.value = initial.name || "";
+        nameCell.append(nameInput);
+
+        const valueCell = createElement("label", "attribute-cell");
+        valueCell.append(createElement("span", "field-label", "Value"));
+        const valueInput = createElement("input");
+        valueInput.className = "attribute-value";
+        valueInput.type = "text";
+        valueInput.autocomplete = "off";
+        valueInput.placeholder = "value";
+        valueInput.setAttribute("aria-label", "Attribute value");
+        valueInput.value = initial.value || "";
+        valueCell.append(valueInput);
+
+        const removeButton = createElement("button", "secondary-button", "Remove");
+        removeButton.type = "button";
+        removeButton.addEventListener("click", () => {
+          row.remove();
+          syncAttributes(operation);
+        });
+
+        nameInput.addEventListener("input", () => syncAttributes(operation));
+        valueInput.addEventListener("input", () => syncAttributes(operation));
+        row.append(nameCell, valueCell, removeButton);
+        return row;
+      }
+
+      function appendAttributeSection(operation, form) {
+        const section = createElement("section", "attribute-section");
+        const heading = createElement("div", "section-heading");
+        heading.append(
+          createElement("h3", null, "Attribute filters"),
+          createElement("small", null, "optional")
+        );
+        section.append(heading);
+        section.append(createElement("p", "field-hint", "Each row becomes attr.<name>=<value> in the request."));
+
+        const list = createElement("div", "attribute-list");
+        list.id = "log-attributes";
+        const attributes = Array.isArray(operation.values.attributes) ? operation.values.attributes : [];
+        if (attributes.length === 0) {
+          list.append(createAttributeRow(operation));
+        } else {
+          attributes.forEach((attribute) => list.append(createAttributeRow(operation, attribute)));
+        }
+        section.append(list);
+
+        const actions = createElement("div", "form-actions");
+        const add = createElement("button", "secondary-button", "Add attribute");
+        add.id = "add-log-attribute";
+        add.type = "button";
+        add.addEventListener("click", () => {
+          const row = createAttributeRow(operation);
+          list.append(row);
+          row.querySelector(".attribute-name").focus();
+        });
+        actions.append(add);
+        section.append(actions);
+        form.append(section);
+      }
+
+      function renderOperationForm(operation) {
+        operationForm.replaceChildren();
+        operationForm.append(createElement("p", "form-description", operation.note));
+        const fields = createElement("div", "fields");
+
+        if (operation.form === "equipment") {
+          fields.append(createField(operation, {
+            name: "equipmentId",
+            label: "Equipment ID",
+            required: true,
+            placeholder: "EQ-001"
+          }));
+        }
+
+        if (operation.form === "logs") {
+          fields.append(
+            createField(operation, { name: "equipmentId", label: "Equipment ID", required: true, placeholder: "EQ-001" }),
+            createField(operation, { name: "logType", label: "logType", required: true, placeholder: "EventLog" }),
+            createField(operation, { name: "from", label: "from", placeholder: "2026-08-28T00:00:00+09:00" }),
+            createField(operation, { name: "to", label: "to", placeholder: "2026-08-29T00:00:00+09:00" }),
+            createField(operation, { name: "subtype", label: "subtype" }),
+            createField(operation, { name: "limit", label: "limit", inputmode: "numeric", placeholder: "50" })
+          );
+          if (operation.id === "logs-list") {
+            appendTokenField(operation, fields);
+          }
+        }
+
+        if (operation.form === "file") {
+          fields.append(createField(operation, {
+            name: "fileId",
+            label: "fileId",
+            required: true,
+            opaque: true,
+            copy: true,
+            wide: true,
+            placeholder: "Paste an opaque fileId from a list response"
+          }));
+        }
+
+        if (operation.form === "current") {
+          fields.append(
+            createField(operation, { name: "equipmentId", label: "Equipment ID", required: true, placeholder: "EQ-001" }),
+            createField(operation, { name: "configurationType", label: "configurationType", required: true, placeholder: "PM" })
+          );
+        }
+
+        if (operation.form === "history") {
+          fields.append(
+            createField(operation, { name: "equipmentId", label: "Equipment ID", required: true, placeholder: "EQ-001" }),
+            createField(operation, { name: "configurationType", label: "configurationType", required: true, placeholder: "PM" }),
+            createField(operation, { name: "from", label: "from", required: true, placeholder: "2026-08-01T00:00:00+09:00" }),
+            createField(operation, { name: "to", label: "to", required: true, placeholder: "2026-09-01T00:00:00+09:00" }),
+            createField(operation, { name: "limit", label: "limit", inputmode: "numeric", placeholder: "50" })
+          );
+          appendTokenField(operation, fields);
+        }
+
+        operationForm.append(fields);
+        if (operation.form === "logs") {
+          appendAttributeSection(operation, operationForm);
+        }
+        operationForm.append(createElement("p", "field-hint", "The Send action is above; only this operation's request controls are changed while navigating."));
+      }
+
+      function collectFormValues(operation) {
+        const values = { ...operation.values };
+        operationForm.querySelectorAll("[data-field]").forEach((input) => {
+          values[input.dataset.field] = input.value.trim();
+        });
+        operation.values = values;
+        syncAttributes(operation);
+        values.attributes = Array.isArray(operation.values.attributes)
+          ? operation.values.attributes.map((attribute) => ({ ...attribute }))
+          : [];
+        return values;
+      }
+
+      function requiredValue(operation, name, label) {
+        const input = operationForm.querySelector(`[data-field="${name}"]`);
+        const value = input ? input.value.trim() : "";
         if (value) {
           return value;
         }
-        showClientError(output, `${label}은(는) 필수입니다.`);
-        input.focus();
+        showClientError(`${label} is required.`, input);
         return null;
       }
 
-      function optionalValue(inputId) {
-        return document.getElementById(inputId).value.trim();
+      function formatBytes(bytes) {
+        if (bytes == null || Number.isNaN(bytes)) {
+          return "—";
+        }
+        if (bytes < 1024) {
+          return `${bytes} B`;
+        }
+        const units = ["KB", "MB", "GB"];
+        let value = bytes / 1024;
+        let unit = 0;
+        while (value >= 1024 && unit < units.length - 1) {
+          value /= 1024;
+          unit += 1;
+        }
+        return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[unit]}`;
       }
 
-      async function withBusyButtons(buttons, action) {
-        buttons.forEach((button) => {
-          button.disabled = true;
-        });
-        try {
-          await action();
-        } finally {
-          buttons.forEach((button) => {
-            button.disabled = false;
-          });
+      function measureBody(body) {
+        if (typeof body !== "string") {
+          return null;
+        }
+        if (window.TextEncoder) {
+          return new TextEncoder().encode(body).length;
+        }
+        return new Blob([body]).size;
+      }
+
+      function responseBodySize(response, body) {
+        const contentLength = response.headers.get("Content-Length");
+        if (contentLength && /^\d+$/.test(contentLength)) {
+          return Number(contentLength);
+        }
+        if (body instanceof Blob) {
+          return body.size;
+        }
+        return measureBody(body);
+      }
+
+      function appendRequestUrl(parent, url) {
+        const container = createElement("div", "request-url");
+        container.append(
+          createElement("span", "request-url-label", "Request URL"),
+          createElement("code", null, url)
+        );
+        parent.append(container);
+      }
+
+      function showClientError(message, focusTarget) {
+        responseBody.replaceChildren();
+        setResponseMetrics("Not sent", "error", null, null);
+        clearJsonCopy();
+        const panel = createElement("div", "error-message");
+        panel.append(
+          createElement("strong", null, "Request validation"),
+          createElement("p", null, message)
+        );
+        responseBody.append(panel);
+        if (focusTarget) {
+          focusTarget.focus();
         }
       }
 
-      function clearOutput(output) {
-        output.replaceChildren();
+      function showLoading(url) {
+        responseBody.replaceChildren();
+        setResponseMetrics("Sending…", "loading", null, null);
+        appendRequestUrl(responseBody, url);
+        const panel = createElement("div", "loading-message");
+        panel.append(
+          createElement("strong", null, "Sending…"),
+          createElement("p", null, "The request is in progress. Other operations remain available.")
+        );
+        responseBody.append(panel);
+        clearJsonCopy();
       }
 
-      function addStatus(output, text, kind) {
-        const status = document.createElement("p");
-        status.className = `response-status ${kind}`;
-        status.textContent = text;
-        output.append(status);
-        return status;
-      }
-
-      function addMessage(output, text, className = "response-message") {
-        const message = document.createElement("p");
-        message.className = className;
-        message.textContent = text;
-        output.append(message);
-        return message;
-      }
-
-      function appendRequestUrl(output, url) {
-        const container = document.createElement("div");
-        container.className = "request-url";
-        const label = document.createElement("span");
-        label.className = "request-url-label";
-        label.textContent = "요청 URL";
-        const value = document.createElement("code");
-        value.textContent = url;
-        container.append(label, value);
-        output.append(container);
-      }
-
-      function showClientError(output, text) {
-        clearOutput(output);
-        addStatus(output, "요청을 보내지 않음", "error");
-        addMessage(output, text);
-      }
-
-      function showLoading(output, url) {
-        clearOutput(output);
-        appendRequestUrl(output, url);
-        addStatus(output, "요청 중…", "loading");
-      }
-
-      function showNetworkError(output, url) {
-        clearOutput(output);
-        appendRequestUrl(output, url);
-        addStatus(output, "네트워크 오류", "error");
-        addMessage(output, "서버에 연결하지 못했거나 응답을 읽지 못했습니다.");
+      function showNetworkError(url, duration) {
+        responseBody.replaceChildren();
+        setResponseMetrics("Network error", "error", duration, null);
+        appendRequestUrl(responseBody, url);
+        const panel = createElement("div", "error-message");
+        panel.append(
+          createElement("strong", null, "Network error"),
+          createElement("p", null, "The server could not be reached or its response could not be read.")
+        );
+        responseBody.append(panel);
+        clearJsonCopy();
       }
 
       function isJsonContentType(contentType) {
@@ -895,295 +1957,20 @@
       }
 
       function statusText(response) {
-        return `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
-      }
-
-      function appendJson(output, value) {
-        const pre = document.createElement("pre");
-        const serialized = JSON.stringify(value, null, 2);
-        pre.textContent = serialized === undefined ? String(value) : serialized;
-        output.append(pre);
-      }
-
-      function appendErrorMeta(output, data) {
-        const meta = document.createElement("div");
-        meta.className = "error-meta";
-        const code = data && typeof data === "object" && data.code != null ? String(data.code) : "없음";
-        const traceId = data && typeof data === "object" && data.traceId != null ? String(data.traceId) : "없음";
-        for (const [label, value] of [["code", code], ["traceId", traceId]]) {
-          const item = document.createElement("div");
-          item.className = "error-meta-item";
-          const itemLabel = document.createElement("span");
-          itemLabel.className = "error-meta-label";
-          itemLabel.textContent = label;
-          const itemValue = document.createElement("strong");
-          itemValue.className = "error-meta-value";
-          itemValue.textContent = value;
-          item.append(itemLabel, itemValue);
-          meta.append(item);
-        }
-        output.append(meta);
-        return code;
-      }
-
-      function appendFileIdButton(itemCard, fileId) {
-        const button = document.createElement("button");
-        button.className = "copy-file-id secondary-button";
-        button.type = "button";
-        button.textContent = "fileId 복사";
-        button.addEventListener("click", async () => {
-          commonFileIdInput.value = fileId;
-          commonFileIdInput.focus();
-          commonFileIdInput.scrollIntoView({ behavior: "smooth", block: "center" });
-          try {
-            if (navigator.clipboard && window.isSecureContext) {
-              await navigator.clipboard.writeText(fileId);
-              button.textContent = "입력·클립보드 복사됨";
-            } else {
-              button.textContent = "공통 입력에 채움";
-            }
-          } catch {
-            button.textContent = "공통 입력에 채움";
-          }
-        });
-        itemCard.querySelector(".item-heading").append(button);
-      }
-
-      function itemSummary(item, index) {
-        const fileName = item && typeof item === "object" && item.fileName
-          ? String(item.fileName)
-          : `item ${index + 1}`;
-        if (!item || typeof item !== "object") {
-          return fileName;
-        }
-
-        const details = [];
-        if (item.size != null) {
-          details.push(`size=${String(item.size)}`);
-        }
-        const timestamp = item.timestamp ?? item.snapshotTimestamp;
-        if (timestamp != null && String(timestamp).length > 0) {
-          details.push(`timestamp=${String(timestamp)}`);
-        }
-        return details.length > 0 ? `${fileName} · ${details.join(" · ")}` : fileName;
-      }
-
-      function appendItems(output, data) {
-        const items = Array.isArray(data)
-          ? data
-          : data && typeof data === "object" && Array.isArray(data.items)
-            ? data.items
-            : null;
-        if (!items) {
-          return;
-        }
-
-        const list = document.createElement("div");
-        list.className = "item-list";
-        const listHeading = document.createElement("h3");
-        listHeading.textContent = `items (${items.length})`;
-        list.append(listHeading);
-
-        items.forEach((item, index) => {
-          const itemCard = document.createElement("article");
-          itemCard.className = "item-card";
-          const heading = document.createElement("div");
-          heading.className = "item-heading";
-          const title = document.createElement("strong");
-          const titleValue = item && typeof item === "object" && item.fileName
-            ? String(item.fileName)
-            : `item ${index + 1}`;
-          title.textContent = titleValue;
-          heading.append(title);
-          itemCard.append(heading);
-
-          if (item && typeof item === "object" && typeof item.fileId === "string" && item.fileId.length > 0) {
-            appendFileIdButton(itemCard, item.fileId);
-          }
-
-          const itemDetails = document.createElement("details");
-          itemDetails.className = "item-json";
-          const itemSummaryElement = document.createElement("summary");
-          itemSummaryElement.textContent = itemSummary(item, index);
-          const itemPre = document.createElement("pre");
-          const serializedItem = JSON.stringify(item, null, 2);
-          itemPre.textContent = serializedItem === undefined ? String(item) : serializedItem;
-          itemDetails.append(itemSummaryElement, itemPre);
-          itemCard.append(itemDetails);
-          list.append(itemCard);
-        });
-        output.append(list);
-      }
-
-      function appendNextPage(output, loadNextPage, token) {
-        if (!token) {
-          return;
-        }
-        const button = document.createElement("button");
-        button.className = "next-page primary-button";
-        button.type = "button";
-        button.textContent = "다음 페이지";
-        button.addEventListener("click", () => loadNextPage(token));
-        output.append(button);
-      }
-
-      function renderJsonSuccess(output, response, data, loadNextPage, url) {
-        clearOutput(output);
-        appendRequestUrl(output, url);
-        addStatus(output, `${statusText(response)} · JSON 응답`, "success");
-        appendItems(output, data);
-        if (loadNextPage && data && typeof data === "object" && !Array.isArray(data)) {
-          const token = typeof data.continuationToken === "string" ? data.continuationToken : "";
-          appendNextPage(output, loadNextPage, token);
-        }
-        appendJson(output, data);
-      }
-
-      async function renderHttpError(output, response, url) {
-        let body;
-        try {
-          body = await response.text();
-        } catch {
-          showNetworkError(output, url);
-          return;
-        }
-
-        clearOutput(output);
-        appendRequestUrl(output, url);
-        if (isJsonContentType(response.headers.get("Content-Type"))) {
-          let data;
-          try {
-            data = JSON.parse(body);
-          } catch {
-            addStatus(output, `${statusText(response)} · JSON 파싱 실패`, "error");
-            addMessage(output, "오류 응답의 JSON 본문을 해석하지 못했습니다.");
-            const pre = document.createElement("pre");
-            pre.textContent = body || "(본문 없음)";
-            output.append(pre);
-            return;
-          }
-
-          addStatus(output, `${statusText(response)} · JSON Problem Details`, "error");
-          const code = appendErrorMeta(output, data);
-          if (code === "MultipleFilesMatched") {
-            addMessage(output, "목록 조회로 fileId를 확인한 뒤 파일 공통 카드에서 다운로드하라.", "guidance");
-          }
-          appendJson(output, data);
-          return;
-        }
-
-        addStatus(output, `${statusText(response)} · 비-JSON 오류 응답`, "error");
-        const pre = document.createElement("pre");
-        pre.textContent = body || "(본문 없음)";
-        output.append(pre);
-      }
-
-      async function requestJson(url, output, loadNextPage) {
-        showLoading(output, url);
-        let response;
-        try {
-          response = await fetch(url, { method: "GET", headers: requestHeaders() });
-        } catch {
-          showNetworkError(output, url);
-          return;
-        }
-
-        if (!response.ok) {
-          await renderHttpError(output, response, url);
-          return;
-        }
-
-        let body;
-        try {
-          body = await response.text();
-        } catch {
-          showNetworkError(output, url);
-          return;
-        }
-
-        if (!isJsonContentType(response.headers.get("Content-Type"))) {
-          clearOutput(output);
-          appendRequestUrl(output, url);
-          addStatus(output, `${statusText(response)} · 비-JSON 성공 응답`, "neutral");
-          const pre = document.createElement("pre");
-          pre.textContent = body || "(본문 없음)";
-          output.append(pre);
-          return;
-        }
-
-        let data;
-        try {
-          data = JSON.parse(body);
-        } catch {
-          clearOutput(output);
-          appendRequestUrl(output, url);
-          addStatus(output, `${statusText(response)} · JSON 파싱 실패`, "error");
-          addMessage(output, "성공 응답의 JSON 본문을 해석하지 못했습니다.");
-          const pre = document.createElement("pre");
-          pre.textContent = body || "(본문 없음)";
-          output.append(pre);
-          return;
-        }
-
-        renderJsonSuccess(output, response, data, loadNextPage, url);
-      }
-
-      async function downloadFile(url, output) {
-        showLoading(output, url);
-        let response;
-        try {
-          response = await fetch(url, { method: "GET", headers: requestHeaders() });
-        } catch {
-          showNetworkError(output, url);
-          return;
-        }
-
-        if (!response.ok) {
-          await renderHttpError(output, response, url);
-          return;
-        }
-
-        let blob;
-        try {
-          blob = await response.blob();
-        } catch {
-          showNetworkError(output, url);
-          return;
-        }
-
-        const fileName = parseFileName(response.headers.get("Content-Disposition"));
-        const contentLength = response.headers.get("Content-Length") || "없음";
-        const objectUrl = URL.createObjectURL(blob);
-        try {
-          const link = document.createElement("a");
-          link.href = objectUrl;
-          link.download = fileName;
-          link.hidden = true;
-          document.body.append(link);
-          link.click();
-          link.remove();
-        } finally {
-          URL.revokeObjectURL(objectUrl);
-        }
-
-        clearOutput(output);
-        appendRequestUrl(output, url);
-        addStatus(output, `${statusText(response)} · 다운로드 저장 요청 완료`, "success");
-        const details = document.createElement("div");
-        details.className = "download-details";
-        for (const [label, value] of [["파일명", fileName], ["Content-Length", contentLength]]) {
-          const detail = document.createElement("div");
-          detail.className = "download-detail";
-          const detailLabel = document.createElement("span");
-          detailLabel.className = "download-detail-label";
-          detailLabel.textContent = label;
-          const detailValue = document.createElement("span");
-          detailValue.className = "download-detail-value";
-          detailValue.textContent = value;
-          detail.append(detailLabel, detailValue);
-          details.append(detail);
-        }
-        output.append(details);
+        const fallback = {
+          200: "OK",
+          201: "Created",
+          204: "No Content",
+          400: "Bad Request",
+          401: "Unauthorized",
+          404: "Not Found",
+          409: "Conflict",
+          410: "Gone",
+          500: "Internal Server Error",
+          502: "Bad Gateway"
+        };
+        const reason = response.statusText || fallback[response.status] || "";
+        return `${response.status}${reason ? ` ${reason}` : ""}`;
       }
 
       function safeFileName(value) {
@@ -1221,33 +2008,6 @@
         return "filegateway-download.bin";
       }
 
-      function buildLogCriteria(output) {
-        const equipmentId = requiredValue("logs-equipment-id", "설비 ID", output);
-        if (!equipmentId) return null;
-        const logType = requiredValue("logs-log-type", "logType", output);
-        if (!logType) return null;
-
-        const attributes = [];
-        document.querySelectorAll("#log-attributes .attribute-row").forEach((row) => {
-          const name = row.querySelector(".attribute-name").value.trim();
-          const value = row.querySelector(".attribute-value").value.trim();
-          if (name && value) {
-            attributes.push([name, value]);
-          }
-        });
-
-        return {
-          equipmentId,
-          logType,
-          from: optionalValue("logs-from"),
-          to: optionalValue("logs-to"),
-          subtype: optionalValue("logs-subtype"),
-          limit: optionalValue("logs-limit"),
-          continuationToken: optionalValue("logs-continuation-token"),
-          attributes,
-        };
-      }
-
       function buildLogQuery(criteria, continuationToken) {
         const query = new URLSearchParams();
         query.set("equipmentId", criteria.equipmentId);
@@ -1258,49 +2018,10 @@
         if (criteria.limit) query.set("limit", criteria.limit);
         const token = continuationToken === undefined ? criteria.continuationToken : continuationToken;
         if (token) query.set("continuationToken", token);
-        for (const [name, value] of criteria.attributes) {
-          query.set(`attr.${name}`, value);
+        for (const attribute of criteria.attributes) {
+          query.set(`attr.${attribute.name}`, attribute.value);
         }
         return query;
-      }
-
-      function loadLogs(criteria, output, continuationToken) {
-        const query = buildLogQuery(criteria, continuationToken);
-        return requestJson(
-          buildUrl("/api/v1/logs", query),
-          output,
-          (nextToken) => loadLogs(criteria, output, nextToken),
-        );
-      }
-
-      function buildCurrentQuery(output) {
-        const equipmentId = requiredValue("current-equipment-id", "설비 ID", output);
-        if (!equipmentId) return null;
-        const configurationType = requiredValue("current-configuration-type", "configurationType", output);
-        if (!configurationType) return null;
-        const query = new URLSearchParams();
-        query.set("equipmentId", equipmentId);
-        query.set("configurationType", configurationType);
-        return query;
-      }
-
-      function buildHistoryCriteria(output) {
-        const equipmentId = requiredValue("history-equipment-id", "설비 ID", output);
-        if (!equipmentId) return null;
-        const configurationType = requiredValue("history-configuration-type", "configurationType", output);
-        if (!configurationType) return null;
-        const from = requiredValue("history-from", "from", output);
-        if (!from) return null;
-        const to = requiredValue("history-to", "to", output);
-        if (!to) return null;
-        return {
-          equipmentId,
-          configurationType,
-          from,
-          to,
-          limit: optionalValue("history-limit"),
-          continuationToken: optionalValue("history-continuation-token"),
-        };
       }
 
       function buildHistoryQuery(criteria, continuationToken) {
@@ -1315,123 +2036,610 @@
         return query;
       }
 
-      function loadHistory(criteria, output, continuationToken) {
-        const query = buildHistoryQuery(criteria, continuationToken);
-        return requestJson(
-          buildUrl("/api/v1/configurations/history", query),
-          output,
-          (nextToken) => loadHistory(criteria, output, nextToken),
+      function buildRequest(operation, continuationToken) {
+        const values = collectFormValues(operation);
+
+        if (operation.form === "equipment") {
+          const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
+          if (!equipmentId) return null;
+          return {
+            url: buildUrl(`/api/v1/equipments/${encodeURIComponent(equipmentId)}/file-types`, new URLSearchParams()),
+            mode: operation.mode
+          };
+        }
+
+        if (operation.form === "logs") {
+          const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
+          if (!equipmentId) return null;
+          const logType = requiredValue(operation, "logType", "logType");
+          if (!logType) return null;
+          const criteria = {
+            equipmentId,
+            logType,
+            from: values.from || "",
+            to: values.to || "",
+            subtype: values.subtype || "",
+            limit: values.limit || "",
+            continuationToken: values.continuationToken || "",
+            attributes: Array.isArray(values.attributes) ? values.attributes : []
+          };
+          operation.criteria = criteria;
+          return {
+            url: buildUrl(operation.mode === "download" ? "/api/v1/logs/download" : "/api/v1/logs", buildLogQuery(criteria, continuationToken)),
+            mode: operation.mode
+          };
+        }
+
+        if (operation.form === "file") {
+          const fileId = requiredValue(operation, "fileId", "fileId");
+          if (!fileId) return null;
+          const query = new URLSearchParams();
+          query.set("fileId", fileId);
+          return {
+            url: buildUrl(operation.mode === "download" ? "/api/v1/files/download" : "/api/v1/files", query),
+            mode: operation.mode
+          };
+        }
+
+        if (operation.form === "current") {
+          const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
+          if (!equipmentId) return null;
+          const configurationType = requiredValue(operation, "configurationType", "configurationType");
+          if (!configurationType) return null;
+          const query = new URLSearchParams();
+          query.set("equipmentId", equipmentId);
+          query.set("configurationType", configurationType);
+          return {
+            url: buildUrl(operation.mode === "download" ? "/api/v1/configurations/current/download" : "/api/v1/configurations/current", query),
+            mode: operation.mode
+          };
+        }
+
+        if (operation.form === "history") {
+          const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
+          if (!equipmentId) return null;
+          const configurationType = requiredValue(operation, "configurationType", "configurationType");
+          if (!configurationType) return null;
+          const from = requiredValue(operation, "from", "from");
+          if (!from) return null;
+          const to = requiredValue(operation, "to", "to");
+          if (!to) return null;
+          const criteria = {
+            equipmentId,
+            configurationType,
+            from,
+            to,
+            limit: values.limit || "",
+            continuationToken: values.continuationToken || ""
+          };
+          operation.criteria = criteria;
+          return {
+            url: buildUrl("/api/v1/configurations/history", buildHistoryQuery(criteria, continuationToken)),
+            mode: operation.mode
+          };
+        }
+
+        return null;
+      }
+
+      function buildNextPageRequest(operation, token) {
+        if (!operation.criteria) {
+          return null;
+        }
+        if (operation.form === "logs") {
+          return {
+            url: buildUrl("/api/v1/logs", buildLogQuery(operation.criteria, token)),
+            mode: "json"
+          };
+        }
+        if (operation.form === "history") {
+          return {
+            url: buildUrl("/api/v1/configurations/history", buildHistoryQuery(operation.criteria, token)),
+            mode: "json"
+          };
+        }
+        return null;
+      }
+
+      function setJsonCopy(value) {
+        const serialized = value || "";
+        copyJson.disabled = !serialized;
+        copyJson.setAttribute("data-copy-value", serialized);
+        copyJson.textContent = "Copy JSON";
+      }
+
+      function appendRawJson(parent, rawText) {
+        const raw = createElement("details", "raw-response");
+        raw.open = true;
+        raw.append(
+          createElement("summary", null, "Raw response JSON"),
+          createElement("pre", null, rawText || "(empty body)")
         );
+        parent.append(raw);
       }
 
-      function createAttributeRow() {
-        const row = document.createElement("div");
-        row.className = "attribute-row";
-
-        const nameInput = document.createElement("input");
-        nameInput.className = "attribute-name";
-        nameInput.type = "text";
-        nameInput.autocomplete = "off";
-        nameInput.placeholder = "name";
-        nameInput.setAttribute("aria-label", "속성 이름");
-
-        const valueInput = document.createElement("input");
-        valueInput.className = "attribute-value";
-        valueInput.type = "text";
-        valueInput.autocomplete = "off";
-        valueInput.placeholder = "value";
-        valueInput.setAttribute("aria-label", "속성 값");
-
-        const removeButton = document.createElement("button");
-        removeButton.className = "secondary-button";
-        removeButton.type = "button";
-        removeButton.textContent = "삭제";
-        removeButton.addEventListener("click", () => row.remove());
-
-        row.append(nameInput, valueInput, removeButton);
-        return row;
+      function appendJsonSection(parent, data, rawText, title = "JSON body") {
+        const section = createElement("section", "json-section");
+        const toolbar = createElement("div", "response-toolbar");
+        const pretty = JSON.stringify(data, null, 2);
+        toolbar.append(createElement("h3", null, title));
+        section.append(toolbar);
+        const pre = createElement("pre", "json-body", pretty === undefined ? String(data) : pretty);
+        section.append(pre);
+        if (rawText && rawText !== pretty) {
+          appendRawJson(section, rawText);
+        }
+        parent.append(section);
+        setJsonCopy(pretty === undefined ? String(data) : pretty);
       }
 
-      document.getElementById("log-attributes").append(createAttributeRow());
-      document.getElementById("add-log-attribute").addEventListener("click", () => {
-        const row = createAttributeRow();
-        document.getElementById("log-attributes").append(row);
-        row.querySelector(".attribute-name").focus();
-      });
+      function appendResultField(parent, label, value) {
+        if (value == null || value === "") {
+          return;
+        }
+        const field = createElement("div", "result-field");
+        field.append(
+          createElement("span", "result-field-label", label),
+          createElement("span", "result-field-value", String(value))
+        );
+        parent.append(field);
+      }
 
-      const fileTypesOutput = document.getElementById("file-types-output");
-      const fileTypesButtons = [document.querySelector("#file-types-form button[type=submit]")];
-      document.getElementById("file-types-form").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const equipmentId = requiredValue("file-types-equipment-id", "설비 ID", fileTypesOutput);
-        if (!equipmentId) return;
-        const query = new URLSearchParams();
-        withBusyButtons(fileTypesButtons, () => requestJson(
-          buildUrl(`/api/v1/equipments/${encodeURIComponent(equipmentId)}/file-types`, query),
-          fileTypesOutput,
+      function selectFileOperation(fileId, operationId) {
+        const target = operations.get(operationId);
+        if (!target) {
+          return;
+        }
+        target.values.fileId = fileId;
+        renderOperation(operationId);
+        const input = operationForm.querySelector('[data-field="fileId"]');
+        if (input) {
+          input.value = fileId;
+          input.focus();
+        }
+      }
+
+      function appendFileIdActions(parent, fileId) {
+        const row = createElement("div", "file-id-row");
+        row.append(
+          createElement("span", "file-id-label", "fileId"),
+          createElement("code", "file-id-value", fileId)
+        );
+        const actions = createElement("div", "file-id-actions");
+        actions.append(
+          createCopyButton("Copy", fileId),
+          createElement("button", "link-button", "Metadata"),
+          createElement("button", "link-button", "Download")
+        );
+        const metadataButton = actions.children[1];
+        metadataButton.type = "button";
+        metadataButton.addEventListener("click", () => selectFileOperation(fileId, "files-metadata"));
+        const downloadButton = actions.children[2];
+        downloadButton.type = "button";
+        downloadButton.addEventListener("click", () => selectFileOperation(fileId, "files-download"));
+        row.append(actions);
+        parent.append(row);
+      }
+
+      function appendResultItem(list, item, index) {
+        const result = createElement("article", "result-item");
+        const header = createElement("div", "result-item-header");
+        const title = item && typeof item === "object" && item.fileName
+          ? String(item.fileName)
+          : item && typeof item === "object" && item.logType
+            ? String(item.logType)
+            : `item ${index + 1}`;
+        header.append(createElement("strong", null, title));
+        result.append(header);
+
+        if (item && typeof item === "object") {
+          const fields = createElement("div", "result-fields");
+          for (const key of ["equipmentId", "logType", "configurationType", "subtype", "timestamp", "snapshotTimestamp", "size", "generationType"]) {
+            appendResultField(fields, key, item[key]);
+          }
+          if (fields.children.length > 0) {
+            result.append(fields);
+          }
+          if (typeof item.fileId === "string" && item.fileId.length > 0) {
+            appendFileIdActions(result, item.fileId);
+          }
+          const details = createElement("details", "raw-response");
+          details.append(
+            createElement("summary", null, "Item JSON"),
+            createElement("pre", null, JSON.stringify(item, null, 2))
+          );
+          result.append(details);
+        }
+        list.append(result);
+      }
+
+      function appendItems(parent, data, heading = "Items") {
+        const items = Array.isArray(data)
+          ? data
+          : data && typeof data === "object" && Array.isArray(data.items)
+            ? data.items
+            : null;
+        if (!items) {
+          return;
+        }
+
+        const list = createElement("section", "item-list");
+        list.append(createElement("h3", null, `${heading} (${items.length})`));
+        if (items.length === 0) {
+          list.append(createElement("p", "field-hint", "No items returned."));
+        } else {
+          items.forEach((item, index) => appendResultItem(list, item, index));
+        }
+        parent.append(list);
+      }
+
+      function appendCatalogCollections(parent, data) {
+        if (!data || typeof data !== "object" || Array.isArray(data)) {
+          return;
+        }
+        if (Array.isArray(data.logs)) {
+          appendItems(parent, data.logs, "Logs");
+        }
+        if (Array.isArray(data.configurations)) {
+          appendItems(parent, data.configurations, "Configurations");
+        }
+      }
+
+      function appendPagination(operation, parent, token) {
+        if (!token || !operation.criteria) {
+          return;
+        }
+
+        const actions = createElement("div", "pagination-actions");
+        const next = createElement("button", "primary-button", "Load next page");
+        next.type = "button";
+        next.addEventListener("click", () => {
+          const request = buildNextPageRequest(operation, token);
+          if (request) {
+            executeRequest(operation, request, next);
+          }
+        });
+        actions.append(next);
+
+        const fragment = document.getElementById("request-token-template").content.cloneNode(true);
+        const details = fragment.firstElementChild;
+        details.querySelector(".token-field-content").append(
+          createElement("pre", null, token),
+          createCopyButton("Copy token", token)
+        );
+        actions.append(details);
+        parent.append(actions);
+      }
+
+      function renderJsonSuccess(operation, response, data, rawText, duration, url) {
+        const size = responseBodySize(response, rawText);
+        responseBody.replaceChildren();
+        setResponseMetrics(statusText(response), "success", duration, size);
+        appendRequestUrl(responseBody, url);
+
+        if (data && typeof data === "object" && !Array.isArray(data) && typeof data.fileId === "string" && data.fileId.length > 0) {
+          appendFileIdActions(responseBody, data.fileId);
+        }
+        if (operation.form === "equipment") {
+          appendCatalogCollections(responseBody, data);
+        } else {
+          appendItems(responseBody, data);
+        }
+        if (data && typeof data === "object" && !Array.isArray(data)) {
+          const token = typeof data.continuationToken === "string" ? data.continuationToken : "";
+          appendPagination(operation, responseBody, token);
+        }
+        appendJsonSection(responseBody, data, rawText);
+      }
+
+      function renderNonJsonSuccess(response, body, duration, url) {
+        const size = responseBodySize(response, body);
+        responseBody.replaceChildren();
+        setResponseMetrics(statusText(response), "success", duration, size);
+        clearJsonCopy();
+        appendRequestUrl(responseBody, url);
+        const message = createElement("div", "download-state");
+        message.append(
+          createElement("h3", null, "Non-JSON success response"),
+          createElement("p", null, "The endpoint returned a successful response without a JSON content type.")
+        );
+        responseBody.append(message);
+        appendRawJson(responseBody, body);
+      }
+
+      function renderProblemDetails(responseBodyData, rawText) {
+        const fragment = document.getElementById("problem-details-template").content.cloneNode(true);
+        const section = fragment.firstElementChild;
+        section.querySelector("#problem-status").textContent = responseBodyData.status == null ? "—" : String(responseBodyData.status);
+        section.querySelector("#problem-code").textContent = responseBodyData.code == null ? "—" : String(responseBodyData.code);
+        section.querySelector("#problem-title").textContent = responseBodyData.title == null ? "—" : String(responseBodyData.title);
+        section.querySelector("#problem-detail").textContent = responseBodyData.detail == null ? "—" : String(responseBodyData.detail);
+        section.querySelector("#problem-trace").textContent = responseBodyData.traceId == null ? "—" : String(responseBodyData.traceId);
+        section.querySelector("#problem-raw-response").textContent = rawText || "(empty body)";
+        responseBody.append(section);
+      }
+
+      function appendRecoveryGuidance(data) {
+        if (!data || data.code !== "MultipleFilesMatched") {
+          return;
+        }
+        const panel = createElement("div", "loading-message");
+        panel.append(
+          createElement("strong", null, "Choose a fileId"),
+          createElement("p", null, "Run a list operation, then use a result's Metadata or Download action for the intended file.")
+        );
+        responseBody.append(panel);
+      }
+
+      function isProblemDetails(contentType, data) {
+        if ((contentType || "").toLowerCase().includes("application/problem+json")) {
+          return true;
+        }
+        return Boolean(data && typeof data === "object" && !Array.isArray(data) && (
+          Object.prototype.hasOwnProperty.call(data, "title") ||
+          Object.prototype.hasOwnProperty.call(data, "detail") ||
+          Object.prototype.hasOwnProperty.call(data, "code")
         ));
+      }
+
+      async function renderHttpError(response, url, startedAt, isActive) {
+        let body;
+        try {
+          body = await response.text();
+        } catch {
+          if (isActive()) {
+            showNetworkError(url, performance.now() - startedAt);
+          }
+          return;
+        }
+
+        if (!isActive()) {
+          return;
+        }
+
+        const duration = performance.now() - startedAt;
+        const size = responseBodySize(response, body);
+        responseBody.replaceChildren();
+        setResponseMetrics(statusText(response), "error", duration, size);
+        clearJsonCopy();
+        appendRequestUrl(responseBody, url);
+
+        const contentType = response.headers.get("Content-Type") || "";
+        if (isJsonContentType(contentType)) {
+          let data;
+          try {
+            data = JSON.parse(body);
+          } catch {
+            const panel = createElement("div", "error-message");
+            panel.append(
+              createElement("strong", null, "JSON parse failed"),
+              createElement("p", null, "The API error body could not be parsed as JSON.")
+            );
+            responseBody.append(panel);
+            appendRawJson(responseBody, body);
+            clearJsonCopy();
+            return;
+          }
+
+          if (isProblemDetails(contentType, data)) {
+            renderProblemDetails(data, body);
+            appendRecoveryGuidance(data);
+          } else {
+            appendJsonSection(responseBody, data, body, "API error JSON");
+            appendRecoveryGuidance(data);
+          }
+          return;
+        }
+
+        const panel = createElement("div", "error-message");
+        panel.append(
+          createElement("strong", null, "Non-JSON API error"),
+          createElement("p", null, "The API returned an error body without a JSON content type.")
+        );
+        responseBody.append(panel);
+        appendRawJson(responseBody, body);
+        clearJsonCopy();
+      }
+
+      function renderDownloadSuccess(response, blob, duration, url) {
+        const fileName = parseFileName(response.headers.get("Content-Disposition"));
+        const contentLength = response.headers.get("Content-Length") || formatBytes(blob.size);
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+          const link = createElement("a");
+          link.href = objectUrl;
+          link.download = fileName;
+          link.hidden = true;
+          document.body.append(link);
+          link.click();
+          link.remove();
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+
+        responseBody.replaceChildren();
+        setResponseMetrics(statusText(response), "success", duration, blob.size);
+        appendRequestUrl(responseBody, url);
+        const state = createElement("div", "download-state");
+        state.append(
+          createElement("h3", null, "Download started"),
+          createElement("p", null, "The browser download action was requested for this response.")
+        );
+        const details = createElement("div", "download-details");
+        for (const [label, value] of [
+          ["File name", fileName],
+          ["Content-Type", response.headers.get("Content-Type") || "unknown"],
+          ["Content-Length", contentLength]
+        ]) {
+          const detail = createElement("div", "download-detail");
+          detail.append(
+            createElement("span", "download-detail-label", label),
+            createElement("span", "download-detail-value", value)
+          );
+          details.append(detail);
+        }
+        state.append(details);
+        responseBody.append(state);
+        clearJsonCopy();
+      }
+
+      function renderJsonParseError(response, body, duration, url) {
+        responseBody.replaceChildren();
+        setResponseMetrics(statusText(response), "error", duration, responseBodySize(response, body));
+        appendRequestUrl(responseBody, url);
+        const panel = createElement("div", "error-message");
+        panel.append(
+          createElement("strong", null, "JSON parse failed"),
+          createElement("p", null, "The successful response could not be parsed as JSON.")
+        );
+        responseBody.append(panel);
+        appendRawJson(responseBody, body);
+        clearJsonCopy();
+      }
+
+      async function executeRequest(operation, request, triggerButton) {
+        if (operation.busy) {
+          return;
+        }
+
+        operation.busy = true;
+        const callId = ++requestSequence;
+        const button = triggerButton || sendOperation;
+        const isActive = () => activeOperationId === operation.id && callId === requestSequence;
+
+        if (activeOperationId === operation.id) {
+          button.disabled = true;
+          sendOperation.disabled = true;
+          sendOperation.textContent = "Sending…";
+          showLoading(request.url);
+        }
+
+        const startedAt = performance.now();
+        try {
+          const response = await fetch(request.url, {
+            method: operation.method,
+            headers: requestHeaders()
+          });
+          if (!isActive()) {
+            return;
+          }
+
+          if (!response.ok) {
+            await renderHttpError(response, request.url, startedAt, isActive);
+            return;
+          }
+
+          if (request.mode === "download") {
+            let blob;
+            try {
+              blob = await response.blob();
+            } catch {
+              if (isActive()) {
+                showNetworkError(request.url, performance.now() - startedAt);
+              }
+              return;
+            }
+            if (isActive()) {
+              renderDownloadSuccess(response, blob, performance.now() - startedAt, request.url);
+            }
+            return;
+          }
+
+          let body;
+          try {
+            body = await response.text();
+          } catch {
+            if (isActive()) {
+              showNetworkError(request.url, performance.now() - startedAt);
+            }
+            return;
+          }
+
+          if (!isActive()) {
+            return;
+          }
+
+          const duration = performance.now() - startedAt;
+          const contentType = response.headers.get("Content-Type") || "";
+          if (!isJsonContentType(contentType)) {
+            renderNonJsonSuccess(response, body, duration, request.url);
+            return;
+          }
+
+          let data;
+          try {
+            data = JSON.parse(body);
+          } catch {
+            renderJsonParseError(response, body, duration, request.url);
+            return;
+          }
+          renderJsonSuccess(operation, response, data, body, duration, request.url);
+        } catch {
+          if (isActive()) {
+            showNetworkError(request.url, performance.now() - startedAt);
+          }
+        } finally {
+          operation.busy = false;
+          if (activeOperationId === operation.id) {
+            sendOperation.disabled = false;
+            sendOperation.textContent = "Send";
+            button.disabled = false;
+          }
+        }
+      }
+
+      function renderOperation(operationId) {
+        const nextOperation = operations.get(operationId);
+        if (!nextOperation) {
+          return;
+        }
+
+        if (activeOperation) {
+          collectFormValues(activeOperation);
+        }
+        activeOperation = nextOperation;
+        activeOperationId = operationId;
+        document.querySelectorAll("[data-operation]").forEach((link) => {
+          const selected = link.dataset.operation === operationId;
+          link.classList.toggle("active", selected);
+          if (selected) {
+            link.setAttribute("aria-current", "page");
+          } else {
+            link.removeAttribute("aria-current");
+          }
+        });
+
+        activeGroupLabel.textContent = nextOperation.group;
+        activeOperationLabel.textContent = nextOperation.label;
+        requestMethod.textContent = nextOperation.method;
+        requestMethod.className = `method-badge method-${nextOperation.method.toLowerCase()}`;
+        requestEndpoint.textContent = nextOperation.endpoint;
+        renderOperationForm(nextOperation);
+        sendOperation.disabled = nextOperation.busy;
+        sendOperation.textContent = nextOperation.busy ? "Sending…" : "Send";
+        showEmptyResponse();
+      }
+
+      operationForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (!activeOperation || activeOperation.busy) {
+          return;
+        }
+        const request = buildRequest(activeOperation);
+        if (request) {
+          executeRequest(activeOperation, request, sendOperation);
+        }
       });
 
-      const logsOutput = document.getElementById("logs-output");
-      const logsButtons = [
-        document.querySelector("#logs-form button[type=submit]"),
-        document.getElementById("logs-download"),
-      ];
-      document.getElementById("logs-form").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const criteria = buildLogCriteria(logsOutput);
-        if (criteria) withBusyButtons(logsButtons, () => loadLogs(criteria, logsOutput));
-      });
-      document.getElementById("logs-download").addEventListener("click", () => {
-        const criteria = buildLogCriteria(logsOutput);
-        if (!criteria) return;
-        const query = buildLogQuery(criteria);
-        withBusyButtons(logsButtons, () => downloadFile(buildUrl("/api/v1/logs/download", query), logsOutput));
+      copyJson.addEventListener("click", () => {
+        copyText(copyJson.dataset.copyValue, copyJson);
       });
 
-      const filesOutput = document.getElementById("files-output");
-      const filesButtons = [
-        document.querySelector("#files-form button[type=submit]"),
-        document.getElementById("files-download"),
-      ];
-      document.getElementById("files-form").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const fileId = requiredValue("common-file-id", "fileId", filesOutput);
-        if (!fileId) return;
-        const query = new URLSearchParams();
-        query.set("fileId", fileId);
-        withBusyButtons(filesButtons, () => requestJson(buildUrl("/api/v1/files", query), filesOutput));
-      });
-      document.getElementById("files-download").addEventListener("click", () => {
-        const fileId = requiredValue("common-file-id", "fileId", filesOutput);
-        if (!fileId) return;
-        const query = new URLSearchParams();
-        query.set("fileId", fileId);
-        withBusyButtons(filesButtons, () => downloadFile(buildUrl("/api/v1/files/download", query), filesOutput));
+      document.querySelectorAll("[data-operation]").forEach((link) => {
+        link.addEventListener("click", () => renderOperation(link.dataset.operation));
       });
 
-      const currentOutput = document.getElementById("current-output");
-      const currentButtons = [
-        document.querySelector("#current-form button[type=submit]"),
-        document.getElementById("current-download"),
-      ];
-      document.getElementById("current-form").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const query = buildCurrentQuery(currentOutput);
-        if (query) withBusyButtons(currentButtons, () => requestJson(buildUrl("/api/v1/configurations/current", query), currentOutput));
-      });
-      document.getElementById("current-download").addEventListener("click", () => {
-        const query = buildCurrentQuery(currentOutput);
-        if (query) withBusyButtons(currentButtons, () => downloadFile(buildUrl("/api/v1/configurations/current/download", query), currentOutput));
-      });
-
-      const historyOutput = document.getElementById("history-output");
-      const historyButtons = [document.querySelector("#history-form button[type=submit]")];
-      document.getElementById("history-form").addEventListener("submit", (event) => {
-        event.preventDefault();
-        const criteria = buildHistoryCriteria(historyOutput);
-        if (criteria) withBusyButtons(historyButtons, () => loadHistory(criteria, historyOutput));
-      });
+      renderOperation("catalog-file-types");
     })();
   </script>
 </body>
