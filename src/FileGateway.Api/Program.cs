@@ -13,6 +13,8 @@ using FileGateway.Infrastructure.ReferenceData;
 using FileGateway.Infrastructure.Tokens;
 using FileGateway.Logs;
 using Microsoft.Extensions.Options;
+using Microsoft.OpenApi;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +24,28 @@ builder.Services.AddOptions<FileGatewayOptions>()
     .Validate(o => o.Configurations.HistoryMaxQueryRange > TimeSpan.Zero, "HistoryMaxQueryRange must be positive")
     .ValidateOnStart();
 builder.Services.Configure<AuthenticationOptions>(builder.Configuration.GetSection("Authentication"));
+
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, _, _) =>
+    {
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        document.Components.SecuritySchemes["ApiKey"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.ApiKey,
+            In = ParameterLocation.Header,
+            Name = "X-Api-Key",
+            Description = "설비/서버 등록 시 발급된 caller API Key",
+        };
+        document.Security ??= new List<OpenApiSecurityRequirement>();
+        document.Security.Add(new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecuritySchemeReference("ApiKey", document)] = new List<string>(),
+        });
+        return Task.CompletedTask;
+    });
+});
 
 // DataProtection 키 내구성: 미설정 시 기본 키 링은 프로세스/IIS App Pool 재시작과 무관하지 않으나
 // 배포 환경(프로필 없는 App Pool identity)에서는 휘발성이므로 명시적 디렉터리를 요구한다.
@@ -89,6 +113,50 @@ app.MapCatalogEndpoints();
 app.MapLogEndpoints();
 app.MapConfigurationEndpoints();
 app.MapFileEndpoints();
+
+if (app.Environment.IsDevelopment())
+{
+    // 개발 환경 전용 웹 API 테스트 도구. 내부 기준정보/스키마를 노출하는 문서 endpoint이므로
+    // Development 밖에서는 등록하지 않는다.
+    app.MapOpenApi();
+    app.MapScalarApiReference(options => options
+        .WithTitle("FileGateway API")
+        .WithTheme(ScalarTheme.None)
+        .WithDefaultHttpClient(ScalarTarget.Shell, ScalarClient.Curl)
+        .WithCustomCss(ScalarBrandCss.Content));
+    app.MapGet("/tester", () => Results.File("tester/index.html", "text/html"));
+}
+
 app.Run();
 
 public partial class Program;
+
+/// <summary>
+/// Scalar 문서 UI를 FeedbackOps 디자인 토큰(Samsung One UI 계열 라이트 테마)에 맞춘 CSS 오버라이드.
+/// 값 출처: https://github.com/hjung3113/FeedbackOps DESIGN.md.
+/// </summary>
+internal static class ScalarBrandCss
+{
+    public const string Content = """
+        :root {
+            --scalar-color-1: #101828;
+            --scalar-color-2: #374151;
+            --scalar-color-3: #687386;
+            --scalar-color-accent: #1428a0;
+            --scalar-background-1: #f3f7fe;
+            --scalar-background-2: #fbfdff;
+            --scalar-background-3: #edf3fb;
+            --scalar-border-color: #cbd6e6;
+            --scalar-radius: 6px;
+            --scalar-radius-lg: 6px;
+            --scalar-radius-xl: 12px;
+            --scalar-font: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --scalar-font-code: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+        .light-mode {
+            --scalar-button-1: #1428a0;
+            --scalar-button-1-color: #ffffff;
+            --scalar-button-1-hover: #101f80;
+        }
+        """;
+}

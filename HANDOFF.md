@@ -2,6 +2,18 @@
 
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
+## 2026-08-28 세션 상태 (다음 세션이 여기부터 이어감)
+
+Task 0~20(자동화 구현) 완료 후, MVP 범위 밖 부가 작업 진행 중. **Task 21(수동 배포 검증)은 아직 미착수 — 여전히 유일한 MVP 완료 조건.**
+
+- **merge 완료(main)**: PR #9(배포 체크리스트/API 매뉴얼), PR #10·#11(Python/C# 클라이언트 샘플 최초분 + fileId query param 이동), PR #14(`samples/` 8개 유즈케이스별 Python/C# 샘플 재작성 — `93e716e`/`3399e2b`). 클라이언트 샘플 코드는 omp(glm-5.3-high) 리뷰 반영 완료 상태로 merge됨.
+- **main에 uncommitted 상태로 남아있는 작업 (커밋 안 됨, 다음 세션이 이어받을 것)**:
+  - `src/FileGateway.Api/Program.cs`, `FileGateway.Api.csproj`: Development 전용 Scalar UI(`/scalar/v1`, `/openapi/v1.json`) + 커스텀 웹 API 테스터(`/tester`) 추가. `Microsoft.AspNetCore.OpenApi`, `Scalar.AspNetCore` 패키지 참조 추가됨.
+  - `src/FileGateway.Api/wwwroot/tester/index.html` (untracked, 새 파일): 순수 HTML/CSS/vanilla JS 단일 파일 API 테스터, same-origin 서빙(CORS 미들웨어 없음). FeedbackOps(github.com/hjung3113/FeedbackOps) DESIGN.md 라이트 테마 토큰 적용.
+  - 진행 순서: 설계 → sol(gpt-5.6-sol high) 설계 리뷰 → luna(gpt-5.6-luna max) 구현 → opus(세션 서브에이전트, openrouter credit 부족으로 omp 경유 실패해서 Agent 서브에이전트로 전환) 디자인 리뷰 → 지적사항 5건 직접 반영(폰트 스택, 필드 2단 그리드, 다운로드 안내 중복 제거, 헤딩/설명 통일, API Key 인풋 폭 제한) → 코드 아키텍처 리뷰(glm-5.3-high) 시도했으나 omp가 세 번 연속(헤드리스 2회 + orca-cli TUI 1회) rumination 루프에 빠져 실패, 결국 컨트롤러가 직접 6개 항목 정적 리뷰 수행(문제 없음 확인: ApiKeyMiddleware가 `/api` prefix에만 적용돼 `/tester` 인증 불필요, innerHTML 0건, downloadFile object URL revoke 정상, YAGNI 위반 없음).
+  - **다음 세션 할 일**: 이 상태를 사용자와 함께 검토(피드백 반영 필요할 수도 있음) → 커밋 → PR → merge. 커밋 전 `dotnet build`/`dotnet test` 재검증 필수(마지막 확인 시 0 warning, 단위 166 + 통합 84 전부 통과).
+- **omp 관련 교훈**: 이 환경에서 omp를 헤드리스(`-p`)로 돌릴 때 `< /dev/null`로 stdin을 반드시 닫을 것(안 그러면 `readPipedInput`에서 무한 대기). orca-cli로 TUI를 띄울 때는 (1) 새 터미널이 oh-my-zsh 업데이트 프롬프트 등에 걸려있지 않은 순수 shell 프롬프트인지 먼저 `terminal read`로 확인 후 커맨드 전송, (2) `terminal send`가 `accepted:false`를 반환하면 `terminal switch`(focus)부터 다시 하고 재시도, (3) TUI가 실제로 떴는지(모델 배너 등) `terminal read`로 확인한 뒤에만 프롬프트 텍스트를 보낼 것. openrouter 경유 `opus`/`claude-opus-5`는 이 계정 credit으로 65536 토큰 요청을 감당 못해 402 — 세션 서브에이전트(Agent tool, model: "opus")로 대체하는 편이 안정적.
+
 - 설계 확정: `docs/00-glossary.md`~`10-testing-and-deployment.md` + 통합 스냅샷 `docs/superpowers/specs/2026-08-22-filegateway-design.md`
 - 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개
 - **Task 0~20 전체 자동화 구현 완료, main에 전부 merge됨.** 최종 게이트(main HEAD, 컨트롤러 직접 검증): 빌드 0 경고, 단위 166/166 + 통합 82/82.

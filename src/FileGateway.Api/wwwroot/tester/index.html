@@ -1,0 +1,1353 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FileGateway API Tester</title>
+  <style>
+    :root {
+      --page-background: #f3f7fe;
+      --card-background: #fbfdff;
+      --muted-background: #edf3fb;
+      --primary: #1428a0;
+      --primary-hover: #101f80;
+      --text: #101828;
+      --muted-text: #687386;
+      --border: #cbd6e6;
+      --danger: #b42318;
+      --success: #067647;
+      --radius: 6px;
+      --gap: 8px;
+      /* CDN 로드 없이 시스템 sans-serif만 사용(Inter는 로드하지 않으므로 스택에서 제외) */
+      --font: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --code-font: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--page-background);
+      font-family: var(--font);
+      line-height: 1.5;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 28px clamp(16px, 4vw, 48px) 24px;
+      border-bottom: 1px solid var(--border);
+      background: var(--card-background);
+    }
+
+    .eyebrow {
+      margin: 0 0 4px;
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 4px;
+      font-size: clamp(24px, 4vw, 34px);
+      line-height: 1.15;
+    }
+
+    h2 {
+      margin-bottom: 4px;
+      font-size: 18px;
+      line-height: 1.3;
+    }
+
+    h3 {
+      margin-bottom: 0;
+      font-size: 14px;
+    }
+
+    .subtitle,
+    .card-description,
+    .note,
+    .field-hint {
+      color: var(--muted-text);
+      font-size: 13px;
+    }
+
+    .subtitle {
+      margin-bottom: 0;
+    }
+
+    .card-description code {
+      color: var(--text);
+      font-family: var(--code-font);
+      font-size: 12px;
+    }
+
+    .origin {
+      display: grid;
+      gap: 2px;
+      min-width: min(100%, 320px);
+      color: var(--muted-text);
+      font-size: 12px;
+      text-align: right;
+    }
+
+    .origin code {
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-family: var(--code-font);
+      font-size: 13px;
+    }
+
+    main {
+      display: grid;
+      gap: 16px;
+      width: min(1400px, 100%);
+      margin: 0 auto;
+      padding: 24px clamp(16px, 4vw, 48px) 48px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+
+    .card {
+      min-width: 0;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--card-background);
+      box-shadow: 0 2px 8px rgb(16 24 40 / 4%);
+    }
+
+    .access-card {
+      display: grid;
+      gap: 16px;
+    }
+
+    .card-heading {
+      margin-bottom: 16px;
+    }
+
+    .card-heading h2 {
+      margin-bottom: 2px;
+    }
+
+    .card-description,
+    .note {
+      margin-bottom: 0;
+    }
+
+    .request-form {
+      display: grid;
+      gap: 16px;
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+      gap: var(--gap);
+    }
+
+    .field {
+      display: grid;
+      align-content: start;
+      gap: 4px;
+      min-width: 0;
+    }
+
+    .field-wide {
+      grid-column: 1 / -1;
+    }
+
+    label,
+    .field-label {
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    input {
+      width: 100%;
+      min-height: 38px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      background: #ffffff;
+      font: inherit;
+    }
+
+    input::placeholder {
+      color: var(--muted-text);
+    }
+
+    input:focus,
+    button:focus-visible {
+      outline: 3px solid rgb(20 40 160 / 18%);
+      outline-offset: 1px;
+    }
+
+    .password-input {
+      font-family: var(--code-font);
+    }
+
+    .access-controls,
+    .form-actions,
+    .attribute-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--gap);
+    }
+
+    .access-controls {
+      align-items: flex-end;
+    }
+
+    .access-key-field {
+      flex: 1 1 280px;
+      max-width: 420px;
+    }
+
+    .remember-control {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 38px;
+      white-space: nowrap;
+    }
+
+    .remember-control input {
+      width: 16px;
+      min-height: 16px;
+      accent-color: var(--primary);
+    }
+
+    button {
+      min-height: 38px;
+      padding: 8px 13px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      color: var(--text);
+      background: transparent;
+      cursor: pointer;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    button:disabled {
+      cursor: wait;
+      opacity: 0.65;
+    }
+
+    .primary-button {
+      color: #ffffff;
+      background: var(--primary);
+    }
+
+    .primary-button:hover:not(:disabled) {
+      background: var(--primary-hover);
+    }
+
+    .secondary-button {
+      border-color: var(--border);
+      background: #ffffff;
+    }
+
+    .secondary-button:hover:not(:disabled) {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .danger-button {
+      border-color: #e6b8b3;
+      color: var(--danger);
+      background: #fffafa;
+    }
+
+    .attribute-section {
+      display: grid;
+      gap: var(--gap);
+    }
+
+    .attribute-list {
+      display: grid;
+      gap: var(--gap);
+    }
+
+    .attribute-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+      gap: var(--gap);
+      align-items: end;
+    }
+
+    .attribute-row button {
+      min-width: 54px;
+      padding-inline: 8px;
+    }
+
+    .response {
+      display: grid;
+      gap: 10px;
+      margin-top: 16px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #ffffff;
+    }
+
+    .response:empty {
+      display: none;
+    }
+
+    .response-status {
+      margin-bottom: 0;
+      font-size: 13px;
+      font-weight: 750;
+    }
+
+    .response-status.success {
+      color: var(--success);
+    }
+
+    .response-status.error {
+      color: var(--danger);
+    }
+
+    .response-status.loading {
+      color: var(--primary);
+    }
+
+    .response-status.neutral {
+      color: var(--muted-text);
+    }
+
+    .response-message {
+      margin-bottom: 0;
+      color: var(--muted-text);
+      font-size: 13px;
+    }
+
+    .error-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      padding: 10px;
+      border: 1px solid #e6b8b3;
+      border-radius: var(--radius);
+      background: #fffafa;
+    }
+
+    .error-meta-item {
+      display: grid;
+      gap: 1px;
+      min-width: 120px;
+    }
+
+    .error-meta-label {
+      color: var(--muted-text);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .error-meta-value {
+      color: var(--danger);
+      font-family: var(--code-font);
+      font-size: 13px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+    }
+
+    .guidance {
+      margin-bottom: 0;
+      padding: 10px;
+      border-radius: var(--radius);
+      color: var(--primary);
+      background: var(--muted-background);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    pre {
+      max-height: 360px;
+      margin: 0;
+      overflow: auto;
+      padding: 12px;
+      border-radius: var(--radius);
+      color: var(--text);
+      background: #f7f9fc;
+      font-family: var(--code-font);
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .item-list {
+      display: grid;
+      gap: var(--gap);
+    }
+
+    .item-card {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--card-background);
+    }
+
+    .item-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--gap);
+    }
+
+    .item-heading strong {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .copy-file-id {
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding: 5px 9px;
+      color: var(--primary);
+      background: #ffffff;
+      border-color: var(--border);
+      font-size: 12px;
+    }
+
+    .copy-file-id:hover:not(:disabled) {
+      border-color: var(--primary);
+    }
+
+    .download-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--gap);
+    }
+
+    .download-detail {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+      padding: 8px;
+      border-radius: var(--radius);
+      background: var(--muted-background);
+    }
+
+    .download-detail-label {
+      color: var(--muted-text);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .download-detail-value {
+      overflow-wrap: anywhere;
+      font-family: var(--code-font);
+      font-size: 12px;
+    }
+
+    .next-page {
+      justify-self: start;
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .origin {
+        min-width: 0;
+        text-align: left;
+      }
+
+      .card {
+        padding: 16px;
+      }
+
+      .attribute-row {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .attribute-row button {
+        grid-column: 1 / -1;
+        justify-self: start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Development tool</p>
+      <h1>FileGateway API Tester</h1>
+      <p class="subtitle">same-origin 요청으로 FileGateway API 계약을 수동 확인합니다.</p>
+      <p class="subtitle">다운로드 카드는 blob 전체를 메모리에 올려 소규모 파일만 수동 확인합니다 — 스트리밍 대용량 다운로드 검증 도구가 아닙니다.</p>
+    </div>
+    <div class="origin">
+      <span>Gateway 기본 URL</span>
+      <code id="gateway-origin"></code>
+    </div>
+  </header>
+
+  <main>
+    <section class="card access-card" aria-labelledby="access-title">
+      <div class="card-heading">
+        <h2 id="access-title">접속 설정</h2>
+        <p class="card-description">API Key는 X-Api-Key 헤더로만 전송됩니다.</p>
+      </div>
+      <div class="access-controls">
+        <label class="access-key-field">
+          API Key
+          <input id="api-key" class="password-input" type="password" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="remember-control">
+          <input id="remember-key" type="checkbox">
+          이 브라우저에 기억
+        </label>
+        <button id="clear-key" class="danger-button" type="button">키 삭제</button>
+      </div>
+      <p class="note">기본 저장 위치는 sessionStorage이며, 체크하면 localStorage로 이동합니다.</p>
+    </section>
+
+    <div class="cards">
+      <section class="card" aria-labelledby="file-types-title">
+        <div class="card-heading">
+          <h2 id="file-types-title">1. 설비 제공 파일 종류</h2>
+          <p class="card-description">설비가 제공하는 로그/구성 종류 조회 — <code>GET /api/v1/equipments/{equipmentId}/file-types</code></p>
+        </div>
+        <form id="file-types-form" class="request-form" novalidate>
+          <div class="fields">
+            <label class="field">
+              설비 ID
+              <input id="file-types-equipment-id" type="text" autocomplete="off" placeholder="EQ-001">
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">조회</button>
+          </div>
+        </form>
+        <div id="file-types-output" class="response" aria-live="polite"></div>
+      </section>
+
+      <section class="card" aria-labelledby="logs-title">
+        <div class="card-heading">
+          <h2 id="logs-title">2. 로그</h2>
+          <p class="card-description">목록과 조건 기반 직접 다운로드는 같은 조건을 사용합니다.</p>
+        </div>
+        <form id="logs-form" class="request-form" novalidate>
+          <div class="fields">
+            <label class="field">
+              설비 ID
+              <input id="logs-equipment-id" type="text" autocomplete="off" placeholder="EQ-001">
+            </label>
+            <label class="field">
+              logType
+              <input id="logs-log-type" type="text" autocomplete="off" placeholder="EventLog">
+            </label>
+            <label class="field">
+              from
+              <input id="logs-from" type="text" autocomplete="off" placeholder="2026-08-28T00:00:00+09:00">
+            </label>
+            <label class="field">
+              to
+              <input id="logs-to" type="text" autocomplete="off" placeholder="2026-08-29T00:00:00+09:00">
+            </label>
+            <label class="field">
+              subtype
+              <input id="logs-subtype" type="text" autocomplete="off">
+            </label>
+            <label class="field">
+              limit
+              <input id="logs-limit" type="text" inputmode="numeric" autocomplete="off" placeholder="50">
+            </label>
+            <label class="field field-wide">
+              continuationToken
+              <input id="logs-continuation-token" type="text" autocomplete="off">
+            </label>
+          </div>
+          <div class="attribute-section">
+            <span class="field-label">속성 필터 (attr.&lt;name&gt;=&lt;value&gt;)</span>
+            <div id="log-attributes" class="attribute-list"></div>
+            <div class="attribute-actions">
+              <button id="add-log-attribute" class="secondary-button" type="button">속성 추가</button>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">목록 조회</button>
+            <button id="logs-download" class="secondary-button" type="button">조건으로 다운로드</button>
+          </div>
+        </form>
+        <div id="logs-output" class="response" aria-live="polite"></div>
+      </section>
+
+      <section class="card" aria-labelledby="files-title">
+        <div class="card-heading">
+          <h2 id="files-title">3. 파일 공통</h2>
+          <p class="card-description">fileId로 metadata 조회/다운로드 — <code>GET /api/v1/files?fileId=...</code></p>
+        </div>
+        <form id="files-form" class="request-form" novalidate>
+          <div class="fields">
+            <label class="field field-wide">
+              fileId
+              <input id="common-file-id" type="text" autocomplete="off" spellcheck="false" placeholder="목록 응답에서 복사한 fileId">
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">파일 정보 조회</button>
+            <button id="files-download" class="secondary-button" type="button">파일 다운로드</button>
+          </div>
+        </form>
+        <div id="files-output" class="response" aria-live="polite"></div>
+      </section>
+
+      <section class="card" aria-labelledby="current-title">
+        <div class="card-heading">
+          <h2 id="current-title">4. Current Configuration</h2>
+          <p class="card-description">현재 파일 목록 조회와 단일 매칭 직접 다운로드</p>
+        </div>
+        <form id="current-form" class="request-form" novalidate>
+          <div class="fields">
+            <label class="field">
+              설비 ID
+              <input id="current-equipment-id" type="text" autocomplete="off" placeholder="EQ-001">
+            </label>
+            <label class="field">
+              configurationType
+              <input id="current-configuration-type" type="text" autocomplete="off" placeholder="PM">
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">목록 조회</button>
+            <button id="current-download" class="secondary-button" type="button">조건으로 다운로드</button>
+          </div>
+        </form>
+        <div id="current-output" class="response" aria-live="polite"></div>
+      </section>
+
+      <section class="card" aria-labelledby="history-title">
+        <div class="card-heading">
+          <h2 id="history-title">5. Configuration History</h2>
+          <p class="card-description">from/to는 ISO-8601 텍스트로 입력합니다.</p>
+        </div>
+        <form id="history-form" class="request-form" novalidate>
+          <div class="fields">
+            <label class="field">
+              설비 ID
+              <input id="history-equipment-id" type="text" autocomplete="off" placeholder="EQ-001">
+            </label>
+            <label class="field">
+              configurationType
+              <input id="history-configuration-type" type="text" autocomplete="off" placeholder="PM">
+            </label>
+            <label class="field">
+              from
+              <input id="history-from" type="text" autocomplete="off" placeholder="2026-08-01T00:00:00+09:00">
+            </label>
+            <label class="field">
+              to
+              <input id="history-to" type="text" autocomplete="off" placeholder="2026-09-01T00:00:00+09:00">
+            </label>
+            <label class="field">
+              limit
+              <input id="history-limit" type="text" inputmode="numeric" autocomplete="off" placeholder="50">
+            </label>
+            <label class="field field-wide">
+              continuationToken
+              <input id="history-continuation-token" type="text" autocomplete="off">
+            </label>
+          </div>
+          <div class="form-actions">
+            <button class="primary-button" type="submit">목록 조회</button>
+          </div>
+        </form>
+        <div id="history-output" class="response" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const apiKeyStorageKey = "filegateway.tester.apiKey";
+      const gatewayOrigin = document.getElementById("gateway-origin");
+      const apiKeyInput = document.getElementById("api-key");
+      const rememberKey = document.getElementById("remember-key");
+      const commonFileIdInput = document.getElementById("common-file-id");
+
+      gatewayOrigin.textContent = window.location.origin;
+
+      function readStoredKey(storage) {
+        try {
+          return storage.getItem(apiKeyStorageKey) || "";
+        } catch {
+          return "";
+        }
+      }
+
+      function removeStoredKey(storage) {
+        try {
+          storage.removeItem(apiKeyStorageKey);
+        } catch {
+          // Storage can be unavailable in a restricted browser context.
+        }
+      }
+
+      function storeKey(storage, value) {
+        try {
+          storage.setItem(apiKeyStorageKey, value);
+        } catch {
+          // Storage can be unavailable in a restricted browser context.
+        }
+      }
+
+      function persistApiKey() {
+        const value = apiKeyInput.value;
+        if (rememberKey.checked) {
+          storeKey(window.localStorage, value);
+          removeStoredKey(window.sessionStorage);
+        } else {
+          storeKey(window.sessionStorage, value);
+          removeStoredKey(window.localStorage);
+        }
+      }
+
+      const rememberedKey = readStoredKey(window.localStorage);
+      if (rememberedKey) {
+        apiKeyInput.value = rememberedKey;
+        rememberKey.checked = true;
+        removeStoredKey(window.sessionStorage);
+      } else {
+        apiKeyInput.value = readStoredKey(window.sessionStorage);
+      }
+
+      apiKeyInput.addEventListener("input", persistApiKey);
+      rememberKey.addEventListener("change", persistApiKey);
+      document.getElementById("clear-key").addEventListener("click", () => {
+        apiKeyInput.value = "";
+        rememberKey.checked = false;
+        removeStoredKey(window.sessionStorage);
+        removeStoredKey(window.localStorage);
+        apiKeyInput.focus();
+      });
+
+      function requestHeaders() {
+        const value = apiKeyInput.value;
+        return value.length > 0 ? { "X-Api-Key": value } : {};
+      }
+
+      function buildUrl(path, query) {
+        const queryString = query.toString();
+        return `${window.location.origin}${path}${queryString ? `?${queryString}` : ""}`;
+      }
+
+      function requiredValue(inputId, label, output) {
+        const input = document.getElementById(inputId);
+        const value = input.value.trim();
+        if (value) {
+          return value;
+        }
+        showClientError(output, `${label}은(는) 필수입니다.`);
+        input.focus();
+        return null;
+      }
+
+      function optionalValue(inputId) {
+        return document.getElementById(inputId).value.trim();
+      }
+
+      async function withBusyButtons(buttons, action) {
+        buttons.forEach((button) => {
+          button.disabled = true;
+        });
+        try {
+          await action();
+        } finally {
+          buttons.forEach((button) => {
+            button.disabled = false;
+          });
+        }
+      }
+
+      function clearOutput(output) {
+        output.replaceChildren();
+      }
+
+      function addStatus(output, text, kind) {
+        const status = document.createElement("p");
+        status.className = `response-status ${kind}`;
+        status.textContent = text;
+        output.append(status);
+        return status;
+      }
+
+      function addMessage(output, text, className = "response-message") {
+        const message = document.createElement("p");
+        message.className = className;
+        message.textContent = text;
+        output.append(message);
+        return message;
+      }
+
+      function showClientError(output, text) {
+        clearOutput(output);
+        addStatus(output, "요청을 보내지 않음", "error");
+        addMessage(output, text);
+      }
+
+      function showLoading(output) {
+        clearOutput(output);
+        addStatus(output, "요청 중…", "loading");
+      }
+
+      function showNetworkError(output) {
+        clearOutput(output);
+        addStatus(output, "네트워크 오류", "error");
+        addMessage(output, "서버에 연결하지 못했거나 응답을 읽지 못했습니다.");
+      }
+
+      function isJsonContentType(contentType) {
+        const normalized = (contentType || "").toLowerCase();
+        return normalized.includes("application/json") || normalized.includes("+json");
+      }
+
+      function statusText(response) {
+        return `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+      }
+
+      function appendJson(output, value) {
+        const pre = document.createElement("pre");
+        const serialized = JSON.stringify(value, null, 2);
+        pre.textContent = serialized === undefined ? String(value) : serialized;
+        output.append(pre);
+      }
+
+      function appendErrorMeta(output, data) {
+        const meta = document.createElement("div");
+        meta.className = "error-meta";
+        const code = data && typeof data === "object" && data.code != null ? String(data.code) : "없음";
+        const traceId = data && typeof data === "object" && data.traceId != null ? String(data.traceId) : "없음";
+        for (const [label, value] of [["code", code], ["traceId", traceId]]) {
+          const item = document.createElement("div");
+          item.className = "error-meta-item";
+          const itemLabel = document.createElement("span");
+          itemLabel.className = "error-meta-label";
+          itemLabel.textContent = label;
+          const itemValue = document.createElement("strong");
+          itemValue.className = "error-meta-value";
+          itemValue.textContent = value;
+          item.append(itemLabel, itemValue);
+          meta.append(item);
+        }
+        output.append(meta);
+        return code;
+      }
+
+      function appendFileIdButton(itemCard, fileId) {
+        const button = document.createElement("button");
+        button.className = "copy-file-id secondary-button";
+        button.type = "button";
+        button.textContent = "fileId 복사";
+        button.addEventListener("click", async () => {
+          commonFileIdInput.value = fileId;
+          commonFileIdInput.focus();
+          commonFileIdInput.scrollIntoView({ behavior: "smooth", block: "center" });
+          try {
+            if (navigator.clipboard && window.isSecureContext) {
+              await navigator.clipboard.writeText(fileId);
+              button.textContent = "입력·클립보드 복사됨";
+            } else {
+              button.textContent = "공통 입력에 채움";
+            }
+          } catch {
+            button.textContent = "공통 입력에 채움";
+          }
+        });
+        itemCard.querySelector(".item-heading").append(button);
+      }
+
+      function appendItems(output, data) {
+        const items = Array.isArray(data)
+          ? data
+          : data && typeof data === "object" && Array.isArray(data.items)
+            ? data.items
+            : null;
+        if (!items) {
+          return;
+        }
+
+        const list = document.createElement("div");
+        list.className = "item-list";
+        const listHeading = document.createElement("h3");
+        listHeading.textContent = `items (${items.length})`;
+        list.append(listHeading);
+
+        items.forEach((item, index) => {
+          const itemCard = document.createElement("article");
+          itemCard.className = "item-card";
+          const heading = document.createElement("div");
+          heading.className = "item-heading";
+          const title = document.createElement("strong");
+          const titleValue = item && typeof item === "object" && item.fileName
+            ? String(item.fileName)
+            : `item ${index + 1}`;
+          title.textContent = titleValue;
+          heading.append(title);
+          itemCard.append(heading);
+
+          if (item && typeof item === "object" && typeof item.fileId === "string" && item.fileId.length > 0) {
+            appendFileIdButton(itemCard, item.fileId);
+          }
+
+          const itemPre = document.createElement("pre");
+          const serializedItem = JSON.stringify(item, null, 2);
+          itemPre.textContent = serializedItem === undefined ? String(item) : serializedItem;
+          itemCard.append(itemPre);
+          list.append(itemCard);
+        });
+        output.append(list);
+      }
+
+      function appendNextPage(output, loadNextPage, token) {
+        if (!token) {
+          return;
+        }
+        const button = document.createElement("button");
+        button.className = "next-page primary-button";
+        button.type = "button";
+        button.textContent = "다음 페이지";
+        button.addEventListener("click", () => loadNextPage(token));
+        output.append(button);
+      }
+
+      function renderJsonSuccess(output, response, data, loadNextPage) {
+        clearOutput(output);
+        addStatus(output, `${statusText(response)} · JSON 응답`, "success");
+        appendItems(output, data);
+        if (loadNextPage && data && typeof data === "object" && !Array.isArray(data)) {
+          const token = typeof data.continuationToken === "string" ? data.continuationToken : "";
+          appendNextPage(output, loadNextPage, token);
+        }
+        appendJson(output, data);
+      }
+
+      async function renderHttpError(output, response) {
+        let body;
+        try {
+          body = await response.text();
+        } catch {
+          showNetworkError(output);
+          return;
+        }
+
+        clearOutput(output);
+        if (isJsonContentType(response.headers.get("Content-Type"))) {
+          let data;
+          try {
+            data = JSON.parse(body);
+          } catch {
+            addStatus(output, `${statusText(response)} · JSON 파싱 실패`, "error");
+            addMessage(output, "오류 응답의 JSON 본문을 해석하지 못했습니다.");
+            const pre = document.createElement("pre");
+            pre.textContent = body || "(본문 없음)";
+            output.append(pre);
+            return;
+          }
+
+          addStatus(output, `${statusText(response)} · JSON Problem Details`, "error");
+          const code = appendErrorMeta(output, data);
+          if (code === "MultipleFilesMatched") {
+            addMessage(output, "목록 조회로 fileId를 확인한 뒤 파일 공통 카드에서 다운로드하라.", "guidance");
+          }
+          appendJson(output, data);
+          return;
+        }
+
+        addStatus(output, `${statusText(response)} · 비-JSON 오류 응답`, "error");
+        const pre = document.createElement("pre");
+        pre.textContent = body || "(본문 없음)";
+        output.append(pre);
+      }
+
+      async function requestJson(url, output, loadNextPage) {
+        showLoading(output);
+        let response;
+        try {
+          response = await fetch(url, { method: "GET", headers: requestHeaders() });
+        } catch {
+          showNetworkError(output);
+          return;
+        }
+
+        if (!response.ok) {
+          await renderHttpError(output, response);
+          return;
+        }
+
+        let body;
+        try {
+          body = await response.text();
+        } catch {
+          showNetworkError(output);
+          return;
+        }
+
+        if (!isJsonContentType(response.headers.get("Content-Type"))) {
+          clearOutput(output);
+          addStatus(output, `${statusText(response)} · 비-JSON 성공 응답`, "neutral");
+          const pre = document.createElement("pre");
+          pre.textContent = body || "(본문 없음)";
+          output.append(pre);
+          return;
+        }
+
+        let data;
+        try {
+          data = JSON.parse(body);
+        } catch {
+          clearOutput(output);
+          addStatus(output, `${statusText(response)} · JSON 파싱 실패`, "error");
+          addMessage(output, "성공 응답의 JSON 본문을 해석하지 못했습니다.");
+          const pre = document.createElement("pre");
+          pre.textContent = body || "(본문 없음)";
+          output.append(pre);
+          return;
+        }
+
+        renderJsonSuccess(output, response, data, loadNextPage);
+      }
+
+      async function downloadFile(url, output) {
+        showLoading(output);
+        let response;
+        try {
+          response = await fetch(url, { method: "GET", headers: requestHeaders() });
+        } catch {
+          showNetworkError(output);
+          return;
+        }
+
+        if (!response.ok) {
+          await renderHttpError(output, response);
+          return;
+        }
+
+        let blob;
+        try {
+          blob = await response.blob();
+        } catch {
+          showNetworkError(output);
+          return;
+        }
+
+        const fileName = parseFileName(response.headers.get("Content-Disposition"));
+        const contentLength = response.headers.get("Content-Length") || "없음";
+        const objectUrl = URL.createObjectURL(blob);
+        try {
+          const link = document.createElement("a");
+          link.href = objectUrl;
+          link.download = fileName;
+          link.hidden = true;
+          document.body.append(link);
+          link.click();
+          link.remove();
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+
+        clearOutput(output);
+        addStatus(output, `${statusText(response)} · 다운로드 저장 요청 완료`, "success");
+        const details = document.createElement("div");
+        details.className = "download-details";
+        for (const [label, value] of [["파일명", fileName], ["Content-Length", contentLength]]) {
+          const detail = document.createElement("div");
+          detail.className = "download-detail";
+          const detailLabel = document.createElement("span");
+          detailLabel.className = "download-detail-label";
+          detailLabel.textContent = label;
+          const detailValue = document.createElement("span");
+          detailValue.className = "download-detail-value";
+          detailValue.textContent = value;
+          detail.append(detailLabel, detailValue);
+          details.append(detail);
+        }
+        output.append(details);
+      }
+
+      function safeFileName(value) {
+        const cleaned = String(value || "")
+          .replace(/[\u0000-\u001f\u007f]/g, "")
+          .replace(/[\\/:*?"<>|]/g, "_")
+          .trim();
+        if (!cleaned || cleaned === "." || cleaned === "..") {
+          return "filegateway-download.bin";
+        }
+        return cleaned.slice(0, 180);
+      }
+
+      function parseFileName(contentDisposition) {
+        if (!contentDisposition) {
+          return "filegateway-download.bin";
+        }
+
+        const encodedMatch = contentDisposition.match(/(?:^|;)\s*filename\*\s*=\s*([^;]+)/i);
+        if (encodedMatch) {
+          let value = encodedMatch[1].trim();
+          value = value.replace(/^UTF-8''/i, "");
+          try {
+            value = decodeURIComponent(value);
+          } catch {
+            // Fall back to the raw header value when percent-decoding fails.
+          }
+          return safeFileName(value.replace(/^"|"$/g, ""));
+        }
+
+        const plainMatch = contentDisposition.match(/(?:^|;)\s*filename\s*=\s*(?:"([^"]*)"|([^;]+))/i);
+        if (plainMatch) {
+          return safeFileName(plainMatch[1] || plainMatch[2]);
+        }
+        return "filegateway-download.bin";
+      }
+
+      function buildLogCriteria(output) {
+        const equipmentId = requiredValue("logs-equipment-id", "설비 ID", output);
+        if (!equipmentId) return null;
+        const logType = requiredValue("logs-log-type", "logType", output);
+        if (!logType) return null;
+
+        const attributes = [];
+        document.querySelectorAll("#log-attributes .attribute-row").forEach((row) => {
+          const name = row.querySelector(".attribute-name").value.trim();
+          const value = row.querySelector(".attribute-value").value.trim();
+          if (name && value) {
+            attributes.push([name, value]);
+          }
+        });
+
+        return {
+          equipmentId,
+          logType,
+          from: optionalValue("logs-from"),
+          to: optionalValue("logs-to"),
+          subtype: optionalValue("logs-subtype"),
+          limit: optionalValue("logs-limit"),
+          continuationToken: optionalValue("logs-continuation-token"),
+          attributes,
+        };
+      }
+
+      function buildLogQuery(criteria, continuationToken) {
+        const query = new URLSearchParams();
+        query.set("equipmentId", criteria.equipmentId);
+        query.set("logType", criteria.logType);
+        if (criteria.from) query.set("from", criteria.from);
+        if (criteria.to) query.set("to", criteria.to);
+        if (criteria.subtype) query.set("subtype", criteria.subtype);
+        if (criteria.limit) query.set("limit", criteria.limit);
+        const token = continuationToken === undefined ? criteria.continuationToken : continuationToken;
+        if (token) query.set("continuationToken", token);
+        for (const [name, value] of criteria.attributes) {
+          query.set(`attr.${name}`, value);
+        }
+        return query;
+      }
+
+      function loadLogs(criteria, output, continuationToken) {
+        const query = buildLogQuery(criteria, continuationToken);
+        return requestJson(
+          buildUrl("/api/v1/logs", query),
+          output,
+          (nextToken) => loadLogs(criteria, output, nextToken),
+        );
+      }
+
+      function buildCurrentQuery(output) {
+        const equipmentId = requiredValue("current-equipment-id", "설비 ID", output);
+        if (!equipmentId) return null;
+        const configurationType = requiredValue("current-configuration-type", "configurationType", output);
+        if (!configurationType) return null;
+        const query = new URLSearchParams();
+        query.set("equipmentId", equipmentId);
+        query.set("configurationType", configurationType);
+        return query;
+      }
+
+      function buildHistoryCriteria(output) {
+        const equipmentId = requiredValue("history-equipment-id", "설비 ID", output);
+        if (!equipmentId) return null;
+        const configurationType = requiredValue("history-configuration-type", "configurationType", output);
+        if (!configurationType) return null;
+        const from = requiredValue("history-from", "from", output);
+        if (!from) return null;
+        const to = requiredValue("history-to", "to", output);
+        if (!to) return null;
+        return {
+          equipmentId,
+          configurationType,
+          from,
+          to,
+          limit: optionalValue("history-limit"),
+          continuationToken: optionalValue("history-continuation-token"),
+        };
+      }
+
+      function buildHistoryQuery(criteria, continuationToken) {
+        const query = new URLSearchParams();
+        query.set("equipmentId", criteria.equipmentId);
+        query.set("configurationType", criteria.configurationType);
+        query.set("from", criteria.from);
+        query.set("to", criteria.to);
+        if (criteria.limit) query.set("limit", criteria.limit);
+        const token = continuationToken === undefined ? criteria.continuationToken : continuationToken;
+        if (token) query.set("continuationToken", token);
+        return query;
+      }
+
+      function loadHistory(criteria, output, continuationToken) {
+        const query = buildHistoryQuery(criteria, continuationToken);
+        return requestJson(
+          buildUrl("/api/v1/configurations/history", query),
+          output,
+          (nextToken) => loadHistory(criteria, output, nextToken),
+        );
+      }
+
+      function createAttributeRow() {
+        const row = document.createElement("div");
+        row.className = "attribute-row";
+
+        const nameInput = document.createElement("input");
+        nameInput.className = "attribute-name";
+        nameInput.type = "text";
+        nameInput.autocomplete = "off";
+        nameInput.placeholder = "name";
+        nameInput.setAttribute("aria-label", "속성 이름");
+
+        const valueInput = document.createElement("input");
+        valueInput.className = "attribute-value";
+        valueInput.type = "text";
+        valueInput.autocomplete = "off";
+        valueInput.placeholder = "value";
+        valueInput.setAttribute("aria-label", "속성 값");
+
+        const removeButton = document.createElement("button");
+        removeButton.className = "secondary-button";
+        removeButton.type = "button";
+        removeButton.textContent = "삭제";
+        removeButton.addEventListener("click", () => row.remove());
+
+        row.append(nameInput, valueInput, removeButton);
+        return row;
+      }
+
+      document.getElementById("log-attributes").append(createAttributeRow());
+      document.getElementById("add-log-attribute").addEventListener("click", () => {
+        const row = createAttributeRow();
+        document.getElementById("log-attributes").append(row);
+        row.querySelector(".attribute-name").focus();
+      });
+
+      const fileTypesOutput = document.getElementById("file-types-output");
+      const fileTypesButtons = [document.querySelector("#file-types-form button[type=submit]")];
+      document.getElementById("file-types-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const equipmentId = requiredValue("file-types-equipment-id", "설비 ID", fileTypesOutput);
+        if (!equipmentId) return;
+        const query = new URLSearchParams();
+        withBusyButtons(fileTypesButtons, () => requestJson(
+          buildUrl(`/api/v1/equipments/${encodeURIComponent(equipmentId)}/file-types`, query),
+          fileTypesOutput,
+        ));
+      });
+
+      const logsOutput = document.getElementById("logs-output");
+      const logsButtons = [
+        document.querySelector("#logs-form button[type=submit]"),
+        document.getElementById("logs-download"),
+      ];
+      document.getElementById("logs-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const criteria = buildLogCriteria(logsOutput);
+        if (criteria) withBusyButtons(logsButtons, () => loadLogs(criteria, logsOutput));
+      });
+      document.getElementById("logs-download").addEventListener("click", () => {
+        const criteria = buildLogCriteria(logsOutput);
+        if (!criteria) return;
+        const query = buildLogQuery(criteria);
+        withBusyButtons(logsButtons, () => downloadFile(buildUrl("/api/v1/logs/download", query), logsOutput));
+      });
+
+      const filesOutput = document.getElementById("files-output");
+      const filesButtons = [
+        document.querySelector("#files-form button[type=submit]"),
+        document.getElementById("files-download"),
+      ];
+      document.getElementById("files-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const fileId = requiredValue("common-file-id", "fileId", filesOutput);
+        if (!fileId) return;
+        const query = new URLSearchParams();
+        query.set("fileId", fileId);
+        withBusyButtons(filesButtons, () => requestJson(buildUrl("/api/v1/files", query), filesOutput));
+      });
+      document.getElementById("files-download").addEventListener("click", () => {
+        const fileId = requiredValue("common-file-id", "fileId", filesOutput);
+        if (!fileId) return;
+        const query = new URLSearchParams();
+        query.set("fileId", fileId);
+        withBusyButtons(filesButtons, () => downloadFile(buildUrl("/api/v1/files/download", query), filesOutput));
+      });
+
+      const currentOutput = document.getElementById("current-output");
+      const currentButtons = [
+        document.querySelector("#current-form button[type=submit]"),
+        document.getElementById("current-download"),
+      ];
+      document.getElementById("current-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const query = buildCurrentQuery(currentOutput);
+        if (query) withBusyButtons(currentButtons, () => requestJson(buildUrl("/api/v1/configurations/current", query), currentOutput));
+      });
+      document.getElementById("current-download").addEventListener("click", () => {
+        const query = buildCurrentQuery(currentOutput);
+        if (query) withBusyButtons(currentButtons, () => downloadFile(buildUrl("/api/v1/configurations/current/download", query), currentOutput));
+      });
+
+      const historyOutput = document.getElementById("history-output");
+      const historyButtons = [document.querySelector("#history-form button[type=submit]")];
+      document.getElementById("history-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const criteria = buildHistoryCriteria(historyOutput);
+        if (criteria) withBusyButtons(historyButtons, () => loadHistory(criteria, historyOutput));
+      });
+    })();
+  </script>
+</body>
+</html>
