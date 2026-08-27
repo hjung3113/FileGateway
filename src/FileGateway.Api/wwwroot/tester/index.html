@@ -1268,7 +1268,7 @@
           </label>
           <button id="clear-key" class="danger-button" type="button">Clear key</button>
         </div>
-        <p class="context-note">API Key는 X-Api-Key HTTP header로만 전송됩니다. 기본 저장 위치는 sessionStorage이며, 선택하면 localStorage를 사용합니다.</p>
+        <p class="context-note">The API key is sent only in the X-Api-Key HTTP header. It is stored in sessionStorage by default and uses localStorage when enabled.</p>
       </section>
 
       <div class="workbench">
@@ -1300,7 +1300,7 @@
               <span aria-hidden="true">·</span>
               <span id="response-size" class="response-metric">—</span>
               <div class="response-toolbar">
-                <button id="copy-json" class="copy-control" type="button" data-copy-value="" disabled>Copy JSON</button>
+                <button id="copy-json" class="copy-control" type="button" data-copy-value="" data-copy-label="Copy JSON" disabled>Copy JSON</button>
               </div>
             </div>
           </header>
@@ -1418,6 +1418,7 @@
           endpoint: "/api/v1/files?fileId=...",
           mode: "json",
           form: "file",
+          inputGroup: "file",
           note: "fileId is an opaque value returned by a list operation."
         },
         {
@@ -1428,6 +1429,7 @@
           endpoint: "/api/v1/files/download?fileId=...",
           mode: "download",
           form: "file",
+          inputGroup: "file",
           note: "Use the same opaque fileId for the common download endpoint."
         },
         {
@@ -1722,7 +1724,7 @@
       function createAttributeRow(operation, initial = {}) {
         const row = createElement("div", "attribute-row");
 
-        const nameCell = createElement("label", "attribute-cell");
+        const nameCell = createElement("label");
         nameCell.append(createElement("span", "field-label", "Name"));
         const nameInput = createElement("input");
         nameInput.className = "attribute-name";
@@ -1733,7 +1735,7 @@
         nameInput.value = initial.name || "";
         nameCell.append(nameInput);
 
-        const valueCell = createElement("label", "attribute-cell");
+        const valueCell = createElement("label");
         valueCell.append(createElement("span", "field-label", "Value"));
         const valueInput = createElement("input");
         valueInput.className = "attribute-value";
