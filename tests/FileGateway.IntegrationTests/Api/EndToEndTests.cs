@@ -60,9 +60,9 @@ public class EndToEndTests(DatabaseFixture db, FtpAdapterFixture ftp)
         var list = await client.GetFromJsonAsync<JsonElement>(
             "/api/v1/logs?equipmentId=EQ-001&logType=EventLog&from=2026-08-22T00:00:00%2B09:00&to=2026-08-23T00:00:00%2B09:00");
         var fileId = list.GetProperty("items")[0].GetProperty("fileId").GetString()!;
-        var meta = await client.GetFromJsonAsync<JsonElement>($"/api/v1/files/{Uri.EscapeDataString(fileId)}");
+        var meta = await client.GetFromJsonAsync<JsonElement>($"/api/v1/files?fileId={Uri.EscapeDataString(fileId)}");
         Assert.Equal("2026082218_Event.zip", meta.GetProperty("fileName").GetString());
-        using var download = await client.GetAsync($"/api/v1/files/{Uri.EscapeDataString(fileId)}/download");
+        using var download = await client.GetAsync($"/api/v1/files/download?fileId={Uri.EscapeDataString(fileId)}");
         Assert.True(download.IsSuccessStatusCode, $"download failed: {(int)download.StatusCode}");
         Assert.Equal(100, download.Content.Headers.ContentLength);
 
@@ -77,9 +77,9 @@ public class EndToEndTests(DatabaseFixture db, FtpAdapterFixture ftp)
             "/api/v1/configurations/history?equipmentId=EQ-001&configurationType=PM&from=2026-08-22T00:00:00%2B09:00&to=2026-08-23T00:00:00%2B09:00");
         var snapshotId = history.GetProperty("items")[0].GetProperty("fileId").GetString()!;
         // marker 제거 전 정상 해석(200)을 먼저 확인해야 404 assertion이 인과적이 된다.
-        Assert.Equal(200, (int)(await client.GetAsync($"/api/v1/files/{Uri.EscapeDataString(snapshotId)}")).StatusCode);
+        Assert.Equal(200, (int)(await client.GetAsync($"/api/v1/files?fileId={Uri.EscapeDataString(snapshotId)}")).StatusCode);
         await FtpDeleteAsync("ftproot/PM/history/2026/08/22/_DONE");
-        Assert.Equal(404, (int)(await client.GetAsync($"/api/v1/files/{Uri.EscapeDataString(snapshotId)}")).StatusCode);
+        Assert.Equal(404, (int)(await client.GetAsync($"/api/v1/files?fileId={Uri.EscapeDataString(snapshotId)}")).StatusCode);
     }
 
     [Fact]

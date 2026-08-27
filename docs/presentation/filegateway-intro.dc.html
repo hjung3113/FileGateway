@@ -220,7 +220,7 @@
         <span style="color:#4338CA; font-size:16px;">→</span>
         <div style="font:600 12.5px/1.3 Pretendard; color:#1E2233; background:#fff; border:1px solid #E2E5F0; border-radius:9px; padding:10px 16px;">확정 · 1건이면 직접 다운로드</div>
         <span style="color:#4338CA; font-size:16px;">→</span>
-        <div style="font:700 12.5px/1.3 Pretendard; color:#4338CA; background:#EEF0FF; border:1.5px solid #4338CA; border-radius:9px; padding:10px 16px;">수신 · files/{fileId}/download</div>
+        <div style="font:700 12.5px/1.3 Pretendard; color:#4338CA; background:#EEF0FF; border:1.5px solid #4338CA; border-radius:9px; padding:10px 16px;">수신 · files/download?fileId=...</div>
       </div>
 
       <div style="border:1px solid #E7E9F3; border-radius:14px; overflow:hidden; margin-bottom:28px;">
@@ -234,7 +234,7 @@
         <div style="display:grid; grid-template-columns:1.1fr .6fr 2.3fr; border-top:1px solid #EDEEF4; background:#FAFBFE;"><div style="font:600 12.5px/1.5 'JetBrains Mono',monospace; color:#4338CA; padding:12px 18px;">/logs/download</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">GET</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">조건 기반 직접 다운로드 (1건 확정 시)</div></div>
         <div style="display:grid; grid-template-columns:1.1fr .6fr 2.3fr; border-top:1px solid #EDEEF4;"><div style="font:600 12.5px/1.5 'JetBrains Mono',monospace; color:#4338CA; padding:12px 18px;">/configurations/current</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">GET</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">Current Configuration File 집합 조회</div></div>
         <div style="display:grid; grid-template-columns:1.1fr .6fr 2.3fr; border-top:1px solid #EDEEF4; background:#FAFBFE;"><div style="font:600 12.5px/1.5 'JetBrains Mono',monospace; color:#4338CA; padding:12px 18px;">/configurations/history</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">GET</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">Configuration Snapshot History 조회 (from/to 필수)</div></div>
-        <div style="display:grid; grid-template-columns:1.1fr .6fr 2.3fr; border-top:1px solid #EDEEF4;"><div style="font:600 12.5px/1.5 'JetBrains Mono',monospace; color:#4338CA; padding:12px 18px;">/files/{fileId}/download</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">GET</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">공통 fileId 기반 streaming download</div></div>
+        <div style="display:grid; grid-template-columns:1.1fr .6fr 2.3fr; border-top:1px solid #EDEEF4;"><div style="font:600 12.5px/1.5 'JetBrains Mono',monospace; color:#4338CA; padding:12px 18px;">/files/download?fileId=...</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">GET</div><div style="font:400 13px/1.6 #5A6175; padding:12px 18px;">공통 fileId 기반 streaming download</div></div>
       </div>
 
       <div style="background:#FBF3EC; border-left:3px solid #B4543F; border-radius:0 10px 10px 0; padding:14px 16px;">
@@ -276,7 +276,7 @@
           <div style="position:absolute; left:16.5%; width:33.5%; top:156px; height:0; border-top:2px dashed #94A0B4;"></div>
           <div style="position:absolute; left:16.5%; top:150px; color:#94A0B4; font-size:11px;">◀</div>
 
-          <div style="position:absolute; left:16.5%; width:33.5%; top:176px; text-align:center; font:500 10px/1.3 Pretendard; color:#5A6175;">GET /files/{fileId}/download</div>
+          <div style="position:absolute; left:16.5%; width:33.5%; top:176px; text-align:center; font:500 10px/1.3 Pretendard; color:#5A6175;">GET /files/download?fileId=...</div>
           <div style="position:absolute; left:16.5%; width:33.5%; top:198px; height:2px; background:#4338CA;"></div>
           <div style="position:absolute; left:48%; top:192px; color:#4338CA; font-size:11px;">▶</div>
 
@@ -285,7 +285,7 @@
           <div style="position:absolute; left:81.5%; top:234px; color:#4338CA; font-size:11px;">▶</div>
         </div>
       </div>
-      <div style="text-align:center; margin:-14px auto 30px; max-width:600px;"><p style="font:400 11.5px/1.6 Pretendard; color:#9AA0B2; margin:0;">* 실선=호출, 점선=응답. Configuration Current/History도 동일하게 확정 조건 → files/{fileId}/download 경로를 공유한다.</p></div>
+      <div style="text-align:center; margin:-14px auto 30px; max-width:600px;"><p style="font:400 11.5px/1.6 Pretendard; color:#9AA0B2; margin:0;">* 실선=호출, 점선=응답. Configuration Current/History도 동일하게 확정 조건 → files/download?fileId=... 경로를 공유한다.</p></div>
 
       <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
         <div style="border:1px solid #E7E9F3; border-radius:14px; padding:20px 22px;"><div style="font:600 14px/1.3 Pretendard; color:#15172B; margin-bottom:6px;">1건으로 확정되는 경우</div><div style="font:400 13px/1.65 Pretendard; color:#5A6175;">조건 기반 직접 다운로드로 왕복을 줄인다 (<code style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#4338CA;">/logs/download</code>).</div></div>
@@ -295,7 +295,7 @@
       <h3 style="font:600 22px/1.4 'Noto Serif KR',serif; color:#15172B; margin:38px 0 14px;">fileId 오류 분류</h3>
       <p style="font:400 16px/1.85 Pretendard; color:#5A6175; margin:0 0 20px; max-width:760px;">형식·TTL·기준정보·실제 파일 존재 네 단계를 순서대로 검증하며, 각 단계 실패는 서로 다른 코드로 구분된다.</p>
       <div style="max-width:560px; margin:0 auto; text-align:center;">
-        <div style="display:inline-block; background:#15172B; color:#fff; border-radius:100px; padding:11px 20px; font:700 12px/1 Pretendard;">● GET /files/{fileId}</div>
+        <div style="display:inline-block; background:#15172B; color:#fff; border-radius:100px; padding:11px 20px; font:700 12px/1 Pretendard;">● GET /files?fileId=...</div>
         <div style="color:#B6BBD6; font-size:13px; padding:6px 0;">↓ 형식/서명 검증</div>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
           <div style="font:500 12px/1.4 Pretendard; color:#B4543F; background:#FBF1EE; border:1px solid #F0D7CF; border-radius:8px; padding:10px;">실패 → 400 InvalidFileId</div>

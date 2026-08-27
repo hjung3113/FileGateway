@@ -118,7 +118,7 @@ Current 조회와 같은 Resolver 규칙을 사용한다.
 - 1개 일치: 해당 Current Configuration File 다운로드
 - 2개 이상 일치: 임의 선택하지 않고 `MultipleFilesMatched`(409)
 
-여러 Current 파일이 있는 Configuration Type은 Current 목록에서 원하는 파일의 `fileId`를 받은 뒤 공통 `/api/v1/files/{fileId}/download`를 사용한다. 직접 다운로드 endpoint에 `fileName`/`subtype` 같은 추가 선택 축을 만들지 않는다.
+여러 Current 파일이 있는 Configuration Type은 Current 목록에서 원하는 파일의 `fileId`를 받은 뒤 공통 `/api/v1/files/download?fileId=...`를 사용한다. 직접 다운로드 endpoint에 `fileName`/`subtype` 같은 추가 선택 축을 만들지 않는다.
 
 ## Configuration Snapshot History
 
@@ -189,4 +189,4 @@ cursor의 `fileName` 비교는 case-insensitive다. `limit`은 페이지 크기�
 - `Configurations.HistoryMaxQueryRange`를 초과하는 조회는 `InvalidRequest`다.
 - History 기본 정렬은 `snapshotTimestamp DESC`, 동일 시각에서는 case-insensitive `fileName ASC`다.
 - 페이지네이션은 원격 파일 집합의 완전한 snapshot을 보장하지 않는다. 조회 중 파일이 추가/삭제되면 후속 페이지 결과가 달라질 수 있다.
-- Configuration History 전용 조건 기반 직접 다운로드 endpoint는 두지 않는다. History 목록에서 `fileId`를 받은 뒤 공통 `/files/{fileId}/download`를 사용한다.
+- Configuration History 전용 조건 기반 직접 다운로드 endpoint는 두지 않는다. History 목록에서 `fileId`를 받은 뒤 공통 `/files/download?fileId=...`를 사용한다.

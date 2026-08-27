@@ -95,7 +95,7 @@ public sealed class ApiFactory : IAsyncLifetime, IDisposable
     public async Task<(string code, int status)> GetFileErrorAsync(string fileId)
     {
         using var response = await CreateClient()
-            .GetAsync($"/api/v1/files/{Uri.EscapeDataString(fileId)}");
+            .GetAsync($"/api/v1/files?fileId={Uri.EscapeDataString(fileId)}");
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         var code = body.TryGetProperty("code", out var c) ? c.GetString()! : "";
         return (code, (int)response.StatusCode);

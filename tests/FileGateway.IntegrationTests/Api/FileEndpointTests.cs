@@ -52,7 +52,7 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
     public async Task Metadata_returns_minimal_fields_only()
     {
         var fileId = await GetFileIdAsync();
-        var body = await GetJson(_factory, $"/api/v1/files/{Uri.EscapeDataString(fileId)}");
+        var body = await GetJson(_factory, $"/api/v1/files?fileId={Uri.EscapeDataString(fileId)}");
         Assert.Equal(3, body.EnumerateObject().Count()); // fileId/fileName/size 만
         Assert.Equal(fileId, body.GetProperty("fileId").GetString());
         Assert.True(body.GetProperty("size").GetInt64() >= 0);
@@ -63,7 +63,7 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
     {
         var fileId = await GetFileIdAsync();
         using var response = await _factory.CreateClient()
-            .GetAsync($"/api/v1/files/{Uri.EscapeDataString(fileId)}/download");
+            .GetAsync($"/api/v1/files/download?fileId={Uri.EscapeDataString(fileId)}");
         Assert.Equal(200, (int)response.StatusCode);
         Assert.NotNull(response.Content.Headers.ContentDisposition);
         Assert.True(response.Content.Headers.ContentLength > 0);
@@ -80,7 +80,7 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
         factory.UseFakeFtp(SeedFtp);
         var fileId = await GetFileIdAsync(factory);
         using var response = await factory.CreateClient()
-            .GetAsync($"/api/v1/files/{Uri.EscapeDataString(fileId)}/download");
+            .GetAsync($"/api/v1/files/download?fileId={Uri.EscapeDataString(fileId)}");
         Assert.Equal(200, (int)response.StatusCode);
 
         var entry = logs.Entries.Single(e => e.Category == "FileGateway.Audit" && e.Message.Contains("/api/v1/files/", StringComparison.Ordinal));
@@ -95,7 +95,23 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task Garbage_file_id_is_400_InvalidFileId()
     {
-        var error = await GetError("/api/v1/files/garbage");
+        var error = await GetError("/api/v1/files?fileId=garbage");
+        Assert.Equal(400, error.status);
+        Assert.Equal("InvalidFileId", error.code);
+    }
+
+    [Fact]
+    public async Task Missing_file_id_query_param_is_400_InvalidFileId()
+    {
+        var error = await GetError("/api/v1/files");
+        Assert.Equal(400, error.status);
+        Assert.Equal("InvalidFileId", error.code);
+    }
+
+    [Fact]
+    public async Task Empty_file_id_query_param_is_400_InvalidFileId()
+    {
+        var error = await GetError("/api/v1/files?fileId=");
         Assert.Equal(400, error.status);
         Assert.Equal("InvalidFileId", error.code);
     }
@@ -109,7 +125,7 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
         factory.SetSnapshot(Snapshot());
         factory.UseFakeFtp(SeedFtp);
         var expiredId = await GetFileIdAsync(factory);
-        var error = await GetError(factory, $"/api/v1/files/{Uri.EscapeDataString(expiredId)}");
+        var error = await GetError(factory, $"/api/v1/files?fileId={Uri.EscapeDataString(expiredId)}");
         Assert.Equal(410, error.status);
         Assert.Equal("FileIdExpired", error.code);
     }
@@ -119,7 +135,7 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
     {
         var fileId = await GetFileIdAsync();
         _factory.Ftp.RemoveFile("Logs/all/2026082218_Event.zip");
-        var error = await GetError($"/api/v1/files/{Uri.EscapeDataString(fileId)}");
+        var error = await GetError($"/api/v1/files?fileId={Uri.EscapeDataString(fileId)}");
         Assert.Equal(404, error.status);
         Assert.Equal("FileNotFound", error.code);
     }
@@ -130,7 +146,7 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
         var history = await GetJson(_factory, "/api/v1/configurations/history?equipmentId=EQ-001&configurationType=PM&from=2026-08-22T00:00:00%2B09:00&to=2026-08-23T00:00:00%2B09:00");
         var snapshotFileId = history.GetProperty("items")[0].GetProperty("fileId").GetString()!;
         _factory.Ftp.RemoveFile("PM/history/20260822.marker"); // marker 제거, 파일은 잔존
-        var error = await GetError($"/api/v1/files/{Uri.EscapeDataString(snapshotFileId)}");
+        var error = await GetError($"/api/v1/files?fileId={Uri.EscapeDataString(snapshotFileId)}");
         Assert.Equal("FileNotFound", error.code);
     }
 
@@ -139,7 +155,7 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
     {
         var fileId = await GetFileIdAsync();
         using var response = await _factory.CreateClient()
-            .SendAsync(new HttpRequestMessage(HttpMethod.Head, $"/api/v1/files/{Uri.EscapeDataString(fileId)}"));
+            .SendAsync(new HttpRequestMessage(HttpMethod.Head, $"/api/v1/files?fileId={Uri.EscapeDataString(fileId)}"));
         Assert.Equal(405, (int)response.StatusCode); // MapGet만 존재
     }
 
@@ -149,7 +165,7 @@ public class FileEndpointTests : IClassFixture<ApiFactory>
         var fileId = await GetFileIdAsync();
         _factory.Ftp.TruncateAfterOpen("Logs/all/2026082218_Event.zip", bytesToKeep: 1);
         using var response = await _factory.CreateClient()
-            .GetAsync($"/api/v1/files/{Uri.EscapeDataString(fileId)}/download", HttpCompletionOption.ResponseHeadersRead);
+            .GetAsync($"/api/v1/files/download?fileId={Uri.EscapeDataString(fileId)}", HttpCompletionOption.ResponseHeadersRead);
         var stream = await response.Content.ReadAsStreamAsync();
         // 선언 길이보다 짧게 끝남 → 본문이 Content-Length 미달로 종료(TestServer in-memory 전송은
         // 연결 reset 대신 조기 EOF로 관찰된다) 또는 예외

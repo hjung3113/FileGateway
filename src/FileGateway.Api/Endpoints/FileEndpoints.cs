@@ -14,16 +14,16 @@ public static class FileEndpoints
 {
     public static IEndpointRouteBuilder MapFileEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/v1/files/{fileId}", async (
-            string fileId, ITokenCodec codec, ILogQueryService logs,
+        app.MapGet("/api/v1/files", async (
+            string? fileId, ITokenCodec codec, ILogQueryService logs,
             IConfigurationQueryService configurations, HttpContext ctx, CancellationToken ct) =>
         {
             var located = await LocateAsync(fileId, codec, logs, configurations, ctx, ct);
             return Results.Ok(new { fileId, fileName = located.FileName, size = located.Size });
         });
 
-        app.MapGet("/api/v1/files/{fileId}/download", async (
-            string fileId, ITokenCodec codec, ILogQueryService logs,
+        app.MapGet("/api/v1/files/download", async (
+            string? fileId, ITokenCodec codec, ILogQueryService logs,
             IConfigurationQueryService configurations, IFileAccess fileAccess,
             HttpContext ctx, CancellationToken ct) =>
         {
@@ -35,9 +35,11 @@ public static class FileEndpoints
 
     // 재해석에 성공한 payload의 claims에서 감사 항목을 채우고, purpose에 맞는 feature service로 위임한다.
     private static async Task<LocatedFile> LocateAsync(
-        string fileId, ITokenCodec codec, ILogQueryService logs,
+        string? fileId, ITokenCodec codec, ILogQueryService logs,
         IConfigurationQueryService configurations, HttpContext ctx, CancellationToken ct)
     {
+        if (string.IsNullOrEmpty(fileId))
+            throw new FileGatewayException("InvalidFileId", "fileId query parameter is required");
         var payload = DecodeFileId(fileId, codec);
         ctx.Items["Audit.FileId"] = fileId;
         ctx.Items["Audit.EquipmentId"] = payload.Claims.GetValueOrDefault("equipmentId");
