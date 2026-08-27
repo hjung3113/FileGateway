@@ -199,9 +199,10 @@
     }
 
     input:focus,
-    button:focus-visible {
-      outline: 3px solid rgb(20 40 160 / 18%);
-      outline-offset: 1px;
+    button:focus-visible,
+    details summary:focus-visible {
+      outline: 3px solid var(--primary);
+      outline-offset: 2px;
     }
 
     .password-input {
@@ -315,6 +316,31 @@
       background: #ffffff;
     }
 
+    .request-url {
+      display: grid;
+      gap: 2px;
+      margin: 0;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--muted-background);
+    }
+
+    .request-url-label {
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 750;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .request-url code {
+      overflow-wrap: anywhere;
+      color: var(--text);
+      font-family: var(--code-font);
+      font-size: 12px;
+    }
+
     .response:empty {
       display: none;
     }
@@ -418,6 +444,22 @@
       background: var(--card-background);
     }
 
+    .item-json {
+      min-width: 0;
+    }
+
+    .item-json summary {
+      overflow-wrap: anywhere;
+      color: var(--text);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .item-json[open] pre {
+      margin-top: 8px;
+    }
+
     .item-heading {
       display: flex;
       align-items: center;
@@ -460,7 +502,7 @@
     }
 
     .download-detail-label {
-      color: var(--muted-text);
+      color: #55607a;
       font-size: 11px;
       font-weight: 700;
     }
@@ -816,19 +858,33 @@
         return message;
       }
 
+      function appendRequestUrl(output, url) {
+        const container = document.createElement("div");
+        container.className = "request-url";
+        const label = document.createElement("span");
+        label.className = "request-url-label";
+        label.textContent = "요청 URL";
+        const value = document.createElement("code");
+        value.textContent = url;
+        container.append(label, value);
+        output.append(container);
+      }
+
       function showClientError(output, text) {
         clearOutput(output);
         addStatus(output, "요청을 보내지 않음", "error");
         addMessage(output, text);
       }
 
-      function showLoading(output) {
+      function showLoading(output, url) {
         clearOutput(output);
+        appendRequestUrl(output, url);
         addStatus(output, "요청 중…", "loading");
       }
 
-      function showNetworkError(output) {
+      function showNetworkError(output, url) {
         clearOutput(output);
+        appendRequestUrl(output, url);
         addStatus(output, "네트워크 오류", "error");
         addMessage(output, "서버에 연결하지 못했거나 응답을 읽지 못했습니다.");
       }
@@ -893,6 +949,25 @@
         itemCard.querySelector(".item-heading").append(button);
       }
 
+      function itemSummary(item, index) {
+        const fileName = item && typeof item === "object" && item.fileName
+          ? String(item.fileName)
+          : `item ${index + 1}`;
+        if (!item || typeof item !== "object") {
+          return fileName;
+        }
+
+        const details = [];
+        if (item.size != null) {
+          details.push(`size=${String(item.size)}`);
+        }
+        const timestamp = item.timestamp ?? item.snapshotTimestamp;
+        if (timestamp != null && String(timestamp).length > 0) {
+          details.push(`timestamp=${String(timestamp)}`);
+        }
+        return details.length > 0 ? `${fileName} · ${details.join(" · ")}` : fileName;
+      }
+
       function appendItems(output, data) {
         const items = Array.isArray(data)
           ? data
@@ -926,10 +1001,15 @@
             appendFileIdButton(itemCard, item.fileId);
           }
 
+          const itemDetails = document.createElement("details");
+          itemDetails.className = "item-json";
+          const itemSummaryElement = document.createElement("summary");
+          itemSummaryElement.textContent = itemSummary(item, index);
           const itemPre = document.createElement("pre");
           const serializedItem = JSON.stringify(item, null, 2);
           itemPre.textContent = serializedItem === undefined ? String(item) : serializedItem;
-          itemCard.append(itemPre);
+          itemDetails.append(itemSummaryElement, itemPre);
+          itemCard.append(itemDetails);
           list.append(itemCard);
         });
         output.append(list);
@@ -947,8 +1027,9 @@
         output.append(button);
       }
 
-      function renderJsonSuccess(output, response, data, loadNextPage) {
+      function renderJsonSuccess(output, response, data, loadNextPage, url) {
         clearOutput(output);
+        appendRequestUrl(output, url);
         addStatus(output, `${statusText(response)} · JSON 응답`, "success");
         appendItems(output, data);
         if (loadNextPage && data && typeof data === "object" && !Array.isArray(data)) {
@@ -958,16 +1039,17 @@
         appendJson(output, data);
       }
 
-      async function renderHttpError(output, response) {
+      async function renderHttpError(output, response, url) {
         let body;
         try {
           body = await response.text();
         } catch {
-          showNetworkError(output);
+          showNetworkError(output, url);
           return;
         }
 
         clearOutput(output);
+        appendRequestUrl(output, url);
         if (isJsonContentType(response.headers.get("Content-Type"))) {
           let data;
           try {
@@ -997,17 +1079,17 @@
       }
 
       async function requestJson(url, output, loadNextPage) {
-        showLoading(output);
+        showLoading(output, url);
         let response;
         try {
           response = await fetch(url, { method: "GET", headers: requestHeaders() });
         } catch {
-          showNetworkError(output);
+          showNetworkError(output, url);
           return;
         }
 
         if (!response.ok) {
-          await renderHttpError(output, response);
+          await renderHttpError(output, response, url);
           return;
         }
 
@@ -1015,12 +1097,13 @@
         try {
           body = await response.text();
         } catch {
-          showNetworkError(output);
+          showNetworkError(output, url);
           return;
         }
 
         if (!isJsonContentType(response.headers.get("Content-Type"))) {
           clearOutput(output);
+          appendRequestUrl(output, url);
           addStatus(output, `${statusText(response)} · 비-JSON 성공 응답`, "neutral");
           const pre = document.createElement("pre");
           pre.textContent = body || "(본문 없음)";
@@ -1033,6 +1116,7 @@
           data = JSON.parse(body);
         } catch {
           clearOutput(output);
+          appendRequestUrl(output, url);
           addStatus(output, `${statusText(response)} · JSON 파싱 실패`, "error");
           addMessage(output, "성공 응답의 JSON 본문을 해석하지 못했습니다.");
           const pre = document.createElement("pre");
@@ -1041,21 +1125,21 @@
           return;
         }
 
-        renderJsonSuccess(output, response, data, loadNextPage);
+        renderJsonSuccess(output, response, data, loadNextPage, url);
       }
 
       async function downloadFile(url, output) {
-        showLoading(output);
+        showLoading(output, url);
         let response;
         try {
           response = await fetch(url, { method: "GET", headers: requestHeaders() });
         } catch {
-          showNetworkError(output);
+          showNetworkError(output, url);
           return;
         }
 
         if (!response.ok) {
-          await renderHttpError(output, response);
+          await renderHttpError(output, response, url);
           return;
         }
 
@@ -1063,7 +1147,7 @@
         try {
           blob = await response.blob();
         } catch {
-          showNetworkError(output);
+          showNetworkError(output, url);
           return;
         }
 
@@ -1083,6 +1167,7 @@
         }
 
         clearOutput(output);
+        appendRequestUrl(output, url);
         addStatus(output, `${statusText(response)} · 다운로드 저장 요청 완료`, "success");
         const details = document.createElement("div");
         details.className = "download-details";
