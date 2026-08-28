@@ -114,10 +114,17 @@ app.MapLogEndpoints();
 app.MapConfigurationEndpoints();
 app.MapFileEndpoints();
 
-if (app.Environment.IsDevelopment())
+var devToolsEnabled = app.Environment.IsDevelopment()
+    || app.Services.GetRequiredService<IOptions<FileGatewayOptions>>().Value.DevTools.Enabled;
+if (devToolsEnabled)
 {
-    // 개발 환경 전용 웹 API 테스트 도구. 내부 기준정보/스키마를 노출하는 문서 endpoint이므로
-    // Development 밖에서는 등록하지 않는다.
+    // 웹 API 테스트 도구(/tester, /scalar/v1). 내부 기준정보/스키마를 노출하는 문서 endpoint이므로
+    // Development이거나 FileGateway:DevTools:Enabled=true로 명시적으로 켠 경우에만 등록한다.
+    if (!app.Environment.IsDevelopment())
+        app.Logger.LogWarning(
+            "FileGateway:DevTools:Enabled=true로 인해 /tester, /scalar/v1이 {Environment} 환경에서 노출됩니다. 내부에서만 접근 가능한지 확인하세요.",
+            app.Environment.EnvironmentName);
+
     app.MapOpenApi();
     app.MapScalarApiReference(options => options
         .WithTitle("FileGateway API")

@@ -12,6 +12,7 @@ public sealed class FileGatewayOptions
     public TokensOptions Tokens { get; set; } = new();
     public ReferenceDataOptions ReferenceData { get; set; } = new();
     public FtpOptions? Ftp { get; set; }
+    public DevToolsOptions DevTools { get; set; } = new();
 }
 
 public sealed class LogsOptions
@@ -39,4 +40,10 @@ public sealed class TokensOptions
 public sealed class ReferenceDataOptions
 {
     public TimeSpan CacheTtl { get; set; } = TimeSpan.FromMinutes(15);
+}
+
+/// <summary>Development 환경이 아니어도 /tester, /scalar/v1를 opt-in으로 열기 위한 설정.</summary>
+public sealed class DevToolsOptions
+{
+    public bool Enabled { get; set; }
 }

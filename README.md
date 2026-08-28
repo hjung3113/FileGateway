@@ -84,9 +84,9 @@ curl http://localhost:5178/health/ready   # 기준정보 최초 로딩 유발 + 
 
 `/health/ready`는 usable 캐시가 있으면 stale이어도 `200 {"status":"Degraded","stale":true}`를 반환합니다. usable 캐시가 전혀 없으면(최초 기동 시 DB 연결 실패 등) `503 {"status":"Unhealthy"}`입니다 — 이 503은 API 오류 응답(`code`/`traceId` 포함 Problem Details)이 아니라 health 전용 shape입니다.
 
-### 개발 전용 API 테스터/문서 UI
+### API 테스터/문서 UI (`/tester`, `/scalar/v1`)
 
-`dotnet run --project src/FileGateway.Api`로 **Development 환경**에서 기동하면 아래 두 endpoint가 추가로 열립니다(Development 밖에서는 등록되지 않음 — `Program.cs`의 `IsDevelopment()` 분기).
+`dotnet run --project src/FileGateway.Api`로 **Development 환경**에서 기동하면 아래 두 endpoint가 추가로 열립니다.
 
 | URL | 용도 |
 |---|---|
@@ -104,7 +104,15 @@ curl http://localhost:5178/health/ready   # 기준정보 최초 로딩 유발 + 
    - **Current/History Configuration** — `equipmentId`/`configurationType` 기준 조회
 4. 다운로드는 파일 전체를 브라우저 메모리(blob)에 올려 소규모 파일 수동 확인용입니다 — 스트리밍/대용량 다운로드 검증 도구가 아닙니다(대용량은 curl 예시 참조)
 
-이 도구는 실제 API 계약을 그대로 호출하므로 로컬 개발 중 요청/응답을 눈으로 빠르게 확인할 때 유용합니다. 운영 환경(Development 아님)에서는 두 endpoint 모두 존재하지 않습니다.
+이 도구는 실제 API 계약을 그대로 호출하므로 로컬 개발 중 요청/응답을 눈으로 빠르게 확인할 때 유용합니다.
+
+**Development 환경으로 전환하지 않고 켜기**: 스테이징 등 다른 환경 설정(`ASPNETCORE_ENVIRONMENT`)은 그대로 둔 채 이 두 endpoint만 열고 싶으면 `FileGateway:DevTools:Enabled=true`를 지정합니다.
+
+```bash
+FileGateway__DevTools__Enabled=true dotnet run --project src/FileGateway.Api
+```
+
+`ASPNETCORE_ENVIRONMENT`가 Development가 아닌 상태에서 이 플래그로 켜면 기동 로그에 노출 경고가 남습니다. 두 endpoint 모두 내부 스키마/기준정보 구조를 드러내므로, 켜는 경우 접근 가능한 네트워크 범위를 반드시 제한하세요. 플래그를 주지 않으면(기본값 `false`) Development 외 환경에서는 기존과 동일하게 두 endpoint가 등록되지 않습니다.
 
 ## 실행 / 배포
 
@@ -124,6 +132,7 @@ curl http://localhost:5178/health/ready   # 기준정보 최초 로딩 유발 + 
 | `FileGateway:Ftp:AcceptUntrustedCertificates` | `false` | 내부 self-signed 인증서 허용 여부(운영 판단 필요) |
 | `FileGateway:Ftp:ConnectTimeoutSeconds` / `ReadTimeoutSeconds` | `15` / `60` | FTP 연결/읽기 타임아웃 |
 | `FileGateway:Ftp:MaxConcurrentGlobal` / `MaxConcurrentPerServer` | `50` / `5` | FTP 동시 접속 상한(전체/서버별) |
+| `FileGateway:DevTools:Enabled` | `false` | Development 환경이 아니어도 `/tester`, `/scalar/v1` 노출(위 "API 테스터/문서 UI" 참조) |
 
 ### 비밀 주입
 
