@@ -30,9 +30,11 @@ public sealed class ZipDownloadResult(
             foreach (var f in files)
             {
                 var open = await fileAccess.OpenReadAsync(f.Server, f.RelativePath, ctx.RequestAborted);
+                // open 직후 소유권을 넘긴다. CreateEntry/entry.Open()이 중단된 응답에서 던져도
+                // 원격 스트림이 해제되지 않으면 FTP lease(동시성 permit)가 영구히 반납되지 않는다.
+                await using var capped = new ExactLengthStream(open.Stream, open.Length);
                 var entry = zip.CreateEntry(EntryName(f.FileName, used), CompressionLevel.Fastest);
                 await using var es = entry.Open();
-                await using var capped = new ExactLengthStream(open.Stream, open.Length);
                 await capped.CopyToAsync(es, 81_920, ctx.RequestAborted);   // 파일별 스트리밍
                 total += open.Length;
             }
