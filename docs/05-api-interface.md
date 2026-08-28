@@ -376,6 +376,8 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 
 내부적으로 목록과 동일 Resolver를 실행한다. Continuous `logType`에 `from` 또는 `to`가 포함되면 목록과 동일하게 `InvalidRequest`다.
 
+query parameter는 목록과 동일하게 해석한다. `limit`/`continuationToken`도 목록과 같은 의미이며, `continuationToken`을 지정하면 해당 페이지의 매치가 다운로드 대상이 된다. 토큰 위조/조건 변경/만료 시 목록과 동일하게 `InvalidRequest`다.
+
 - 0개 일치: `FileNotFound`
 - 1개 일치: 단일 파일 스트리밍 다운로드(`Content-Type: application/octet-stream`, open 시점 크기의 `Content-Length`, `Content-Disposition: attachment`)
 - 2개 이상 정상 파일이 사용자 조건에 일치: zip 스트리밍 다운로드(아래 계약)

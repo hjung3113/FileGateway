@@ -45,7 +45,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 파일 크기/기본 메타데이터 조회
 - 파일 스트리밍 다운로드
 - `fileId` 기반 접근
-- 조건 기반 직접 조회/다운로드
+- 조건 기반 직접 조회/다운로드 (매치 2건 이상이면 zip 스트리밍)
 - `subtype` 및 동적 `attributes` 조회/필터
 - `limit + continuationToken` 페이지네이션
 
@@ -154,7 +154,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - SMB/SFTP Adapter 구현
 - Site별 다중 credential 관리
 - Range/Resume 다운로드
-- 여러 파일 자동 ZIP 묶음
+- Configuration 직접 다운로드의 여러 파일 자동 ZIP 묶음
 - 세밀한 API Key별 설비/로그 권한
 - Web UI/WPF 클라이언트 자체 구현
 - 고가용성/분산 캐시 구성
