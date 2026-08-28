@@ -377,14 +377,22 @@ GET /api/v1/logs/download?equipmentId=...&logType=...&...
 내부적으로 목록과 동일 Resolver를 실행한다. Continuous `logType`에 `from` 또는 `to`가 포함되면 목록과 동일하게 `InvalidRequest`다.
 
 - 0개 일치: `FileNotFound`
-- 1개 일치: 다운로드
-- 2개 이상 정상 파일이 사용자 조건에 일치: `MultipleFilesMatched` (409)
+- 1개 일치: 단일 파일 스트리밍 다운로드(`Content-Type: application/octet-stream`, open 시점 크기의 `Content-Length`, `Content-Disposition: attachment`)
+- 2개 이상 정상 파일이 사용자 조건에 일치: zip 스트리밍 다운로드(아래 계약)
 - 기준정보의 `cardinality=Single`인데 하나의 논리 생성 슬롯에서 실제 탐색 결과가 2개 이상: `FileDefinitionConflict` (500)
 - 후보 파일이 필수 metadata 규칙으로 해석되지 않음: `FileDefinitionConflict` (500)
 
-`MultipleFilesMatched`는 정상 파일 집합에 사용자 조건이 여러 건 일치한 경우에만 사용한다. 정의상 Single인데 여러 파일이 발견되거나 정의된 후보를 해석하지 못한 상태와 혼용하지 않는다.
+`MultipleFilesMatched`는 이 endpoint에서 더 이상 반환되지 않는다. 오류 코드 자체는 Current Configuration 직접 다운로드가 계속 사용하므로 유지한다.
 
-여러 파일을 자동 ZIP으로 묶는 기능은 MVP에서 제공하지 않는다.
+#### zip 다운로드 응답 계약
+
+- `Content-Type: application/zip`, `Content-Disposition: attachment` (zip 파일명은 서버 생성, 비계약 값)
+- `Content-Length` 없음(사전에 zip 총 크기를 알 수 없어 chunked로 스트리밍)
+- 엔트리 순서 = 목록 조회의 정렬 순서(Hourly/Daily: timestamp DESC → fileName ASC, Continuous: fileName ASC)
+- 엔트리명 = 원본 FileName. case-insensitive 중복 시 확장자 앞 `_N` suffix(첫 등장은 원본명 그대로)
+- `limit`/`Paging.LimitMax`가 다운로드 매치 상한으로 목록과 동일하게 적용된다(다운로드 전용 상한 없음). 미지정 시 `LimitDefault`
+- 각 엔트리는 단일 다운로드와 동일한 스트리밍/크기 고정 규칙(open 시점 길이 상한, growth 무시·truncate 실패)이 파일 단위로 적용된다
+- 스트리밍 중 오류는 단일 다운로드와 동일하게 "이미 시작된 응답" 규칙을 따른다(JSON 오류로 전환하지 않고 응답 중단, 감사 분류만 기록)
 
 ## 경로/헤더 안전성
 
