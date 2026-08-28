@@ -133,7 +133,13 @@ public class LogEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal(response.Content.Headers.ContentLength, bytes.Length);
     }
 
-
+    [Fact]
+    public async Task AC_18_3_Download_no_match_is_404_FileNotFound()
+    {
+        var error = await GetError("/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2020-01-01T00:00:00%2B09:00&to=2020-01-02T00:00:00%2B09:00");
+        Assert.Equal(404, error.status);
+        Assert.Equal("FileNotFound", error.code);
+    }
 
     [Fact]
     public async Task Download_audit_log_carries_fileId()
