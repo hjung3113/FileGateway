@@ -84,6 +84,28 @@ curl http://localhost:5178/health/ready   # 기준정보 최초 로딩 유발 + 
 
 `/health/ready`는 usable 캐시가 있으면 stale이어도 `200 {"status":"Degraded","stale":true}`를 반환합니다. usable 캐시가 전혀 없으면(최초 기동 시 DB 연결 실패 등) `503 {"status":"Unhealthy"}`입니다 — 이 503은 API 오류 응답(`code`/`traceId` 포함 Problem Details)이 아니라 health 전용 shape입니다.
 
+### 개발 전용 API 테스터/문서 UI
+
+`dotnet run --project src/FileGateway.Api`로 **Development 환경**에서 기동하면 아래 두 endpoint가 추가로 열립니다(Development 밖에서는 등록되지 않음 — `Program.cs`의 `IsDevelopment()` 분기).
+
+| URL | 용도 |
+|---|---|
+| `http://localhost:5178/tester` | FileGateway API Tester — API Key 입력 후 브라우저에서 same-origin으로 실제 endpoint를 직접 호출해보는 수동 테스트 페이지 |
+| `http://localhost:5178/scalar/v1` | Scalar 기반 OpenAPI 문서 뷰어(원본 스펙은 `/openapi/v1.json`) |
+
+`/tester` 사용법:
+
+1. 브라우저로 `http://localhost:5178/tester` 접속
+2. 상단 "접속 설정"에 API Key 입력(`X-Api-Key` header로만 전송됨). 기본은 `sessionStorage`(탭 닫으면 소실) — "이 브라우저에 기억" 체크 시 `localStorage`로 저장
+3. 카드별로 조회/다운로드 버튼 사용:
+   - **설비 제공 파일 종류** — `equipmentId`만 넣고 조회
+   - **로그** — `equipmentId`/`logType`/`from`/`to`/`subtype`/속성 필터로 목록 조회 또는 조건으로 바로 다운로드
+   - **파일 공통** — 목록 응답에서 복사한 `fileId`로 metadata 조회/다운로드
+   - **Current/History Configuration** — `equipmentId`/`configurationType` 기준 조회
+4. 다운로드는 파일 전체를 브라우저 메모리(blob)에 올려 소규모 파일 수동 확인용입니다 — 스트리밍/대용량 다운로드 검증 도구가 아닙니다(대용량은 curl 예시 참조)
+
+이 도구는 실제 API 계약을 그대로 호출하므로 로컬 개발 중 요청/응답을 눈으로 빠르게 확인할 때 유용합니다. 운영 환경(Development 아님)에서는 두 endpoint 모두 존재하지 않습니다.
+
 ## 실행 / 배포
 
 빌드/테스트/로컬 실행 명령은 위 "설치 > 로컬 개발 실행" 참조.
