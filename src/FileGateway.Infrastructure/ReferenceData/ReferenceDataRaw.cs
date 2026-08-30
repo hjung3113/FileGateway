@@ -24,7 +24,12 @@ public sealed record RawConfigurationDefinition(
     string CurrentFilePattern,
     string HistoryPathTemplate,
     string HistoryFilePattern,
-    string HistoryMarkerPathTemplate);
+    string HistoryMarkerPathTemplate,
+    string CurrentFileMatchMode = "",
+    string HistoryFileMatchMode = "",
+    string HistoryMetadataMode = "",
+    string HistoryMetadataPattern = "",
+    string HistoryMetadataMappings = "");
 
 public sealed record ReferenceDataRaw(
     IReadOnlyList<string> EquipmentIds,

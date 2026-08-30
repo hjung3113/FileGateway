@@ -129,6 +129,64 @@ public class ConfigurationQueryServiceTests
     }
 
     [Fact]
+    public async Task Snapshot_fileId_round_trips_same_file_name_across_days()
+    {
+        // P2-S2: 동일 fileName·상이 ts 실반례 — 이름만의 SingleOrDefault regression이면
+        // 2건 hit로 InternalError가 된다. 목록→fileId→동일 물리 파일 round-trip을 방어한다.
+        var ftp = new FakeFileAccess();
+        SeedSnapshot(ftp, 22, "PM1.cfg");
+        SeedSnapshot(ftp, 23, "PM1.cfg");
+        var svc = Service(ftp);
+
+        var page = await svc.GetHistoryAsync(
+            new ConfigurationHistoryQuery("EQ-001", "PM", From, To.AddDays(1), null, null), CancellationToken.None);
+        Assert.Equal(2, page.Items.Count);
+
+        foreach (var item in page.Items)
+        {
+            var payload = Codec.Unprotect(item.FileId, ConfigurationTokenKinds.FileIdSnapshotPurpose).Payload!;
+            var located = await svc.LocateByFileIdAsync(payload, CancellationToken.None);
+            Assert.Equal($"PM/history/2026/08/{item.SnapshotTimestamp.Day:00}/PM1.cfg", located.RelativePath);
+        }
+    }
+
+    [Fact]
+    public async Task Snapshot_fileId_reinterpretation_is_isolated_from_neighbor_batch_failures()
+    {
+        // P1-T1: metadata 정의의 fileId 재해석은 SiteLocalMidnight(ts) 단일 슬롯만 순회한다.
+        // 이웃(08-23) batch에 metadata 추출 실패 파일이 있어도 target(08-22) fileId는 오염되지 않는다.
+        var raw = new ReferenceDataRaw(["EQ-001"], [new RawServer("SRV1", "ftp1", "ftproot")], [],
+        [
+            new RawConfigurationDefinition("EQ-001", "PM", "SRV1",
+                "PM/current", "PM*.cfg",
+                "PM/history/{yyyy}/{MM}/{dd}", "*",
+                "PM/history/{yyyy}/{MM}/{dd}/_DONE",
+                HistoryMetadataMode: "Template", HistoryMetadataPattern: "{yyyy}{MM}{dd}{HH}")
+        ]);
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("PM/history/2026/08/22/2026082220.zip", "aa"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        var svc = new ConfigurationQueryService(new FixedView(ReferenceDataSnapshotBuilder.Build(raw)),
+            new CurrentResolver(ftp), new HistoryResolver(ftp), ftp,
+            Codec, TimeProvider.System, TimeSpan.FromDays(366), 50, 200,
+            TimeSpan.FromHours(24), TimeSpan.FromMinutes(30));
+
+        // 목록 시점에는 이웃 batch가 깨끗하다 — fileId를 발급받는다.
+        var page = await svc.GetHistoryAsync(
+            new ConfigurationHistoryQuery("EQ-001", "PM", From, To, null, null), CancellationToken.None);
+        var item = Assert.Single(page.Items);
+        Assert.Equal(22, item.SnapshotTimestamp.Day);
+        var payload = Codec.Unprotect(item.FileId, ConfigurationTokenKinds.FileIdSnapshotPurpose).Payload!;
+
+        // 이후 이웃(08-23) batch에 metadata 추출 실패 파일이 생겨도 재해석 범위는 08-22 단일 슬롯이므로
+        // target fileId 다운로드가 오염되지 않는다(P1-T1 — ts+1d 재탐색이면 FileDefinitionConflict가 된다).
+        ftp.AddFile("PM/history/2026/08/23/readme.zip", "b"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/23/_DONE", []);
+        var located = await svc.LocateByFileIdAsync(payload, CancellationToken.None);
+        Assert.Equal("PM/history/2026/08/22/2026082220.zip", located.RelativePath);
+    }
+
+    [Fact]
     public async Task Current_fileId_points_to_current_content()
     {
         var ftp = new FakeFileAccess();

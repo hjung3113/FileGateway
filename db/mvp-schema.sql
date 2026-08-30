@@ -15,4 +15,9 @@ CREATE TABLE dbo.FgConfigurationDefinition (
     CurrentPathTemplate nvarchar(512) NOT NULL, CurrentFilePattern nvarchar(256) NOT NULL,
     HistoryPathTemplate nvarchar(512) NOT NULL, HistoryFilePattern nvarchar(256) NOT NULL,
     HistoryMarkerPathTemplate nvarchar(512) NOT NULL,
+    CurrentFileMatchMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryFileMatchMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryMetadataMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryMetadataPattern nvarchar(1024) NOT NULL DEFAULT '',
+    HistoryMetadataMappings nvarchar(max) NOT NULL DEFAULT '',
     CONSTRAINT PK_FgConfigurationDefinition PRIMARY KEY (EquipmentId, ConfigurationType));

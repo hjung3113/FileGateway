@@ -113,10 +113,123 @@ public class HistoryResolverTests
         Assert.Equal("FileDefinitionConflict", ex.Code);
     }
 
+    private static ResolvedConfigurationDefinition RegexDef(string? mode = null, string? pattern = null,
+        ConfigurationMetadataMapping[]? mappings = null, string? filePattern = null)
+        => new(new EquipmentConfigurationDefinition("EQ-001", "PM", "SRV1",
+            new CurrentRule("PM/current", "PM*.cfg"),
+            new HistoryRule("PM/history/{yyyy}/{MM}/{dd}/regex:^PM[0-9]$",
+                filePattern ?? (mode == "Regex" ? @"^\d{10}\.(zip|txt\.gz)$" : "*"),
+                "PM/history/{yyyy}/{MM}/{dd}/_DONE",
+                mode ?? "",
+                mappings is null ? null : new ConfigurationMetadataRule(
+                    mode == "Regex" ? ConfigurationMetadataMode.Regex : ConfigurationMetadataMode.Template,
+                    pattern ?? "{yyyy}{MM}{dd}{HH}", mappings))), Srv);
+
+    [Fact]
+    public async Task Regex_segments_and_metadata_extract_snapshot_timestamp()
+    {
+        var ftp = new InMemoryFileAccess();
+        ftp.AddFile("PM/history/2026/08/22/PM1/2026082220.zip", "1"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/PM1/2026082220.txt.gz", "2"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/PM2/2026082221.zip", "3"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        var files = await new HistoryResolver(ftp).ResolveAsync(
+            RegexDef("Glob", mappings: []), Range(22), CancellationToken.None);
+        // Template stem 매칭 — 같은 stem(.zip/.txt.gz)이 동일 ts 20:00 Set을 이룬다.
+        Assert.Equal(3, files.Count); // PM1 20:00 Set(zip+txt.gz) + PM2 21:00
+        Assert.Equal(21, files[0].SnapshotTimestamp.Hour); // ts DESC 정렬
+        Assert.All(files, f => Assert.Equal(22, f.SnapshotTimestamp.Day));
+        Assert.Equal("PM/history/2026/08/22/PM2/2026082221.zip", files[0].RelativePath);
+        Assert.Equal(20, files[1].SnapshotTimestamp.Hour);
+    }
+
+    [Fact]
+    public async Task Slot_and_extracted_timestamp_date_mismatch_is_conflict()
+    {
+        var ftp = new InMemoryFileAccess();
+        // 물리 슬롯 08-22, 추출 ts 2026-08-23 20:00 — round-trip 불변식 위반(P1-N2).
+        ftp.AddFile("PM/history/2026/08/22/PM1/2026082320.zip", "1"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        var ex = await Assert.ThrowsAsync<FileGatewayException>(() => new HistoryResolver(ftp).ResolveAsync(
+            RegexDef("Glob", mappings: []),
+            new(new DateTimeOffset(2026, 8, 22, 0, 0, 0, TimeSpan.FromHours(9)),
+                new DateTimeOffset(2026, 8, 25, 0, 0, 0, TimeSpan.FromHours(9))), CancellationToken.None));
+        Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
+    public async Task Metadata_failure_on_matching_candidate_is_conflict()
+    {
+        var ftp = new InMemoryFileAccess();
+        ftp.AddFile("PM/history/2026/08/22/PM1/readme.zip", "1"u8.ToArray()); // FilePattern 통과, ts 추출 실패
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        var ex = await Assert.ThrowsAsync<FileGatewayException>(() => new HistoryResolver(ftp).ResolveAsync(
+            new ResolvedConfigurationDefinition(new EquipmentConfigurationDefinition("EQ-001", "PM", "SRV1",
+                new CurrentRule("PM/current", "PM*.cfg"),
+                new HistoryRule("PM/history/{yyyy}/{MM}/{dd}/regex:^PM[0-9]$", "*", "PM/history/{yyyy}/{MM}/{dd}/_DONE",
+                    "Glob", new ConfigurationMetadataRule(ConfigurationMetadataMode.Regex,
+                        @"^(?<ts>\d{10})\.(zip|txt\.gz)$",
+                        [new ConfigurationMetadataMapping("ts", "timestamp", "yyyyMMddHH")]))), Srv),
+            Range(22), CancellationToken.None));
+        Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
+    public async Task Out_of_range_extracted_time_is_conflict_not_normalized()
+    {
+        // P1-S3: mm=60 후보는 보정 없이 FileDefinitionConflict — 잘못된 ts의 identity 발급을 막는다.
+        var ftp = new InMemoryFileAccess();
+        ftp.AddFile("PM/history/2026/08/22/PM1/202608221260.zip", "1"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        var def = new ResolvedConfigurationDefinition(new EquipmentConfigurationDefinition("EQ-001", "PM", "SRV1",
+            new CurrentRule("PM/current", "PM*.cfg"),
+            new HistoryRule("PM/history/{yyyy}/{MM}/{dd}/regex:^PM[0-9]$", "*",
+                "PM/history/{yyyy}/{MM}/{dd}/_DONE", "Glob",
+                new ConfigurationMetadataRule(ConfigurationMetadataMode.Template, "{yyyy}{MM}{dd}{HH}{mm}", []))), Srv);
+        var ex = await Assert.ThrowsAsync<FileGatewayException>(
+            () => new HistoryResolver(ftp).ResolveAsync(def, Range(22), CancellationToken.None));
+        Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
+    public async Task From_to_filter_uses_extracted_timestamp_when_metadata_present()
+    {
+        var ftp = new InMemoryFileAccess();
+        // from=08-22 12:00(KST) — 추출 ts 20:00은 포함, 슬롯 자정 아님에도 결과가 나온다.
+        ftp.AddFile("PM/history/2026/08/22/PM1/2026082220.zip", "1"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        var files = await new HistoryResolver(ftp).ResolveAsync(
+            RegexDef("Glob", mappings: []),
+            new(new DateTimeOffset(2026, 8, 22, 12, 0, 0, TimeSpan.FromHours(9)),
+                new DateTimeOffset(2026, 8, 23, 0, 0, 0, TimeSpan.FromHours(9))), CancellationToken.None);
+        var f = Assert.Single(files);
+        Assert.Equal(20, f.SnapshotTimestamp.Hour);
+    }
+
+    [Fact]
+    public async Task Same_name_different_extracted_ts_are_distinct()
+    {
+        var ftp = new InMemoryFileAccess();
+        // 서로 다른 폴더에서 동일 fileName이지만 추출 ts가 달라 dedupe 키 (ts, ci-name)가 다르다.
+        ftp.AddFile("PM/history/2026/08/22/PM1/2026082220.zip", "1"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/23/PM1/2026082320.zip", "2"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        ftp.AddFile("PM/history/2026/08/23/_DONE", []);
+        var files = await new HistoryResolver(ftp).ResolveAsync(
+            RegexDef("Glob", mappings: []),
+            new(new DateTimeOffset(2026, 8, 22, 0, 0, 0, TimeSpan.FromHours(9)),
+                new DateTimeOffset(2026, 8, 24, 0, 0, 0, TimeSpan.FromHours(9))), CancellationToken.None);
+        Assert.Equal(2, files.Count);
+    }
+
     private sealed class ListingFileAccess(RemoteDirectoryListing listing) : IFileAccess
     {
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection s, string d, CancellationToken ct)
             => Task.FromResult(listing);
+
+        public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+            FileServerConnection s, string d, CancellationToken ct)
+            => Task.FromResult(RemoteDirectoryNames.Missing);
 
         public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct)
             => throw new NotSupportedException();

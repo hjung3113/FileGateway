@@ -69,7 +69,7 @@ X-Api-Key: <key>
 - 기준정보 정의 삭제: 해당 `*DefinitionNotFound`
 - 기준정보는 정상이나 실제 파일 없음: `FileNotFound`
 
-Configuration Snapshot `fileId`는 실제 파일뿐 아니라 해당 Snapshot Set의 완료 marker도 재확인한다. marker가 사라졌다면 Snapshot File이 남아 있어도 `FileNotFound`로 처리한다.
+Configuration Snapshot `fileId`는 실제 파일뿐 아니라 해당 물리 batch(날짜 폴더 복사 단위)의 완료 marker도 재확인한다. marker가 사라졌다면 Snapshot File이 남아 있어도 `FileNotFound`로 처리한다. marker가 완성하는 단위는 물리 batch이지 개별 Snapshot Set이 아니며 한 batch에 여러 Snapshot Set이 포함될 수 있다.
 
 ### token protection key rotation / persistence
 
@@ -153,7 +153,7 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 
 FileGateway는 이미 저장소에 보이는 파일을 읽어 제공하는 시스템이다. Current Configuration 및 Hourly/Daily 로그의 생산 방식, 원자적 replace 여부, 쓰기 중 읽기 일관성은 생산 시스템 책임이며 FileGateway는 이를 위해 snapshot 복사, 파일 잠금, 버전 고정 또는 별도 생산 완료 판정을 수행하지 않는다. 외부 변경으로 읽기 길이 불일치나 I/O 실패가 발생하면 일반 streaming failure로 처리한다.
 
-Configuration History는 예외적으로 History 생산자가 생성한 **완료 marker 파일이 존재하는 Snapshot Set만 탐색 대상**으로 삼는다. marker의 내용은 읽거나 해석하지 않는다. 이는 snapshot 생성 책임을 FileGateway가 가진다는 뜻이 아니라, 불완전한 복사 결과를 읽지 않기 위한 조회 조건이다.
+Configuration History는 예외적으로 History 생산자가 생성한 **완료 marker 파일이 존재하는 물리 batch(날짜 폴더 복사 단위)만 탐색 대상**으로 삼는다. marker의 내용은 읽거나 해석하지 않는다. 이는 snapshot 생성 책임을 FileGateway가 가진다는 뜻이 아니라, 불완전한 복사 결과를 읽지 않기 위한 조회 조건이다. 한 물리 batch에는 metadata rule 추출 시각 기준으로 여러 Snapshot Set이 포함될 수 있다.
 
 ## 장애/timeout
 

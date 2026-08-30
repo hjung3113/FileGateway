@@ -48,6 +48,40 @@ public sealed class LocalFileAccessTests : IDisposable
         Assert.Empty(listing.Files);
     }
 
+    [Fact]
+    public async Task ListDirectories_returns_immediate_children_and_distinguishes_empty_and_missing()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "alpha"));
+        Directory.CreateDirectory(Path.Combine(_root, "beta", "nested"));
+        Directory.CreateDirectory(Path.Combine(_root, "empty"));
+        File.WriteAllText(Path.Combine(_root, "root.log"), "x");
+
+        var listing = await _access.ListDirectoriesAsync(Server(), "", CancellationToken.None);
+
+        Assert.True(listing.Exists);
+        Assert.Equal(["alpha", "beta", "empty"],
+            listing.Names.OrderBy(name => name, StringComparer.Ordinal).ToArray());
+
+        var empty = await _access.ListDirectoriesAsync(Server(), "empty", CancellationToken.None);
+        Assert.True(empty.Exists);
+        Assert.Empty(empty.Names);
+
+        var missing = await _access.ListDirectoriesAsync(Server(), "missing", CancellationToken.None);
+        Assert.False(missing.Exists);
+        Assert.Empty(missing.Names);
+    }
+
+    [Fact]
+    public async Task ListDirectories_observes_canceled_token()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "child"));
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => _access.ListDirectoriesAsync(Server(), "", cts.Token));
+    }
+
     [Fact] // L3 — AC-22-1, AC-22-3
     public async Task AC_22_3_ListFilesOnMissingDirectoryReturnsMissing()
     {
@@ -334,4 +368,3 @@ public sealed class LocalFileAccessTests : IDisposable
     }
 
 }
-

@@ -36,11 +36,14 @@ public sealed class SpReferenceDataSource(string connectionString, string spName
                 reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
                 reader.GetString(8), reader.GetString(9)));
         await RequireNextResultAsync(reader, "configurationDefinitions", ct);
+        RequireFieldCount(reader, "configurationDefinitions", expected: 13);
 
         var configs = new List<RawConfigurationDefinition>();
         while (await reader.ReadAsync(ct))
             configs.Add(new(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
-                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7)));
+                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7),
+                reader.GetString(8), reader.GetString(9), reader.GetString(10), reader.GetString(11),
+                reader.GetString(12)));
 
         return new(equipments, servers, logs, configs);
     }
@@ -52,5 +55,12 @@ public sealed class SpReferenceDataSource(string connectionString, string spName
         if (!await reader.NextResultAsync(ct))
             throw new FileGatewayException("ReferenceDataIncomplete",
                 $"reference data result set '{resultSet}' missing (SP must return all 4 result sets)");
+    }
+
+    private static void RequireFieldCount(SqlDataReader reader, string resultSet, int expected)
+    {
+        if (reader.FieldCount != expected)
+            throw new FileGatewayException("ReferenceDataIncomplete",
+                $"reference data result set '{resultSet}' has expected {expected} columns, actual {reader.FieldCount}");
     }
 }

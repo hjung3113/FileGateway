@@ -6,9 +6,15 @@ namespace FileGateway.UnitTests.TestUtils;
 public sealed class FakeFileAccess : IFileAccess
 {
     private readonly Dictionary<string, byte[]> _files = new(FileNameComparison.Comparer);
+    private readonly HashSet<string> _directories = new(FileNameComparison.Comparer);
 
-    public void AddFile(string relativePath, byte[] content) => _files[relativePath] = content;
+    public void AddFile(string relativePath, byte[] content)
+    {
+        _files[relativePath] = content;
+        AddParentDirectories(relativePath);
+    }
     public void RemoveFile(string relativePath) => _files.Remove(relativePath);
+    public void AddDirectory(string relativePath) => AddParentDirectories(relativePath, includeSelf: true);
 
     private readonly Dictionary<string, int> _truncateAfterOpen = new(FileNameComparison.Comparer);
 
@@ -33,6 +39,23 @@ public sealed class FakeFileAccess : IFileAccess
         return Task.FromResult(new RemoteDirectoryListing(true, entries));
     }
 
+    public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+        FileServerConnection server, string dir, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var normalized = RemotePath.Normalize(dir);
+        var prefix = string.IsNullOrEmpty(normalized) ? string.Empty : normalized + "/";
+        if (!_directories.Contains(normalized)) return Task.FromResult(RemoteDirectoryNames.Missing);
+
+        var names = _directories
+            .Where(path => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            .Select(path => path[prefix.Length..])
+            .Where(IsSafeDirectoryName)
+            .Distinct(FileNameComparison.Comparer)
+            .ToList();
+        return Task.FromResult(new RemoteDirectoryNames(true, names));
+    }
+
     public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
         => Task.FromResult<long>(_files.TryGetValue(path, out var v)
             ? _listingSize.TryGetValue(path, out var s) ? s : v.Length
@@ -49,4 +72,24 @@ public sealed class FakeFileAccess : IFileAccess
                     : new MemoryStream(v, writable: false),
                 v.Length)
             : throw new FileAccessException(FileAccessError.FileNotFound, "not found"));
+
+    private void AddParentDirectories(string relativePath, bool includeSelf = false)
+    {
+        _directories.Add(string.Empty);
+        var normalized = RemotePath.Normalize(relativePath);
+        if (includeSelf && !string.IsNullOrEmpty(normalized)) _directories.Add(normalized);
+
+        var separator = normalized.LastIndexOf('/');
+        while (separator > 0)
+        {
+            _directories.Add(normalized[..separator]);
+            separator = normalized.LastIndexOf('/', separator - 1);
+        }
+        if (separator == 0) _directories.Add(normalized[..separator]);
+    }
+
+    private static bool IsSafeDirectoryName(string name)
+        => !string.IsNullOrEmpty(name)
+           && name is not "." and not ".."
+           && name.IndexOfAny(['/', '\\', ':']) < 0;
 }

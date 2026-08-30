@@ -313,6 +313,9 @@ public class LogQueryServiceTests
     {
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
             => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
+        public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+            FileServerConnection server, string dir, CancellationToken ct)
+            => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
         public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
             => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
         public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)

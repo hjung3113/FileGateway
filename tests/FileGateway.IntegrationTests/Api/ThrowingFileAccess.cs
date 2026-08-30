@@ -8,6 +8,10 @@ public sealed class ThrowingFileAccess : IFileAccess
     public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string relativeDirectory, CancellationToken ct)
         => throw new InvalidOperationException("IFileAccess must not be called for catalog queries.");
 
+    public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+        FileServerConnection server, string relativeDirectory, CancellationToken ct)
+        => throw new InvalidOperationException("IFileAccess must not be called for catalog queries.");
+
     public Task<long> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct)
         => throw new InvalidOperationException("IFileAccess must not be called for catalog queries.");
 

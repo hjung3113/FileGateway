@@ -11,9 +11,21 @@
 1. `Equipments`: `EquipmentId` (`ServerId` 아님)
 2. `Servers`: `ServerId`, `Host`, `RootPath`
 3. `LogDefinitions`: `EquipmentId`, `LogType`, `ServerId`, `GenerationType`, `PathTemplate`, `FilePattern`, `Cardinality`, `MetadataMode`, `MetadataPattern`, `MetadataMappings`
-4. `ConfigurationDefinitions`: `EquipmentId`, `ConfigurationType`, `ServerId`, `CurrentPathTemplate`, `CurrentFilePattern`, `HistoryPathTemplate`, `HistoryFilePattern`, `HistoryMarkerPathTemplate`
+4. `ConfigurationDefinitions`: `EquipmentId`, `ConfigurationType`, `ServerId`, `CurrentPathTemplate`, `CurrentFilePattern`, `HistoryPathTemplate`, `HistoryFilePattern`, `HistoryMarkerPathTemplate`, `CurrentFileMatchMode`, `HistoryFileMatchMode`, `HistoryMetadataMode`, `HistoryMetadataPattern`, `HistoryMetadataMappings`
 
 `MetadataMappings`은 JSON 배열 `[{"group":"...","target":"...","format":"..."}]`이며 `format`은 선택이다. SP/스키마 스크립트는 `db/`에 테스트·개발용 계약 구현으로 제공하고 운영 DB 내부 구조는 이 계약만 지키면 자유롭다.
+
+`ConfigurationDefinitions` result set은 위 순서의 13개 컬럼을 항상 반환한다. 행이 0개여도 result set shape가 13개인지 검증하며, 구 SP의 8컬럼 shape는 `ReferenceDataUnavailable`로 이어지는 fail-closed 오류다. 신규 Configuration tail 컬럼의 NULL/빈 값은 `Glob` 및 metadata rule 없음으로 해석한다.
+
+## Schema/SP 및 애플리케이션 배포 순서
+
+Issue #21의 신규 Configuration 기준정보는 다음 3단계 순서를 지킨다.
+
+1. `db/mvp-schema.sql`의 5개 컬럼과 신규 Stored Procedure를 함께 배포한다. 모든 기존 row는 빈 mode/metadata 값으로 유지한다.
+2. 신규 13컬럼 result set을 읽는 application을 **전 인스턴스**에 배포해 구 app 인스턴스가 혼재하지 않도록 한다.
+3. 신규 `Literal | Glob | Regex` mode, `regex:` path, metadata rule 기준정보를 활성화한다. 2단계가 끝나기 전에는 신규 값을 활성화하지 않는다.
+
+신규 application과 구 SP의 조합은 최초 기준정보 로딩에서 result set shape 오류로 즉시 실패해야 하며 silent mismatch를 허용하지 않는다. Rollback 시에는 신규 application을 구 버전으로 되돌리기 전에 신규 mode/metadata 값과 `regex:` path를 먼저 legacy 값으로 비활성화한다.
 
 ## SP가 제공해야 하는 논리 정보
 
@@ -87,17 +99,25 @@ EquipmentConfigurationDefinition
 ```
 
 - `currentRule`: Current Configuration File 집합의 위치와 후보 파일 패턴을 해석하는 규칙
-- `historyRule`: 날짜별 History 디렉터리/파일 패턴, Snapshot Set의 `snapshotTimestamp`, 완료 marker 파일명/위치를 해석하는 규칙
+- `historyRule`: 날짜별 History 디렉터리/파일 패턴, Snapshot File의 `snapshotTimestamp` 파생 규칙, 완료 marker 파일명/위치를 해석하는 규칙
+
+`currentRule.pathTemplate`과 `historyRule.pathTemplate`은 `/`로 구분하는 상대 경로다. 빈 세그먼트는 제거한 뒤 파싱한다. 각 세그먼트는 `regex:PATTERN`(자식 디렉터리 이름 매칭, 비어 있지 않고 `/`를 포함하지 않으며 `^...$` anchor 필수) 또는 리터럴/기존 날짜 token(`{yyyy}` `{MM}` `{dd}` `{HH}`) template으로 해석한다. Template token은 논리 슬롯의 Site local(`Asia/Seoul`) 구성요소로 치환하며 token 없는 고정 경로도 허용한다. 비-regex 세그먼트에는 `..`, rooted 경로, `:`를 금지한다. `HistoryMarkerPathTemplate`은 확정된 template 경로만 허용하며 `regex:` 세그먼트는 사용할 수 없다.
+
+`CurrentFileMatchMode`와 `HistoryFileMatchMode`는 `Literal | Glob | Regex`이며 NULL/빈 값은 기존 의미인 `Glob`이다. `Literal`과 `Glob`은 case-insensitive로 비교하고 `Regex`는 파일명 전체를 `IgnoreCase | CultureInvariant`로 매칭한다. 정규식은 anchor와 컴파일 가능성을 검증한다.
+
+`HistoryMetadataMode`, `HistoryMetadataPattern`, `HistoryMetadataMappings`는 선택적인 ConfigurationMetadataRule을 표현한다. 입력은 물리 root를 제외한 경로가 아니라 **fileName**이다. `Template`은 fileName의 첫 `.` 앞 stem에 매칭하고 `{yyyy}` `{MM}` `{dd}` `{HH}` `{mm}` token에서 timestamp를 파생하므로 `.zip`, `.gz`, `.txt.gz`처럼 확장자가 달라도 같은 stem을 처리한다. Template의 mappings는 비어 있어야 한다. `Regex`는 fileName 전체를 매칭하며 timestamp 전체를 담는 단일 named group mapping 정확히 1개만 허용하고, target은 `timestamp`, format은 필수다. Metadata 매칭은 `IgnoreCase` 정책을 사용한다. 후보가 rule에 매칭되지 않거나 timestamp를 추출하지 못하면 누락하지 않고 `FileDefinitionConflict`로 처리한다.
+
+`HistoryMetadataMappings`는 Logs의 `MetadataMappings`와 동일한 JSON 배열 `[{"group":"...","target":"...","format":"..."}]` 형태를 사용한다. Configuration에서는 Regex 모드의 단일 timestamp mapping만 허용하며 Template 모드에서는 빈 배열이어야 한다.
 
 하나의 `equipmentId + configurationType` 아래 PM1/PM2/PM3/PM4처럼 여러 Current Configuration File이 존재할 수 있다. 이 파일들을 별도 `configurationType`, `subtype`, `attributes`로 세분화하지 않는다.
 
 Current Configuration File의 logical identity는 `equipmentId + configurationType + fileName`이다. MVP에서 `fileName` 구성요소는 case-insensitive로 비교하며 casing만 다른 이름은 같은 논리 파일로 취급한다.
 
-History는 별도 시스템이 자정에 날짜 폴더를 만들고 Current 파일 집합을 그대로 복사한 결과다. 같은 날짜 폴더의 Snapshot File들은 동일한 `snapshotTimestamp`를 공유하며 현재 운영 계획에서는 Site local `00:00`으로 해석한다. FTP modified time은 snapshot 시각으로 사용하지 않는다.
+History는 별도 시스템이 날짜 폴더를 만들고 Current 파일 집합을 복사한 결과다. **물리 batch**는 날짜 폴더와 그 복사 완료 marker가 이루는 단위다. 물리 batch 안의 파일들은 metadata rule 유무에 따라 `snapshotTimestamp`를 공유하며, 한 물리 batch에 여러 **Snapshot Set**(그룹핑 키는 `snapshotTimestamp` 단독)이 있을 수 있다. Snapshot File identity는 `(snapshotTimestamp, fileName)`이며 `fileName`은 case-insensitive로 비교한다. Metadata rule이 없으면 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`이고, rule이 있으면 fileName에서 추출한 시각이다. FTP modified time은 snapshot 시각으로 사용하지 않는다.
 
-History 생산자는 Snapshot Set 복사 완료 시 marker 파일을 생성한다. marker 파일명/위치는 `historyRule`에 있으며 FileGateway는 **marker 존재 여부만 확인**한다. marker 내용은 읽거나 해석하지 않는다. marker가 없는 날짜 폴더는 History 결과에 포함하지 않으며 marker 자체도 Configuration File 후보로 반환하지 않는다.
+History 생산자는 물리 batch(날짜 폴더 복사) 완료 시 marker 파일을 생성한다. marker 파일명/위치는 `historyRule`에 있으며 FileGateway는 **marker 존재 여부만 확인**한다. marker 내용은 읽거나 해석하지 않는다. marker가 없는 물리 batch는 History 결과에 포함하지 않으며 marker 자체도 Configuration File 후보로 반환하지 않는다. 한 물리 batch 안의 여러 Snapshot Set은 동일 marker로 함께 게이팅된다.
 
-Configuration Snapshot File의 logical identity는 `equipmentId + configurationType + snapshotTimestamp + fileName`이다. `fileName` 구성요소는 case-insensitive로 비교한다.
+Configuration Snapshot File의 logical identity는 `equipmentId + configurationType + snapshotTimestamp + fileName`이다. `fileName` 구성요소는 case-insensitive로 비교하며, cursor도 `snapshotTimestamp + fileName` 의미를 그대로 유지한다.
 
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
@@ -125,11 +145,14 @@ FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 MVP Windows/IIS FTP 환경에서 파일명 관련 비교는 case-insensitive다.
 
 - `filePattern` 및 Configuration 후보 파일명 matching
+- Configuration path의 directory segment matching
+- Configuration file `Regex` matching
+- Configuration metadata matching
 - Log/Current/Snapshot logical identity의 `fileName`
 - `fileName ASC` 정렬
 - continuation cursor의 `fileName`
 
-실제 원격 파일 casing은 API 응답에 그대로 보존한다. `subtype`/`attributes` 비교는 이 규칙과 무관하게 기존대로 case-sensitive다. 향후 case-sensitive 저장소를 도입할 때 파일명 비교 계약을 재검토한다.
+실제 원격 파일 casing은 API 응답에 그대로 보존한다. 정규식은 .NET에서 `OrdinalIgnoreCase` 옵션이 없으므로 `IgnoreCase | CultureInvariant`를 표준 근사로 사용한다. PM1, Port3, Config 같은 ASCII 이름에서는 `OrdinalIgnoreCase`와 동등하다. `subtype`/`attributes` 비교는 이 규칙과 무관하게 기존대로 case-sensitive다. 향후 case-sensitive 저장소를 도입할 때 fileName 계약과 함께 재검토한다.
 
 동일한 탐색 범위에서 case-insensitive 기준으로 같은 파일명인 서로 다른 원격 항목이 둘 이상 발견되면 임의 dedupe하지 않고 `FileDefinitionConflict`로 처리한다. 예: `PM1.cfg`와 `pm1.cfg`가 동시에 존재하는 경우다.
 
@@ -156,6 +179,8 @@ MVP Windows/IIS FTP 환경에서 파일명 관련 비교는 case-insensitive다.
 Current Configuration File의 `fileId`는 특정 바이트 버전을 고정하지 않는다. 같은 `equipmentId + configurationType + fileName` 논리 파일의 다운로드 시점 현재 내용을 가리킨다.
 
 Configuration Snapshot `fileId`를 재해석할 때는 해당 Snapshot Set의 완료 marker 존재 여부도 다시 확인한다. marker가 사라졌다면 실제 Snapshot File이 남아 있어도 완료 상태로 제공하지 않고 `FileNotFound`로 처리한다.
+
+Snapshot `fileId` 재해석의 검색 predicate는 요청한 `snapshotTimestamp`와의 **정확한 일치**(`SnapshotTimestamp == ts`) 및 case-insensitive `fileName` 일치다. 이름만으로 선택하거나 `[ts, ts+1일)` 안의 다른 timestamp를 허용하지 않는다. Metadata rule로 추출한 timestamp의 Site local 날짜가 물리 날짜 슬롯과 다르면 목록 단계에서 `FileDefinitionConflict`로 거부한다. 이 불변식으로 목록에서 발급한 `fileId`가 같은 물리 슬롯을 다시 방문해 round-trip된다.
 
 기준정보 변경과 실제 파일 삭제를 같은 원인으로 취급하지 않는다.
 
@@ -213,14 +238,18 @@ SP 결과 전체에 대해 cache 교체 전에 **정의의 구조·문법·invar
 - `equipmentId + logType` 중복 정의 여부
 - 중복/충돌 매핑
 - root/path template의 구조와 정규화 가능 여부
+- Configuration pathTemplate의 세그먼트 분류, 빈 세그먼트 제거 후 파싱, `regex:` pattern의 anchor/컴파일 가능성, marker template의 `regex:` 금지
 - 정규화 후 `rootPath` 밖으로 탈출 가능한 정의 여부
 - `filePattern`이 지원되는 glob 문법인지
+- Configuration file match mode(`Literal | Glob | Regex`)와 Regex pattern의 anchor/컴파일 가능성
 - 무제한 recursive scan을 요구하는 정의가 아닌지
 - MetadataRule 입력 정규화와 지원 mode가 유효한지
+- Configuration MetadataRule의 fileName/stem 입력, token 또는 단일 timestamp named group, `target=timestamp`, `format`, IgnoreCase 규칙
 - Current rule의 구조/패턴이 유효한지
 - History rule의 날짜별 경로, 논리 시각, marker 파일명/위치 정의가 유효한지
 - 지원하지 않는 generation/metadata mode
 - 유효하지 않은 regex/template/mapping
+- `ConfigurationDefinitions` result set의 `FieldCount == 13` shape(행이 0개인 경우 포함)
 
 실제 원격 탐색에서는 다음을 별도로 판정한다.
 
@@ -228,6 +257,8 @@ SP 결과 전체에 대해 cache 교체 전에 **정의의 구조·문법·invar
 - `cardinality=Single`인데 하나의 논리 생성 슬롯에서 여러 파일 발견 → `FileDefinitionConflict`
 - case-insensitive 기준 동일 파일명이 둘 이상 발견 → `FileDefinitionConflict`
 - 후보 파일의 필수 metadata 해석 실패 → `FileDefinitionConflict`
+- Regex runtime timeout → `FileDefinitionConflict`
+- 물리 날짜 슬롯과 metadata 추출 timestamp의 Site local 날짜 불일치 → `FileDefinitionConflict`
 - 파일 서버 연결/인증/프로토콜 장애 → 파일 서버 오류
 
 기준정보 오류와 실제 파일 서버 장애는 별도 원인으로 유지한다.

@@ -121,7 +121,10 @@ public class EndToEndTests(DatabaseFixture db, FtpAdapterFixture ftp)
         INSERT dbo.FgLogDefinition VALUES('EQ-001','TraceLog','SRV1','Continuous',
             'Trace/cur','Trace_*.log','Single','Template',
             'Trace/cur/Trace_{subtype}.log','[]');
-        INSERT dbo.FgConfigurationDefinition VALUES('EQ-001','PM','SRV1',
+        INSERT dbo.FgConfigurationDefinition
+            (EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, CurrentFilePattern,
+             HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate)
+            VALUES('EQ-001','PM','SRV1',
             'PM/current','PM_*.cfg','PM/history/{yyyy}/{MM}/{dd}','PM_*.cfg',
             'PM/history/{yyyy}/{MM}/{dd}/_DONE');");
 

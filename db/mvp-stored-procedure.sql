@@ -8,6 +8,11 @@ BEGIN
            Cardinality, MetadataMode, MetadataPattern, MetadataMappings
     FROM dbo.FgLogDefinition;
     SELECT EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, CurrentFilePattern,
-           HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate
+           HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate,
+           ISNULL(CurrentFileMatchMode, '') AS CurrentFileMatchMode,
+           ISNULL(HistoryFileMatchMode, '') AS HistoryFileMatchMode,
+           ISNULL(HistoryMetadataMode, '') AS HistoryMetadataMode,
+           ISNULL(HistoryMetadataPattern, '') AS HistoryMetadataPattern,
+           ISNULL(HistoryMetadataMappings, '') AS HistoryMetadataMappings
     FROM dbo.FgConfigurationDefinition;
 END

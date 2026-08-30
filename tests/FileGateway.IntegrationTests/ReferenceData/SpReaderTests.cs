@@ -13,7 +13,10 @@ public class SpReaderTests(DatabaseFixture db) : IClassFixture<DatabaseFixture>
             INSERT dbo.FgLogDefinition VALUES('EQ-001','EventLog','SRV1','Hourly',
               'Logs/{yyyy}/{MM}/{dd}/{HH}','*.zip','Multiple','Template',
               'Logs/{yyyy}/{MM}/{dd}/{HH}/Event_{subtype}.zip','[]');
-            INSERT dbo.FgConfigurationDefinition VALUES('EQ-001','PM','SRV1',
+            INSERT dbo.FgConfigurationDefinition
+              (EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, CurrentFilePattern,
+               HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate)
+              VALUES('EQ-001','PM','SRV1',
               'PM/current','PM_*.cfg','PM/history/{yyyy}/{MM}/{dd}','PM_*.cfg',
               'PM/history/{yyyy}/{MM}/{dd}/_DONE');");
 
@@ -50,5 +53,62 @@ public class SpReaderTests(DatabaseFixture db) : IClassFixture<DatabaseFixture>
         var ex = await Assert.ThrowsAsync<FileGateway.Core.Errors.FileGatewayException>(
             () => new SpReferenceDataSource(db.ConnectionString, variant).ReadAsync(CancellationToken.None));
         Assert.Equal("ReferenceDataIncomplete", ex.Code);
+    }
+
+    [Fact]
+    public async Task Reader_rejects_zero_row_configuration_result_set_with_legacy_eight_columns()
+    {
+        var ex = await Assert.ThrowsAsync<FileGateway.Core.Errors.FileGatewayException>(
+            () => ReadConfigurationShapeAsync(
+                "dbo.FileGateway_GetReferenceData_ZeroRowsEight",
+                "SELECT TOP (0) EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, " +
+                "CurrentFilePattern, HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate " +
+                "FROM dbo.FgConfigurationDefinition;"));
+
+        Assert.Equal("ReferenceDataIncomplete", ex.Code);
+        Assert.Contains("expected 13", ex.Message);
+    }
+
+    [Fact]
+    public async Task Reader_accepts_zero_row_configuration_result_set_with_thirteen_columns()
+    {
+        var raw = await ReadConfigurationShapeAsync(
+            "dbo.FileGateway_GetReferenceData_ZeroRowsThirteen",
+            "SELECT TOP (0) EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, " +
+            "CurrentFilePattern, HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate, " +
+            "CurrentFileMatchMode, HistoryFileMatchMode, HistoryMetadataMode, " +
+            "HistoryMetadataPattern, HistoryMetadataMappings FROM dbo.FgConfigurationDefinition;");
+
+        Assert.Empty(raw.ConfigurationDefinitions);
+    }
+
+    [Fact]
+    public async Task Reader_rejects_rows_with_legacy_eight_column_configuration_result_set()
+    {
+        var ex = await Assert.ThrowsAsync<FileGateway.Core.Errors.FileGatewayException>(
+            () => ReadConfigurationShapeAsync(
+                "dbo.FileGateway_GetReferenceData_RowsEight",
+                "SELECT 'EQ-001', 'PM', 'SRV1', 'PM/current', 'PM*.cfg', " +
+                "'PM/history/{yyyy}/{MM}/{dd}', 'PM*.cfg', 'PM/history/{yyyy}/{MM}/{dd}/_DONE';"));
+
+        Assert.Equal("ReferenceDataIncomplete", ex.Code);
+        Assert.Contains("actual 8", ex.Message);
+    }
+
+    private async Task<ReferenceDataRaw> ReadConfigurationShapeAsync(string procedureName, string configurationSelect)
+    {
+        await db.ExecuteAsync($@"CREATE OR ALTER PROCEDURE {procedureName} AS
+            BEGIN
+                SET NOCOUNT ON;
+                SELECT TOP (0) EquipmentId FROM dbo.FgEquipment;
+                SELECT TOP (0) ServerId, Host, RootPath FROM dbo.FgServer;
+                SELECT TOP (0) EquipmentId, LogType, ServerId, GenerationType, PathTemplate, FilePattern,
+                       Cardinality, MetadataMode, MetadataPattern, MetadataMappings
+                FROM dbo.FgLogDefinition;
+                {configurationSelect}
+            END");
+
+        return await new SpReferenceDataSource(db.ConnectionString, procedureName)
+            .ReadAsync(CancellationToken.None);
     }
 }
