@@ -45,12 +45,13 @@ FileGateway.Infrastructure
 
 `LocalFileAccess`는 `System.IO`로 직접 읽으며 별도 옵션/설정, 동시성 limiter가 없다(`FtpConcurrencyLimiter`는 FTP 연결 자원 보호용이라 로컬에는 적용하지 않는다).
 
-- **`RootPath` 해석**: localhost 서버의 `RootPath`는 기준정보(SP)가 내려주는 값을 **로컬 파일시스템 절대 경로로 그대로 사용**한다(예: `C:\FileGateway\files`). 변환 계층은 없다.
+- **`RootPath` 해석**: localhost 서버의 `RootPath`는 기준정보(SP)가 내려주는 값을 **로컬 파일시스템 절대 경로로 그대로 사용**한다(예: `C:\FileGateway\files`). 변환 계층은 없다. 상대 경로가 들어오면 프로세스 CWD 기준으로 조용히 절대화하지 않고 `ProtocolError`로 fail-fast한다.
 - **`RootPath` 제약**: 드라이브 루트(`C:\`, `/`) 자체를 `RootPath`로 지정하지 않는다. 루트 검증이 끝 구분자를 정규화하는 과정에서 정상 하위 경로까지 거부되는 fail-closed 부작용이 있다. 운영 기준정보는 드라이브 루트 하위의 전용 디렉터리를 사용한다.
-- **경로 검증(이중 방어)**: 상대 경로는 먼저 FTP 어댑터와 동일한 `RemotePath.Combine` 가드를 통과해야 한다(rooted 경로, `.`/`..` 세그먼트 거부). 이후 `Path.GetFullPath`로 정규화한 물리 경로가 정규화된 `RootPath` 하위인지 접두사 재검증한다. 어느 쪽이든 위반은 `FileAccessError.ProtocolError`(FTP 가드 위반과 동일한 오류 코드)로 거부하며, 파일시스템 접근보다 먼저 수행된다. 빈/공백 상대 경로는 루트 자체로 해석한다(FTP와 동일).
-- **에러 매핑**: FTP와 같은 `FileAccessException`/`FileAccessError` 체계를 공유한다. 대상 파일 부재는 `FileNotFound`, 목록 대상 디렉터리 부재는 예외가 아니라 `RemoteDirectoryListing.Missing`, 공유 위반/일반 IO 오류는 `IoFailure`, 그 외는 `ProtocolError`다. `ConnectionFailed`/`AuthenticationFailed`/`Timeout`은 로컬 경로에서 발생하지 않는다.
+- **경로 검증(삼중 방어)**: 상대 경로는 먼저 FTP 어댑터와 동일한 `RemotePath.Combine` 가드를 통과해야 한다(rooted 경로, `.`/`..` 세그먼트 거부). 이후 `Path.GetFullPath`로 정규화한 물리 경로가 정규화된 `RootPath` 하위인지 접두사 재검증한다. 마지막으로 root부터 대상까지 경로 구성요소 중 symlink/junction(reparse point)이 하나라도 있으면 거부한다 — `GetFullPath`는 링크 대상을 해석하지 않으므로 접두사 검사만으로는 root 밖 이탈을 막을 수 없다. 어느 쪽이든 위반은 `FileAccessError.ProtocolError`(FTP 가드 위반과 동일한 오류 코드)로 거부하며, 파일시스템 접근보다 먼저 수행된다. 빈/공백 상대 경로는 루트 자체로 해석한다(FTP와 동일).
+- **에러 매핑**: FTP와 같은 `FileAccessException`/`FileAccessError` 체계를 공유한다. 대상 파일 부재는 `FileNotFound`, 목록 대상 디렉터리 부재는 예외가 아니라 `RemoteDirectoryListing.Missing`, 공유 위반/일반 IO 오류는 `IoFailure`, 그 외는 `ProtocolError`다. `ConnectionFailed`/`AuthenticationFailed`/`Timeout`은 로컬 경로에서 발생하지 않는다. 존재 여부를 `Exists`로 선판정하지 않고 실제 enumerate/메타데이터 조회/open 결과로 분류한다 — `Exists`는 접근 거부에서도 `false`를 반환해 권한 문제를 '없음'으로 오분류할 수 있기 때문이다.
 - **권한 거부는 FTP와 의도적으로 다르다**: FTP 서버는 권한 거부를 550으로 돌려주어 파일 없음과 뭉개지지만, 로컬은 `UnauthorizedAccessException`을 구분할 수 있으므로 `IoFailure`로 매핑한다("경로는 맞는데 실행 계정에 권한 없음" 장애가 404로 표시되지 않게 한다 — "오류 구분" 원칙).
-- **스트리밍**: `FileShare.Read | Write | Delete`로 열어 생산자의 append/rotation과 병행 읽기를 허용한다. 반환 크기는 open 직전 관측값이고, 읽기 중 IO 오류는 `IoFailure`다 — 아래 "스트리밍" 문단의 계약을 그대로 따른다.
+- **취소**: 목록 나열 루프에서도 취소 토큰을 관찰해 클라이언트 단절 시 대량 디렉터리 스캔을 즉시 중단한다. 취소(`OperationCanceledException`)는 오류 매핑 없이 그대로 전파한다.
+- **스트리밍**: `FileShare.Read | Write | Delete`로 열어 생산자의 append/rotation과 병행 읽기를 허용한다. 반환 크기는 open된 스트림의 관측값이고, 읽기 중 IO 오류는 `IoFailure`다 — 아래 "스트리밍" 문단의 계약을 그대로 따른다.
 
 FluentFTP는 구현 세부사항으로 `FileGateway.Infrastructure` 안에 격리한다.
 

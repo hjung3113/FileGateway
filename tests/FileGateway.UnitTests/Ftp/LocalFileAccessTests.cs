@@ -204,6 +204,66 @@ public sealed class LocalFileAccessTests : IDisposable
         Assert.IsNotType<FileAccessException>(asyncEx);
     }
 
+    [Fact] // L15 — PR#23 review: symlink/junction으로 RootPath 밖을 가리키는 경로는 reparse point 거부
+    public async Task AC_22_4_SymlinkEscapingRootIsRejectedWithProtocolError()
+    {
+        var outside = Path.Combine(Path.GetTempPath(), "fgw-outside-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(outside);
+        try
+        {
+            File.WriteAllText(Path.Combine(outside, "secret.log"), "x");
+            Directory.CreateSymbolicLink(Path.Combine(_root, "link"), outside); // <root>/link -> outside
+            File.CreateSymbolicLink(Path.Combine(_root, "link.log"), Path.Combine(outside, "secret.log"));
+
+            foreach (var relative in new[] { "link/secret.log", "link.log" })
+            {
+                var ex = await Assert.ThrowsAsync<FileAccessException>(
+                    () => _access.StatFileAsync(Server(), relative, CancellationToken.None));
+                Assert.Equal(FileAccessError.ProtocolError, ex.Error);
+                Assert.Equal("path traverses a symbolic link", ex.Message);
+            }
+        }
+        finally { Directory.Delete(outside, recursive: true); }
+    }
+
+    [Fact] // L15 — root 내부를 가리키는 symlink라도 일관된 거부(링크 허용 여부를 대상 경로로 판단하지 않는다)
+    public async Task AC_22_4_SymlinkInsideRootIsAlsoRejected()
+    {
+        Directory.CreateDirectory(Path.Combine(_root, "real"));
+        File.WriteAllText(Path.Combine(_root, "real", "a.log"), "x");
+        Directory.CreateSymbolicLink(Path.Combine(_root, "alias"), Path.Combine(_root, "real"));
+
+        var ex = await Assert.ThrowsAsync<FileAccessException>(
+            () => _access.StatFileAsync(Server(), "alias/a.log", CancellationToken.None));
+        Assert.Equal(FileAccessError.ProtocolError, ex.Error);
+    }
+
+    [Fact] // L16 — PR#23 review: 상대 RootPath는 CWD 기준 절대화 대신 ProtocolError로 fail-fast
+    public async Task AC_22_3_RelativeRootPathFailsFastWithProtocolError()
+    {
+        var server = new FileServerConnection("S1", "localhost", "logs");
+
+        var stat = await Assert.ThrowsAsync<FileAccessException>(
+            () => _access.StatFileAsync(server, "a.log", CancellationToken.None));
+        Assert.Equal(FileAccessError.ProtocolError, stat.Error);
+        Assert.Equal("RootPath must be an absolute local path", stat.Message);
+
+        var list = await Assert.ThrowsAsync<FileAccessException>(
+            () => _access.ListFilesAsync(server, "", CancellationToken.None));
+        Assert.Equal(FileAccessError.ProtocolError, list.Error);
+    }
+
+    [Fact] // L17 — PR#23 review: 취소 토큰이 목록 나열 중에도 관찰되어야 한다(선확인 통과 후에도 즉시 전파)
+    public async Task AC_22_1_ListFilesObservesCanceledToken()
+    {
+        File.WriteAllText(Path.Combine(_root, "a.log"), "x");
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => _access.ListFilesAsync(Server(), "", cts.Token));
+    }
+
     private static Stream CreateLocalStream(Stream inner)
     {
         var streamType = typeof(LocalFileAccess).GetNestedType(
