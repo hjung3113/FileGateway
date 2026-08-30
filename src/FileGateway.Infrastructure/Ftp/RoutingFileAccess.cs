@@ -9,6 +9,10 @@ public sealed class RoutingFileAccess(IFileAccess local, IFileAccess ftp) : IFil
     public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
         => Select(server).ListFilesAsync(server, dir, ct);
 
+    public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+        FileServerConnection server, string dir, CancellationToken ct)
+        => Select(server).ListDirectoriesAsync(server, dir, ct);
+
     public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
         => Select(server).StatFileAsync(server, path, ct);
 

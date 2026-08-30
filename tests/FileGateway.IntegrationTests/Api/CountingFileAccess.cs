@@ -14,6 +14,13 @@ public sealed class CountingFileAccess(IFileAccess inner) : IFileAccess
         return inner.ListFilesAsync(server, dir, ct);
     }
 
+    public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+        FileServerConnection server, string dir, CancellationToken ct)
+    {
+        Interlocked.Increment(ref _listings);
+        return inner.ListDirectoriesAsync(server, dir, ct);
+    }
+
     public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
         => inner.StatFileAsync(server, path, ct);
 

@@ -28,6 +28,10 @@ public class FileAccessErrorMappingTests
             => Task.FromResult(new RemoteDirectoryListing(true,
                 [new RemoteFileEntry("2026082218_Event.zip", 8)]));
 
+        public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+            FileServerConnection server, string dir, CancellationToken ct)
+            => Task.FromResult(RemoteDirectoryNames.Missing);
+
         public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
             => Task.FromResult(8L);
 
@@ -82,6 +86,10 @@ public class FileAccessErrorMappingTests
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
             => Task.FromResult(new RemoteDirectoryListing(true,
                 [new RemoteFileEntry("2026082218_Event.zip", 8)]));
+
+        public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+            FileServerConnection server, string dir, CancellationToken ct)
+            => Task.FromResult(RemoteDirectoryNames.Missing);
 
         public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
             => Task.FromResult(8L);

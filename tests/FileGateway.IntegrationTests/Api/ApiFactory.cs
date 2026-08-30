@@ -135,6 +135,10 @@ public sealed class ApiFactory : IAsyncLifetime, IDisposable
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string relativeDirectory, CancellationToken ct)
             => Inner.ListFilesAsync(server, relativeDirectory, ct);
 
+        public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+            FileServerConnection server, string relativeDirectory, CancellationToken ct)
+            => Inner.ListDirectoriesAsync(server, relativeDirectory, ct);
+
         public Task<long> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct)
             => Inner.StatFileAsync(server, relativePath, ct);
 

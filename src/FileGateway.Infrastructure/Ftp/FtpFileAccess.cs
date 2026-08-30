@@ -26,6 +26,21 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
                      .Select(i => new RemoteFileEntry(i.Name, i.Size)).ToList());
         }), ct);
 
+    public Task<RemoteDirectoryNames> ListDirectoriesAsync(FileServerConnection server, string dir, CancellationToken ct)
+        => limiter.RunAsync(server, token => WrapAsync(async () =>
+        {
+            using var client = await ConnectAsync(server, token);
+            var info = await GetObjectInfoOrNullAsync(client, server, dir, token);
+            if (info?.Type != FtpObjectType.Directory)
+                return RemoteDirectoryNames.Missing;
+
+            var items = await client.GetListing(
+                AbsolutePath(server, dir), FtpListOption.Modify | FtpListOption.Size, token);
+            return new RemoteDirectoryNames(true,
+                items.Where(i => i.Type == FtpObjectType.Directory && IsSafeDirectoryName(i.Name))
+                     .Select(i => i.Name).ToList());
+        }), ct);
+
     public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
         => limiter.RunAsync(server, token => WrapAsync(async () =>
         {
@@ -103,6 +118,11 @@ public sealed class FtpFileAccess(FtpOptions options, FtpConcurrencyLimiter limi
             ? new(FileAccessError.ProtocolError, "ftp protocol error", ex)
             : new(FileAccessError.ProtocolError, "ftp failure", ex);
     }
+
+    private static bool IsSafeDirectoryName(string? name)
+        => !string.IsNullOrEmpty(name)
+           && name is not "." and not ".."
+           && name.IndexOfAny(['/', '\\', ':']) < 0;
 
     private async Task<AsyncFtpClient> ConnectAsync(FileServerConnection server, CancellationToken ct)
     {

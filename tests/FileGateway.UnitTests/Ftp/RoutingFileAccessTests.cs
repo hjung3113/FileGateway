@@ -42,6 +42,24 @@ public sealed class RoutingFileAccessTests
         Assert.Equal(0, local.Calls);
     }
 
+    [Fact]
+    public async Task Directory_listing_routes_to_matching_access()
+    {
+        var local = new SpyFileAccess();
+        var ftp = new SpyFileAccess();
+        var routing = new RoutingFileAccess(local, ftp);
+
+        await routing.ListDirectoriesAsync(
+            new FileServerConnection("S1", "localhost", "/logs"), "local", CancellationToken.None);
+        await routing.ListDirectoriesAsync(
+            new FileServerConnection("S2", "ftp01", "/logs"), "remote", CancellationToken.None);
+
+        Assert.Equal(1, local.Calls);
+        Assert.Equal(1, ftp.Calls);
+        Assert.Equal(["local"], local.Args);
+        Assert.Equal(["remote"], ftp.Args);
+    }
+
     [Theory] // R3, R4 — AC-22-6
     [InlineData("LOCALHOST")]
     [InlineData("LocalHost")]
@@ -132,5 +150,8 @@ public sealed class RoutingFileAccessTests
             => Record(server, path, () => false);
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string path, CancellationToken ct)
             => Record(server, path, () => new RemoteOpenRead(Stream.Null, 0));
+        public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+            FileServerConnection server, string dir, CancellationToken ct)
+            => Record(server, dir, () => RemoteDirectoryNames.Missing);
     }
 }

@@ -167,6 +167,9 @@ public class LogResolverTests
     {
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection s, string d, CancellationToken ct)
             => Task.FromException<RemoteDirectoryListing>(new FileAccessException(FileAccessError.ConnectionFailed, "down"));
+        public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+            FileServerConnection s, string d, CancellationToken ct)
+            => Task.FromResult(RemoteDirectoryNames.Missing);
         public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> FileExistsAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
@@ -176,6 +179,9 @@ public class LogResolverTests
     {
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection s, string d, CancellationToken ct)
             => Task.FromResult(listing);
+        public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+            FileServerConnection s, string d, CancellationToken ct)
+            => Task.FromResult(RemoteDirectoryNames.Missing);
         public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> FileExistsAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();

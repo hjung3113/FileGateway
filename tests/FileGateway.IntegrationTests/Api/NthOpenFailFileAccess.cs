@@ -11,6 +11,10 @@ public sealed class NthOpenFailFileAccess(IFileAccess inner, int failOnNthOpen) 
     public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
         => inner.ListFilesAsync(server, dir, ct);
 
+    public Task<RemoteDirectoryNames> ListDirectoriesAsync(
+        FileServerConnection server, string dir, CancellationToken ct)
+        => inner.ListDirectoriesAsync(server, dir, ct);
+
     public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
         => inner.StatFileAsync(server, path, ct);
 

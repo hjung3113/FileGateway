@@ -45,6 +45,45 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
     }
 
     [Fact]
+    public async Task ListDirectories_returns_immediate_child_directories()
+    {
+        await Seed(ftp, "ftproot/DirectoryListing/PM1/file.cfg", "1"u8.ToArray());
+        await Seed(ftp, "ftproot/DirectoryListing/PM2/file.cfg", "2"u8.ToArray());
+        await Seed(ftp, "ftproot/DirectoryListing/PM2/Nested/file.cfg", "3"u8.ToArray());
+
+        var (access, opt) = Create(ftp); WithPort(ftp, opt);
+        var listing = await access.ListDirectoriesAsync(
+            Server(ftp.Port), "DirectoryListing", CancellationToken.None);
+
+        Assert.True(listing.Exists);
+        Assert.Equal(["PM1", "PM2"], listing.Names.OrderBy(name => name, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task ListDirectories_reports_missing_directory_as_not_exists()
+    {
+        var (access, opt) = Create(ftp); WithPort(ftp, opt);
+        var listing = await access.ListDirectoriesAsync(
+            Server(ftp.Port), "DirectoryListingMissing", CancellationToken.None);
+
+        Assert.False(listing.Exists);
+        Assert.Empty(listing.Names);
+    }
+
+    [Fact]
+    public async Task ListDirectories_returns_empty_for_existing_directory_without_child_directories()
+    {
+        await Seed(ftp, "ftproot/DirectoryListingEmpty/file.cfg", "1"u8.ToArray());
+        var (access, opt) = Create(ftp); WithPort(ftp, opt);
+
+        var listing = await access.ListDirectoriesAsync(
+            Server(ftp.Port), "DirectoryListingEmpty", CancellationToken.None);
+
+        Assert.True(listing.Exists);
+        Assert.Empty(listing.Names);
+    }
+
+    [Fact]
     public async Task StatFile_throws_FileNotFound_for_missing_file()
     {
         var (access, opt) = Create(ftp); WithPort(ftp, opt);

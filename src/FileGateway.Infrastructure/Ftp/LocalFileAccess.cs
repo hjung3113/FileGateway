@@ -29,6 +29,30 @@ public sealed class LocalFileAccess : IFileAccess
         { throw Classify(ex); }
     }
 
+    public Task<RemoteDirectoryNames> ListDirectoriesAsync(FileServerConnection server, string dir, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        try
+        {
+            var full = ResolvePhysicalPath(server, dir);
+            var names = new List<string>();
+            foreach (var p in Directory.EnumerateDirectories(full))
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    var name = Path.GetFileName(p);
+                    if (IsSafeDirectoryName(name)) names.Add(name);
+                }
+                catch (FileNotFoundException) { /* 나열 도중 삭제/rotation된 항목은 스킵 */ }
+            }
+            return Task.FromResult(new RemoteDirectoryNames(true, names));
+        }
+        catch (DirectoryNotFoundException) { return Task.FromResult(RemoteDirectoryNames.Missing); }
+        catch (Exception ex) when (ex is not FileAccessException and not OperationCanceledException)
+        { throw Classify(ex); }
+    }
+
     public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -132,6 +156,11 @@ public sealed class LocalFileAccess : IFileAccess
         IOException                 => new(FileAccessError.IoFailure, "local I/O failure", ex), // sharing violation, 디스크, PathTooLong 포함
         _                           => new(FileAccessError.ProtocolError, "local failure", ex),  // FTP catch-all과 대응
     };
+
+    private static bool IsSafeDirectoryName(string? name)
+        => !string.IsNullOrEmpty(name)
+           && name is not "." and not ".."
+           && name.IndexOfAny(['/', '\\', ':']) < 0;
 
     /// <summary>읽기 중 IO 오류를 FileAccessError로 변환. 취소(클라이언트 단절 포함)는 변환 없이 그대로 전파한다.
     /// CanSeek=false — 소비자는 전진 전용으로 사용(OwnedFtpStream과 동일).</summary>
