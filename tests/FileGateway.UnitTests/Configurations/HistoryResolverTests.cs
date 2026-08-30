@@ -175,6 +175,23 @@ public class HistoryResolverTests
     }
 
     [Fact]
+    public async Task Out_of_range_extracted_time_is_conflict_not_normalized()
+    {
+        // P1-S3: mm=60 후보는 보정 없이 FileDefinitionConflict — 잘못된 ts의 identity 발급을 막는다.
+        var ftp = new InMemoryFileAccess();
+        ftp.AddFile("PM/history/2026/08/22/PM1/202608221260.zip", "1"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        var def = new ResolvedConfigurationDefinition(new EquipmentConfigurationDefinition("EQ-001", "PM", "SRV1",
+            new CurrentRule("PM/current", "PM*.cfg"),
+            new HistoryRule("PM/history/{yyyy}/{MM}/{dd}/regex:^PM[0-9]$", "*",
+                "PM/history/{yyyy}/{MM}/{dd}/_DONE", "Glob",
+                new ConfigurationMetadataRule(ConfigurationMetadataMode.Template, "{yyyy}{MM}{dd}{HH}{mm}", []))), Srv);
+        var ex = await Assert.ThrowsAsync<FileGatewayException>(
+            () => new HistoryResolver(ftp).ResolveAsync(def, Range(22), CancellationToken.None));
+        Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
     public async Task From_to_filter_uses_extracted_timestamp_when_metadata_present()
     {
         var ftp = new InMemoryFileAccess();

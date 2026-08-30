@@ -114,10 +114,14 @@ public sealed class ConfigurationQueryService(
         var ts = payload.Claims.TryGetValue("ts", out var t) && t.Length > 0
             ? DateTimeOffset.Parse(t, CultureInfo.InvariantCulture)
             : throw new FileGatewayException("InvalidFileId", "snapshot file id requires ts claim");
-        // 해당 날짜 범위만 재탐색 — resolver가 marker 존재를 다시 확인한다(marker 부재 → 그날 0건).
+        // 재해석은 SiteLocalMidnight(ts) 단일 물리 슬롯만 순회한다(P1-T1) — metadata rule이 있어도
+        // 추출 ts의 site-local 날짜 == 물리 슬롯 날짜 불변식이 conflict로 강제되므로 이웃 batch 방문은
+        // 불필요하다(이웃 슬롯의 장애가 target fileId를 오염시키지 않는다). rule이 없으면 ts가 이미
+        // 슬롯 자정이라 기존 EffectiveRange(ts, ts+1d)와 동치다.
+        var midnight = SiteTime.SiteLocalMidnight(ts);
+        var files = await historyResolver.ResolveAsync(def, new EffectiveRange(midnight, midnight.AddDays(1)), ct);
         // 재해석 predicate는 ts 정확 일치 + fileName ci(설계 §3.3, P1-5) — 같은 이름·상이 ts 공존 시
         // resolve 단계의 conflict 규칙 덕에 항상 0개 또는 1개만 만난다.
-        var files = await historyResolver.ResolveAsync(def, new EffectiveRange(ts, ts.AddDays(1)), ct);
         var snapshot = files.SingleOrDefault(f => f.SnapshotTimestamp == ts && FileNameComparison.Same(f.Entry.Name, fileName))
             ?? throw new FileGatewayException("FileNotFound", "snapshot file no longer exists");
         var size = await fileAccess.StatFileAsync(def.Server, snapshot.RelativePath, ct);

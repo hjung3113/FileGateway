@@ -1,4 +1,4 @@
-using FileGateway.Configurations.Definitions;
+using FileGateway.Core.Errors;
 using FileGateway.Configurations.Internal;
 using FileGateway.Core.Files;
 
@@ -9,7 +9,7 @@ public class PathRuleResolverTests
     private static readonly FileServerConnection Srv = new("SRV1", "ftp1", "ftproot");
     private static readonly DateTimeOffset Slot = new(2026, 8, 29, 0, 0, 0, TimeSpan.FromHours(9));
 
-    private static IReadOnlyList<PathSegment> Segments(string raw) => ConfigurationRuleParser.ParsePath(raw);
+    private static IReadOnlyList<CompiledPathSegment> Segments(string raw) => ConfigurationRuleParser.CompilePath(raw);
     private static PathRuleResolver Resolver(IFileAccess ftp) => new(ftp);
 
 
@@ -77,7 +77,6 @@ public class PathRuleResolverTests
         var dirs = await Resolver(ftp).ResolveAsync(Srv, Segments("regex:^PM[0-9]$"), Slot, CancellationToken.None);
         Assert.Equal(["PM1"], dirs);
     }
-
     private sealed class ThrowingListDirsAccess : IFileAccess
     {
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection s, string d, CancellationToken ct)
@@ -87,6 +86,28 @@ public class PathRuleResolverTests
         public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> FileExistsAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
+    }
+
+
+    [Fact]
+    public async Task Directory_regex_timeout_is_conflict()
+    {
+        // P1-S1: 디렉터리 매처 timeout도 FileDefinitionConflict로 분류된다(세 regex 종류 계약 통일).
+        var ftp = new CustomNamesAccess(new string('a', 60) + "b");
+        var ex = await Assert.ThrowsAsync<FileGatewayException>(() => Resolver(ftp).ResolveAsync(
+            Srv, Segments("regex:^(a+)+$"), Slot, CancellationToken.None));
+        Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
+    public async Task Regex_segment_with_backslash_escape_matches_directories()
+    {
+        // P1-S2: `regex:^PM\d$` 같은 escape 포함 pattern이 변형 없이 매칭에 쓰인다.
+        var ftp = new InMemoryFileAccess();
+        ftp.AddDirectory("cfg/PM1");
+        ftp.AddDirectory("cfg/PMX");
+        var dirs = await Resolver(ftp).ResolveAsync(Srv, Segments("cfg/regex:^PM\\d$"), Slot, CancellationToken.None);
+        Assert.Equal(["cfg/PM1"], dirs);
     }
 
     private sealed class CustomNamesAccess(params string[] names) : IFileAccess

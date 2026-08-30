@@ -234,13 +234,15 @@ GET /api/v1/configurations/history
 - `from >= to`면 `InvalidRequest`
 - `from`/`to`가 없으면 임의 기본 기간 또는 전체 History로 대체하지 않고 `InvalidRequest`
 - `Configurations.HistoryMaxQueryRange`를 초과하면 `InvalidRequest`
-- 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더로 복사하며 Current 원본은 그대로 유지
-- 같은 날짜/시점에 복사된 Snapshot File들은 동일한 `snapshotTimestamp`를 공유
-- 현재 운영 계획에서 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`
-- History 생산자는 복사 완료 시 marker 파일을 생성
+- 별도 시스템이 자정에 Current 파일 집합을 날짜 폴더(물리 batch)로 복사하며 Current 원본은 그대로 유지
+- 같은 `snapshotTimestamp`를 공유하는 Snapshot File들이 하나의 Snapshot Set을 이루며, 한 물리 batch 안에
+  여러 Snapshot Set(그룹핑 키 = ts)이 공존할 수 있다
+- 정의에 metadata rule이 없으면 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`이고, rule이 있으면
+  파일명에서 추출한 시각이다(추출 ts의 site-local 날짜는 물리 슬롯 날짜와 일치해야 한다)
+- History 생산자는 물리 batch(날짜 폴더 복사) 완성 시 marker 파일을 생성
 - marker 이름/위치는 `historyRule` 기준정보로 설정
 - FileGateway는 marker **존재 여부만 확인**하고 내용은 읽거나 해석하지 않음
-- marker가 존재하는 Snapshot Set만 조회 결과에 포함하고 복사 중인 부분 Snapshot Set은 노출하지 않음
+- marker가 존재하는 물리 batch의 Snapshot File만 조회 결과에 포함하고 복사 중인 부분 batch는 노출하지 않음
 - 생성 완료된 Snapshot File은 불변으로 취급
 - History는 Snapshot Set을 중첩 객체로 반환하지 않고 개별 Snapshot File 목록으로 반환
 - History item의 핵심 필드: `fileId`, `fileName`, `equipmentId`, `configurationType`, `snapshotTimestamp`, `size`
@@ -253,6 +255,8 @@ GET /api/v1/configurations/history
 - `limit`은 페이지마다 변경 가능
 - 페이지 사이에 원격 History 파일이 추가/삭제되면 결과 변화가 가능하며 완전한 snapshot은 보장하지 않음
 - Current Configuration은 결과에 포함하지 않음
+
+`snapshotTimestamp`의 파생 규칙 일반화는 API shape 변경이 아니다 — 응답 필드·fileId·continuationToken·정렬·pagination 계약은 그대로며, 시각의 관측 의미만 정의에 따라 결정된다.
 
 Configuration History continuation token도 stateless cursor이며 원래 조회조건과 마지막 반환 위치인 `snapshotTimestamp + fileName`을 보존한다. cursor의 `fileName` 비교는 case-insensitive다.
 

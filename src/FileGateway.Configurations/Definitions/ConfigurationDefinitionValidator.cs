@@ -52,7 +52,8 @@ public static class ConfigurationDefinitionValidator
         // non-regex 세그먼트가 하나도 없으면(전체 regex 경로) safe-path 검사 대상 자체가 없다.
         var recombined = string.Join("/", nonRegex);
         if (nonRegex.Count > 0
-            && (nonRegex.Any(s => s.Contains(':')) || !RemotePath.IsSafeDefinitionPath(recombined)))
+            && (nonRegex.Any(s => s.Contains(':')) || nonRegex.Any(s => s.Contains('\\'))
+                || !RemotePath.IsSafeDefinitionPath(recombined)))
         {
             errors.Add($"{field} unsafe: {pathTemplate}");
             return; // unsafe면 token 검사까지 돌려 같은 필드에 오류가 중복된다(기존 동작 보존)

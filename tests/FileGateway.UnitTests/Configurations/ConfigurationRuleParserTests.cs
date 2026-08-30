@@ -1,4 +1,5 @@
 using FileGateway.Configurations.Definitions;
+using FileGateway.Core.Errors;
 using FileGateway.Configurations.Internal;
 using FileGateway.Core.Time;
 
@@ -102,5 +103,36 @@ public class ConfigurationRuleParserTests
         var compiled = ParsedMetadataRule.Compile(rule);
         Assert.False(compiled.TryGetTimestamp("abcdefghij.zip", out _)); // 매칭은 하되 해석 불가
         Assert.False(compiled.TryGetTimestamp("nope", out _));          // 비매칭
+    }
+
+    [Fact]
+    public void ParsePath_preserves_regex_backslash_escapes()
+    {
+        // P1-S2: 구분자는 '/' 뿐 — \d, \. 같은 정상 .NET escape가 세그먼트 분리로 변형되지 않는다.
+        var segments = ConfigurationRuleParser.ParsePath("cfg/regex:^PM\\d{2}$");
+        Assert.Equal(2, segments.Count);
+        Assert.Equal("^PM\\d{2}$", segments[1].Value);
+        Assert.True(FileMatcher.Create(FileMatchMode.Regex, "^PM\\d{2}$").Matches("PM12"));
+    }
+
+    [Fact]
+    public void Regex_matcher_timeout_is_conflict_not_internal_error()
+    {
+        // P1-S1: regex runtime timeout은 FileDefinitionConflict — resolver/API가 같은 코드로 분류한다.
+        var matcher = FileMatcher.Create(FileMatchMode.Regex, "^(a+)+$"); // catastrophic backtracking
+        var ex = Assert.Throws<FileGatewayException>(
+            () => matcher.Matches(new string('a', 60) + "b"));
+        Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
+    public void Template_out_of_range_hour_or_minute_fails_without_normalization()
+    {
+        // P1-S3: HH 26 / mm 60은 보정(다른 시각 정규화) 없이 실패 → caller가 conflict로 처리.
+        var rule = new ConfigurationMetadataRule(ConfigurationMetadataMode.Template, "{yyyy}{MM}{dd}{HH}{mm}", []);
+        var compiled = ParsedMetadataRule.Compile(rule);
+        Assert.False(compiled.TryGetTimestamp("202608221260.zip", out _)); // mm=60
+        Assert.False(compiled.TryGetTimestamp("202608222630.zip", out _)); // HH=26
+        Assert.True(compiled.TryGetTimestamp("202608221259.zip", out _));  // 경계 23:59 이내
     }
 }
