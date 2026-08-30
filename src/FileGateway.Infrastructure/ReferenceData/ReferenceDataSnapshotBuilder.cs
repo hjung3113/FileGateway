@@ -3,6 +3,9 @@ using System.Text.Json;
 using FileGateway.Configurations.Definitions;
 using FileGateway.Core.Files;
 using FileGateway.Logs.Definitions;
+using ConfigurationMetadataMapping = FileGateway.Configurations.Definitions.ConfigurationMetadataMapping;
+using ConfigurationMetadataMode = FileGateway.Configurations.Definitions.ConfigurationMetadataMode;
+using ConfigurationMetadataRule = FileGateway.Configurations.Definitions.ConfigurationMetadataRule;
 
 namespace FileGateway.Infrastructure.ReferenceData;
 
@@ -123,10 +126,14 @@ public static class ReferenceDataSnapshotBuilder
             var row = rows[i];
             var prefix = $"configuration[{i}] {row.EquipmentId}/{row.ConfigurationType}: ";
 
+            if (!TryParseConfigurationMetadata(row, prefix, errors, out var metadata))
+                continue;
+
             var definition = new EquipmentConfigurationDefinition(
                 row.EquipmentId, row.ConfigurationType, row.ServerId,
-                new CurrentRule(row.CurrentPathTemplate, row.CurrentFilePattern),
-                new HistoryRule(row.HistoryPathTemplate, row.HistoryFilePattern, row.HistoryMarkerPathTemplate));
+                new CurrentRule(row.CurrentPathTemplate, row.CurrentFilePattern, row.CurrentFileMatchMode),
+                new HistoryRule(row.HistoryPathTemplate, row.HistoryFilePattern,
+                    row.HistoryMarkerPathTemplate, row.HistoryFileMatchMode, metadata));
 
             errors.AddRange(ConfigurationDefinitionValidator.Validate(definition).Select(e => prefix + e));
 
@@ -146,6 +153,37 @@ public static class ReferenceDataSnapshotBuilder
         return resolved;
     }
 
+    private static bool TryParseConfigurationMetadata(
+        RawConfigurationDefinition row,
+        string prefix,
+        List<string> errors,
+        out ConfigurationMetadataRule? metadata)
+    {
+        metadata = null;
+        if (string.IsNullOrWhiteSpace(row.HistoryMetadataMode))
+        {
+            if (!string.IsNullOrWhiteSpace(row.HistoryMetadataPattern) ||
+                !string.IsNullOrWhiteSpace(row.HistoryMetadataMappings))
+                errors.Add(prefix + "metadata pattern/mappings require historyMetadataMode");
+            return string.IsNullOrWhiteSpace(row.HistoryMetadataPattern) &&
+                string.IsNullOrWhiteSpace(row.HistoryMetadataMappings);
+        }
+
+        if (!TryParseEnum<ConfigurationMetadataMode>(row.HistoryMetadataMode, out var mode))
+        {
+            errors.Add(prefix + $"unsupported historyMetadataMode: {row.HistoryMetadataMode}");
+            return false;
+        }
+        if (!TryDeserializeConfigurationMappings(row.HistoryMetadataMappings, out var mappings))
+        {
+            errors.Add(prefix + $"invalid historyMetadataMappings JSON: {row.HistoryMetadataMappings}");
+            return false;
+        }
+
+        metadata = new ConfigurationMetadataRule(mode, row.HistoryMetadataPattern, mappings);
+        return true;
+    }
+
     private static bool TryParseEnum<TEnum>(string value, out TEnum parsed) where TEnum : struct, Enum
         => Enum.TryParse(value, out parsed) && Enum.IsDefined(parsed);
 
@@ -154,6 +192,28 @@ public static class ReferenceDataSnapshotBuilder
         try
         {
             var result = JsonSerializer.Deserialize<List<MetadataMapping>>(json, MappingJsonOptions);
+            mappings = result ?? [];
+            return result is not null;
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentNullException or NotSupportedException)
+        {
+            mappings = [];
+            return false;
+        }
+    }
+
+    private static bool TryDeserializeConfigurationMappings(
+        string json, out List<ConfigurationMetadataMapping> mappings)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            mappings = [];
+            return true;
+        }
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<List<ConfigurationMetadataMapping>>(json, MappingJsonOptions);
             mappings = result ?? [];
             return result is not null;
         }

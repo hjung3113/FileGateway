@@ -29,6 +29,36 @@ public class SnapshotBuilderTests
     }
 
     [Fact]
+    public void Maps_configuration_match_and_metadata_tail_columns()
+    {
+        var raw = Valid() with
+        {
+            ConfigurationDefinitions =
+            [
+                new RawConfigurationDefinition("EQ-001", "PM", "SRV1",
+                    "PM/current", "PM*.cfg",
+                    "PM/history/{yyyy}/{MM}/{dd}", "^PM.*\\.cfg$", "PM/history/{yyyy}/{MM}/{dd}/_DONE",
+                    "Literal", "Regex", "Regex", "^(?<ts>\\d{10})\\.(zip|gz)$",
+                    "[{\"group\":\"ts\",\"target\":\"timestamp\",\"format\":\"yyyyMMddHH\"}]")
+            ]
+        };
+
+        var configuration = Assert.IsType<ResolvedConfigurationDefinition>(
+            ReferenceDataSnapshotBuilder.Build(raw).FindConfiguration("EQ-001", "PM"));
+
+        Assert.Equal("Literal", configuration.Definition.CurrentRule.FileMatchMode);
+        Assert.Equal("Regex", configuration.Definition.HistoryRule.FileMatchMode);
+        var metadata = configuration.Definition.HistoryRule.Metadata;
+        Assert.NotNull(metadata);
+        Assert.Equal(ConfigurationMetadataMode.Regex, metadata!.Mode);
+        Assert.Equal("^(?<ts>\\d{10})\\.(zip|gz)$", metadata.Pattern);
+        var mapping = Assert.Single(metadata.Mappings);
+        Assert.Equal("ts", mapping.Group);
+        Assert.Equal("timestamp", mapping.Target);
+        Assert.Equal("yyyyMMddHH", mapping.Format);
+    }
+
+    [Fact]
     public void Rejects_duplicate_equipment_logType()
     {
         var raw = Valid();
