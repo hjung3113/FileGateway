@@ -24,7 +24,7 @@ interface IFileAccess
 
 ## MVP 구현
 
-Infrastructure에서 단일 FTP/FTPS Adapter가 `IFileAccess`를 구현한다.
+Infrastructure에서 `IFileAccess`를 두 구현(`FtpFileAccess`, `LocalFileAccess`)과 그 앞의 라우팅 composite(`RoutingFileAccess`)로 제공한다. 상위 계층(Logs/Configurations/Api)은 `IFileAccess` 하나만 의존하며 이 분기를 모른다.
 
 MVP FTP/FTPS Adapter는 **FluentFTP를 사용**하는 방향으로 구현한다.
 
@@ -32,10 +32,25 @@ MVP FTP/FTPS Adapter는 **FluentFTP를 사용**하는 방향으로 구현한다.
 FileGateway.Core.IFileAccess
           ↑
 FileGateway.Infrastructure
-  FluentFTP 기반 FTP/FTPS Adapter
-          ↓
-       FluentFTP
+  RoutingFileAccess (composite)
+    ├ Host == "localhost" → LocalFileAccess → System.IO
+    └ 그 외             → FluentFTP 기반 FTP/FTPS Adapter → FluentFTP
 ```
+
+`RoutingFileAccess`는 상태 없는 singleton이고 호출마다 `server.Host`로 위임 대상을 고른다.
+
+- 판정은 `Host?.Trim()`이 `"localhost"`와 정확히 일치(`OrdinalIgnoreCase`)하는 경우만 로컬이다. `127.0.0.1`, `::1`, 머신명, FQDN, trailing-dot `localhost.`, null/빈 값은 모두 FTP 경로로 간다.
+- 라우팅 조건은 이 composite에만 존재한다. 서버 추가/변경에 별도 설정이 필요 없고, 새 Provider 추상화나 factory 계약을 도입하지 않는다.
+- DI는 `LocalFileAccess`/`FtpFileAccess`를 구체형으로 등록하고 `IFileAccess`는 factory로 composite를 만들어 등록한다(선언 타입 기준 해석의 자기참조를 피하기 위함).
+
+`LocalFileAccess`는 `System.IO`로 직접 읽으며 별도 옵션/설정, 동시성 limiter가 없다(`FtpConcurrencyLimiter`는 FTP 연결 자원 보호용이라 로컬에는 적용하지 않는다).
+
+- **`RootPath` 해석**: localhost 서버의 `RootPath`는 기준정보(SP)가 내려주는 값을 **로컬 파일시스템 절대 경로로 그대로 사용**한다(예: `C:\FileGateway\files`). 변환 계층은 없다.
+- **`RootPath` 제약**: 드라이브 루트(`C:\`, `/`) 자체를 `RootPath`로 지정하지 않는다. 루트 검증이 끝 구분자를 정규화하는 과정에서 정상 하위 경로까지 거부되는 fail-closed 부작용이 있다. 운영 기준정보는 드라이브 루트 하위의 전용 디렉터리를 사용한다.
+- **경로 검증(이중 방어)**: 상대 경로는 먼저 FTP 어댑터와 동일한 `RemotePath.Combine` 가드를 통과해야 한다(rooted 경로, `.`/`..` 세그먼트 거부). 이후 `Path.GetFullPath`로 정규화한 물리 경로가 정규화된 `RootPath` 하위인지 접두사 재검증한다. 어느 쪽이든 위반은 `FileAccessError.ProtocolError`(FTP 가드 위반과 동일한 오류 코드)로 거부하며, 파일시스템 접근보다 먼저 수행된다. 빈/공백 상대 경로는 루트 자체로 해석한다(FTP와 동일).
+- **에러 매핑**: FTP와 같은 `FileAccessException`/`FileAccessError` 체계를 공유한다. 대상 파일 부재는 `FileNotFound`, 목록 대상 디렉터리 부재는 예외가 아니라 `RemoteDirectoryListing.Missing`, 공유 위반/일반 IO 오류는 `IoFailure`, 그 외는 `ProtocolError`다. `ConnectionFailed`/`AuthenticationFailed`/`Timeout`은 로컬 경로에서 발생하지 않는다.
+- **권한 거부는 FTP와 의도적으로 다르다**: FTP 서버는 권한 거부를 550으로 돌려주어 파일 없음과 뭉개지지만, 로컬은 `UnauthorizedAccessException`을 구분할 수 있으므로 `IoFailure`로 매핑한다("경로는 맞는데 실행 계정에 권한 없음" 장애가 404로 표시되지 않게 한다 — "오류 구분" 원칙).
+- **스트리밍**: `FileShare.Read | Write | Delete`로 열어 생산자의 append/rotation과 병행 읽기를 허용한다. 반환 크기는 open 직전 관측값이고, 읽기 중 IO 오류는 `IoFailure`다 — 아래 "스트리밍" 문단의 계약을 그대로 따른다.
 
 FluentFTP는 구현 세부사항으로 `FileGateway.Infrastructure` 안에 격리한다.
 
@@ -53,7 +68,7 @@ FTP/FTPS 옵션 계약은 `FtpOptions.Security` = `Plain | ExplicitTls | Implici
 
 MVP 전제:
 
-- 분산 서버들의 접근 방식 동일
+- 분산 서버들의 접근 방식 동일. 단, `Host == "localhost"` 서버는 FTP를 거치지 않고 동일 머신 파일시스템에서 직접 읽는다.
 - 기본 FTP root 구조 동일
 - 동일 credential 사용
 - 서버별 주요 차이는 host와 기준정보에서 받은 논리 경로/탐색 규칙
@@ -113,4 +128,4 @@ Core에는 다음을 넣지 않는다.
 
 ## 향후 확장
 
-다른 Site에서 접근 방식이 달라지는 경우 `IFileAccess` 구현으로 SMB/SFTP 등을 추가할 수 있다. MVP에서는 미리 구현하지 않는다.
+다른 Site에서 접근 방식이 달라지는 경우 `IFileAccess` 구현으로 SMB/SFTP 등을 추가할 수 있다. MVP에서는 미리 구현하지 않는다. 로컬 파일 접근은 이미 `LocalFileAccess`로 구현되어 있으므로 이 목록에 해당하지 않으며, `RoutingFileAccess`는 `localhost` 2갈래 분기일 뿐 일반화된 Provider 선택 계층이 아니다.
