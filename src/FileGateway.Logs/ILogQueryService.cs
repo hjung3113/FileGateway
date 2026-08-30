@@ -9,6 +9,9 @@ public interface ILogQueryService
 {
     Task<PagedResult<LogFileDescriptor>> ListAsync(LogListQuery query, CancellationToken ct);
 
+    /// <summary>ListAsync와 동일한 매치 집합을 물리 위치까지 포함해 한 번에 반환한다(파일별 재탐색 없음).</summary>
+    Task<IReadOnlyList<LocatedLogFile>> ListLocatedAsync(LogListQuery query, CancellationToken ct);
+
     Task<SingleFileMatch> ResolveSingleAsync(LogListQuery query, CancellationToken ct);
 
     Task<LocatedFile> LocateByFileIdAsync(TokenPayload fileId, CancellationToken ct);

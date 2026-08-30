@@ -22,7 +22,11 @@ public sealed class ZipDownloadResult(
         ctx.Response.Headers.ContentDisposition = ContentDispositionHelper.Attachment(zipFileName);
         // Content-Length 설정 금지: zip 총 크기를 사전에 알 수 없다 → chunked streaming
 
-        long total = 0;
+        // 실패해도 감사에 남도록 스트리밍 시작 전에 설정한다(전송 바이트는 성공/실패 모두 아래에서 확정).
+        ctx.Items["Audit.FileName"] = zipFileName;
+
+        long transferred = 0;
+        var buffer = new byte[81_920];
         var used = new List<string>();                                  // case-insensitive 엔트리명 중복 판정
         var zip = new ZipArchive(ctx.Response.Body, ZipArchiveMode.Create, leaveOpen: true);
         try
@@ -35,18 +39,26 @@ public sealed class ZipDownloadResult(
                 await using var capped = new ExactLengthStream(open.Stream, open.Length);
                 var entry = zip.CreateEntry(EntryName(f.FileName, used), CompressionLevel.Fastest);
                 await using var es = entry.Open();
-                await capped.CopyToAsync(es, 81_920, ctx.RequestAborted);   // 파일별 스트리밍
-                total += open.Length;
+                int read;                                               // 파일별 스트리밍(전송 바이트를 진행하며 누적)
+                while ((read = await capped.ReadAsync(buffer, ctx.RequestAborted)) > 0)
+                {
+                    await es.WriteAsync(buffer.AsMemory(0, read), ctx.RequestAborted);
+                    transferred += read;
+                }
             }
         }
-        finally
+        catch
         {
-            // dispose가 이미 중단된 응답 스트림에 central directory를 쓰며 던지는 2차 예외가
-            // 원본 오류 분류(FileServerUnavailable/ClientCancelled)를 가리지 않도록 swallow한다.
-            try { await zip.DisposeAsync(); } catch { /* 응답 중단 이후의 2차 실패는 무시 */ }
+            ctx.Items["Audit.FileSize"] = transferred;                  // 중단 지점까지 실제로 보낸 바이트
+            // 부분 zip이 "정상" 아카이브로 보이면 안 된다. dispose가 central directory를 써서
+            // 유효한 200 zip을 완성하기 전에 연결을 끊는다(단일 다운로드는 Content-Length 부족으로
+            // 클라이언트가 truncate를 감지하지만 zip은 길이가 없어 이 구분이 불가능하다).
+            ctx.Abort();
+            try { await zip.DisposeAsync(); } catch { /* 중단 이후의 2차 실패는 원본 분류를 가리지 않는다 */ }
+            throw;
         }
-        ctx.Items["Audit.FileName"] = zipFileName;                     // AuditMiddleware는 응답 완료 후 finally에서 읽음
-        ctx.Items["Audit.FileSize"] = total;
+        ctx.Items["Audit.FileSize"] = transferred;                      // AuditMiddleware는 응답 완료 후 finally에서 읽음
+        await zip.DisposeAsync();                                       // 정상 완료에서만 central directory를 기록한다
     }
 
     // 첫 등장은 원본 FileName 그대로, 이후 중복은 확장자 앞 _N suffix(대소문자 무시 판정, ListAsync 순서로 결정적).

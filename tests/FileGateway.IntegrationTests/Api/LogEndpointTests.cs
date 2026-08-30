@@ -335,20 +335,47 @@ public class LogEndpointTests : IClassFixture<ApiFactory>
         using var response = await client.GetAsync(ThreeFileRange, HttpCompletionOption.ResponseHeadersRead);
         Assert.Equal(200, (int)response.StatusCode); // zip 헤더 전송은 이미 시작
 
-        // 본문은 완전한 zip이 아님: 읽기가 실패하거나, 끝까지 읽혀도 3엔트리 zip으로 파싱 불가
-        var complete = false;
+        // 중단된 응답은 central directory를 기록하지 않는다. zip은 Content-Length가 없어
+        // 클라이언트가 truncate를 감지할 수 없으므로, 부분 결과가 "유효한 아카이브"로 열리면 안 된다.
+        var openedAsArchive = false;
         try
         {
             using var zip = await ReadZipAsync(response);
-            complete = zip.Entries.Count == 3;
+            openedAsArchive = true;
+            Assert.Fail($"aborted zip must not open as a valid archive (got {zip.Entries.Count} entries)");
         }
-        catch (Exception) { /* 응답 중단으로 truncated zip / 연결 리셋 */ }
-        Assert.False(complete, "second-file open failure must not produce a complete 3-entry zip");
+        catch (Exception) when (!openedAsArchive) { /* 응답 중단으로 truncated zip / 연결 리셋 */ }
 
         var entry = logs.Entries.Single(e => e.Category == "FileGateway.Audit");
         var errorCode = Regex.Match(entry.Message, @"errorCode (\S+) ").Groups[1].Value;
         if (errorCode.Length == 0) errorCode = Regex.Match(entry.Message, @"errorCode (\S+)$").Groups[1].Value;
         Assert.Equal("FileServerUnavailable", errorCode);
+
+        // 실패 경로에도 zip 파일명과 중단 지점까지의 전송 바이트가 남아야 한다(첫 엔트리 "event-18" 8바이트).
+        Assert.EndsWith(".zip", Regex.Match(entry.Message, @"fileName (\S+) fileSize").Groups[1].Value);
+        Assert.Equal(8, long.Parse(Regex.Match(entry.Message, @"fileSize (\S+) status").Groups[1].Value));
+    }
+
+    [Fact]
+    public async Task Download_zip_does_not_add_remote_listings_beyond_list()
+    {
+        // 목록과 다운로드가 같은 단일 resolve를 사용하므로 파일 수에 비례한 추가 listing이 없어야 한다.
+        using var factory = new ApiFactory();
+        factory.SetSnapshot(Snapshot());
+        var counting = new CountingFileAccess(FakeFtp());
+        factory.SetFileAccess(counting);
+        using var client = factory.CreateClient();
+
+        using (await client.GetAsync(ThreeFileRange.Replace("/logs/download", "/logs"))) { }
+        var listListings = counting.Listings;
+
+        using var download = await client.GetAsync(ThreeFileRange);
+        Assert.Equal(200, (int)download.StatusCode);
+        using var zip = await ReadZipAsync(download);
+        Assert.Equal(3, zip.Entries.Count);
+
+        // 3파일 zip이 목록과 동일한 listing 횟수로 완성된다(파일당 재탐색이 있으면 3배 이상 증가).
+        Assert.Equal(listListings * 2, counting.Listings);
     }
 
     [Fact]
