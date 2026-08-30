@@ -27,6 +27,24 @@ public sealed class LogQueryService(
 {
     public async Task<PagedResult<LogFileDescriptor>> ListAsync(LogListQuery query, CancellationToken ct)
     {
+        var core = await ListCoreAsync(query, ct);
+        return new(core.Page.Select(f => ToDescriptor(core.Def, f, core.Query)).ToList(), core.Next);
+    }
+
+    public async Task<IReadOnlyList<LocatedLogFile>> ListLocatedAsync(LogListQuery query, CancellationToken ct)
+    {
+        // 목록이 이미 확정한 매치를 그대로 사용한다. 파일별 재탐색(원격 listing)을 추가하지 않는다.
+        var core = await ListCoreAsync(query, ct);
+        return core.Page.Select(f => new LocatedLogFile(
+            ToDescriptor(core.Def, f, core.Query),
+            new LocatedFile(core.Def.Server, f.RelativePath, f.Entry.Name, f.Entry.Size))).ToList();
+    }
+
+    private sealed record ListCore(
+        ResolvedLogDefinition Def, LogListQuery Query, IReadOnlyList<ResolvedLogFile> Page, string? Next);
+
+    private async Task<ListCore> ListCoreAsync(LogListQuery query, CancellationToken ct)
+    {
         if (query.Limit is < 1)
             throw new FileGatewayException("InvalidRequest", "limit must be at least 1");
         if (query.Limit is int logLimit && logLimit > limitMaximum)
@@ -61,7 +79,7 @@ public sealed class LogQueryService(
                 ? null : last.Metadata.Timestamp;
             next = LogCursor.Encode(tokens, clock, query, lastTs, last.Entry.Name, range, pageTtl);
         }
-        return new(page.Select(f => ToDescriptor(def, f, query)).ToList(), next);
+        return new(def, query, page, next);
     }
 
     public async Task<SingleFileMatch> ResolveSingleAsync(LogListQuery query, CancellationToken ct)

@@ -29,19 +29,23 @@ public static class LogEndpoints
             HttpRequest request, IOptions<FileGatewayOptions> options, ILogQueryService logs,
             IFileAccess fileAccess, HttpContext ctx, CancellationToken ct) =>
         {
-            var query = ParseListQuery(request, options.Value);
+            var query = ParseListQuery(request, options.Value);          // 목록과 완전 동일 파싱/매치 경로
             ctx.Items["Audit.EquipmentId"] = query.EquipmentId;
             ctx.Items["Audit.LogType"] = query.LogType;
-            var match = await logs.ResolveSingleAsync(query, ct);
-            if (match.Count == MatchCount.Zero)
+
+            // 목록과 동일한 단일 resolve로 물리 위치까지 확정한다(파일별 추가 원격 listing 없음).
+            var matches = await logs.ListLocatedAsync(query, ct);
+            if (matches.Count == 0)
                 throw new FileGatewayException("FileNotFound", "no file matched the query");
-            if (match.Count == MatchCount.Many)
-                throw new FileGatewayException("MultipleFilesMatched", "query matched more than one file");
-            var file = match.File!;
-            ctx.Items["Audit.FileName"] = file.FileName;
-            ctx.Items["Audit.FileSize"] = file.Size;
-            ctx.Items["Audit.FileId"] = match.FileId;
-            return new DownloadResult(file, fileAccess);
+
+            if (matches.Count == 1)                                      // 1건: 기존 단일 스트리밍 응답(불변)
+            {
+                ctx.Items["Audit.FileId"] = matches[0].Descriptor.FileId;
+                ctx.Items["Audit.FileName"] = matches[0].File.FileName;  // FileSize는 DownloadResult가 open 시점 크기로 설정(현행 유지)
+                return (IResult)new DownloadResult(matches[0].File, fileAccess);
+            }
+            var located = matches.Select(m => m.File).ToList();
+            return (IResult)new ZipDownloadResult(ZipName(query), located, fileAccess);   // 2건 이상: zip 스트리밍
         });
         return app;
     }
@@ -80,4 +84,9 @@ public static class LogEndpoints
         try { return SiteTime.Parse(value); }
         catch (ArgumentException ex) { throw new FileGatewayException("InvalidRequest", $"invalid {name}", ex); }
     }
+
+    // zip 파일명은 장식적 값이며 계약이 아니다(클라이언트가 파싱하지 않는다).
+    private static string ZipName(LogListQuery query)
+        => $"{query.EquipmentId}_{query.LogType}_{DateTimeOffset.UtcNow:yyyyMMddHHmmss}Z.zip";
 }
+

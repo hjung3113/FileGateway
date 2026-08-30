@@ -33,7 +33,7 @@ MVP는 여러 API Key/`callerId`를 동시에 사용할 수 있지만 모든 활
 
 ### 다중 파일 다운로드
 
-여러 결과를 자동 ZIP하는 기능은 제외한다. 필요 시 별도 요구사항으로 설계한다.
+로그 조건 기반 직접 다운로드는 매치가 2건 이상이면 zip으로 스트리밍한다(계약은 `docs/05-api-interface.md`). Current Configuration 직접 다운로드는 단일 파일만 제공하며 여러 개 일치 시 `MultipleFilesMatched`다. Configuration 쪽 자동 ZIP은 필요 시 별도 요구사항으로 설계한다.
 
 ### 다중 discovery rule
 
