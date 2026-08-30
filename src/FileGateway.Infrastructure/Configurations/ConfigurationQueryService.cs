@@ -114,9 +114,11 @@ public sealed class ConfigurationQueryService(
         var ts = payload.Claims.TryGetValue("ts", out var t) && t.Length > 0
             ? DateTimeOffset.Parse(t, CultureInfo.InvariantCulture)
             : throw new FileGatewayException("InvalidFileId", "snapshot file id requires ts claim");
-        // 해당 날짜 슬롯만 재탐색 — resolver가 marker 존재를 다시 확인한다(marker 부재 → 그날 0건).
+        // 해당 날짜 범위만 재탐색 — resolver가 marker 존재를 다시 확인한다(marker 부재 → 그날 0건).
+        // 재해석 predicate는 ts 정확 일치 + fileName ci(설계 §3.3, P1-5) — 같은 이름·상이 ts 공존 시
+        // resolve 단계의 conflict 규칙 덕에 항상 0개 또는 1개만 만난다.
         var files = await historyResolver.ResolveAsync(def, new EffectiveRange(ts, ts.AddDays(1)), ct);
-        var snapshot = files.SingleOrDefault(f => FileNameComparison.Same(f.Entry.Name, fileName))
+        var snapshot = files.SingleOrDefault(f => f.SnapshotTimestamp == ts && FileNameComparison.Same(f.Entry.Name, fileName))
             ?? throw new FileGatewayException("FileNotFound", "snapshot file no longer exists");
         var size = await fileAccess.StatFileAsync(def.Server, snapshot.RelativePath, ct);
         return new(def.Server, snapshot.RelativePath, snapshot.Entry.Name, size);

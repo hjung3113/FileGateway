@@ -129,6 +129,40 @@ public class ConfigurationQueryServiceTests
     }
 
     [Fact]
+    public async Task Snapshot_fileId_reinterpretation_matches_exact_timestamp()
+    {
+        // metadata rule로 동일 fileName이 서로 다른 ts로 두 슬롯에 공존(설계 §3.3, P1-5).
+        // 재해석 predicate가 ts 정확 일치 없이 이름만 찾으면 2건 → InternalError가 된다.
+        var raw = new ReferenceDataRaw(["EQ-001"], [new RawServer("SRV1", "ftp1", "ftproot")], [],
+        [
+            new RawConfigurationDefinition("EQ-001", "PM", "SRV1",
+                "PM/current", "PM*.cfg",
+                "PM/history/{yyyy}/{MM}/{dd}", "*",
+                "PM/history/{yyyy}/{MM}/{dd}/_DONE",
+                HistoryMetadataMode: "Template", HistoryMetadataPattern: "{yyyy}{MM}{dd}{HH}")
+        ]);
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("PM/history/2026/08/22/2026082220.zip", "a"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/22/_DONE", []);
+        ftp.AddFile("PM/history/2026/08/23/2026082320.zip", "bbbb"u8.ToArray());
+        ftp.AddFile("PM/history/2026/08/23/_DONE", []);
+        var svc = new ConfigurationQueryService(new FixedView(ReferenceDataSnapshotBuilder.Build(raw)),
+            new CurrentResolver(ftp), new HistoryResolver(ftp), ftp,
+            Codec, TimeProvider.System, TimeSpan.FromDays(366), 50, 200,
+            TimeSpan.FromHours(24), TimeSpan.FromMinutes(30));
+
+        var page = await svc.GetHistoryAsync(
+            new ConfigurationHistoryQuery("EQ-001", "PM", From, To.AddDays(1), null, null), CancellationToken.None);
+        Assert.Equal(2, page.Items.Count);
+        var item = page.Items.Single(i => i.SnapshotTimestamp.Hour == 20 && i.SnapshotTimestamp.Day == 23);
+        var payload = Codec.Unprotect(item.FileId, ConfigurationTokenKinds.FileIdSnapshotPurpose).Payload!;
+
+        var located = await svc.LocateByFileIdAsync(payload, CancellationToken.None);
+        Assert.Equal("PM/history/2026/08/23/2026082320.zip", located.RelativePath);
+        Assert.Equal(4, located.Size); // ts 정확 일치 항목 — 이름이 같아도 23일 파일
+    }
+
+    [Fact]
     public async Task Current_fileId_points_to_current_content()
     {
         var ftp = new FakeFileAccess();

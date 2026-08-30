@@ -89,7 +89,7 @@ builder.Services.AddSingleton<IConfigurationQueryService>(sp =>
     var o = sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value;
     return new ConfigurationQueryService(
         sp.GetRequiredService<IReferenceDataView>(),
-        new CurrentResolver(sp.GetRequiredService<IFileAccess>()),
+        new CurrentResolver(sp.GetRequiredService<IFileAccess>(), sp.GetRequiredService<TimeProvider>()),
         new HistoryResolver(sp.GetRequiredService<IFileAccess>()),
         sp.GetRequiredService<IFileAccess>(),
         sp.GetRequiredService<ITokenCodec>(),

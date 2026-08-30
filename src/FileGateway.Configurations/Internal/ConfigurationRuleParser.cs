@@ -207,13 +207,20 @@ public static class ConfigurationRuleParser
         throw new ArgumentException($"invalid file match mode: {mode}");
     }
 
+    // 컴파일은 파싱 시점 1회만(설계 §5.1). 정의 객체는 기준정보 스냅샷마다 새 인스턴스로 교체되므로
+    // ConditionalWeakTable(참조 수명 연동)로 캐싱한다 — 스냅샷이 GC되면 파싱 결과도 함께 회수된다.
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CurrentRule, ParsedCurrentRule> CurrentCache = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<HistoryRule, ParsedHistoryRule> HistoryCache = new();
+
     public static ParsedCurrentRule ParseCurrent(CurrentRule rule)
-        => new(ParsePath(rule.PathTemplate),
-            FileMatcher.Create(ParseFileMatchMode(rule.FileMatchMode), rule.FilePattern));
+        => CurrentCache.GetValue(rule, r =>
+            new ParsedCurrentRule(ParsePath(r.PathTemplate),
+                FileMatcher.Create(ParseFileMatchMode(r.FileMatchMode), r.FilePattern)));
 
     public static ParsedHistoryRule ParseHistory(HistoryRule rule)
-        => new(ParsePath(rule.PathTemplate),
-            FileMatcher.Create(ParseFileMatchMode(rule.FileMatchMode), rule.FilePattern),
-            ParsePath(rule.MarkerPathTemplate),
-            rule.Metadata is null ? null : ParsedMetadataRule.Compile(rule.Metadata));
+        => HistoryCache.GetValue(rule, r =>
+            new ParsedHistoryRule(ParsePath(r.PathTemplate),
+                FileMatcher.Create(ParseFileMatchMode(r.FileMatchMode), r.FilePattern),
+                ParsePath(r.MarkerPathTemplate),
+                r.Metadata is null ? null : ParsedMetadataRule.Compile(r.Metadata)));
 }
