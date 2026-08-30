@@ -12,7 +12,7 @@ MVP 대상 프레임워크는 `.NET 10 (net10.0, LTS)`으로 고정한다. SDK �
                     v
           Distributed File Servers
                     ^
-                    | FTP/FTPS
+                    | FTP/FTPS · localhost 로컬 접근
                FileGateway
                     ^
                     | HTTPS
@@ -32,7 +32,7 @@ MVP 대상 프레임워크는 `.NET 10 (net10.0, LTS)`으로 고정한다. SDK �
               +-----------------------+
                   ^             ^
                   |             |
-            MSSQL Adapter   FTP/FTPS Adapter
+            MSSQL Adapter   File Access(FTP/FTPS · localhost 로컬)
                   \             /
                 FileGateway.Infrastructure
 ```
@@ -87,7 +87,7 @@ Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec
 
 - MSSQL Stored Procedure 호출
 - 기준정보 memory cache
-- FTP/FTPS 파일 접근
+- 파일 접근: FTP/FTPS Adapter, `Host == "localhost"` 서버의 로컬 파일시스템 직접 접근(자세한 계약은 `03-server-access-core.md`)
 - credential/secret 로딩
 - token 보호 key/secret 공급 및 외부 I/O 구현
 

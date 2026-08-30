@@ -26,6 +26,8 @@
 
 `rootPath`는 해당 서버에서 FileGateway가 접근할 수 있는 물리 경로의 보안 경계다. 모든 discovery/current/history 규칙의 최종 정규화 경로는 반드시 이 root 아래에 있어야 한다.
 
+`host`가 `localhost`(대소문자 무시, 앞뒤 공백 제거 후 정확히 일치)인 서버는 FTP 대신 동일 머신 파일시스템에서 직접 읽는다. 이 경우 `rootPath`는 로컬 절대 경로여야 하며(상대 경로는 즉시 오류), 라우팅/경로 검증 규칙은 `03-server-access-core.md`를 따른다. `127.0.0.1`, `::1`, 머신명 등 다른 값은 모두 FTP 서버로 취급된다.
+
 ### 로그 정의
 
 - `EquipmentId`
