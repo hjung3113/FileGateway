@@ -98,17 +98,26 @@ public sealed class LocalFileAccess : IFileAccess
         _                           => new(FileAccessError.ProtocolError, "local failure", ex),  // FTP catch-all과 대응
     };
 
-    /// <summary>읽기 중 IO 오류를 FileAccessError로 변환. CanSeek=false — 소비자는 전진 전용으로 사용(OwnedFtpStream과 동일).</summary>
-    private sealed class LocalFileStream(FileStream inner) : Stream
+    /// <summary>읽기 중 IO 오류를 FileAccessError로 변환. 취소(클라이언트 단절 포함)는 변환 없이 그대로 전파한다.
+    /// CanSeek=false — 소비자는 전진 전용으로 사용(OwnedFtpStream과 동일).</summary>
+    private sealed class LocalFileStream(Stream inner) : Stream
     {
         public override bool CanRead => true;
         public override bool CanSeek => false;
         public override bool CanWrite => false;
         public override long Length => inner.Length;
         public override int Read(byte[] buffer, int offset, int count)
-        { try { return inner.Read(buffer, offset, count); } catch (Exception ex) { throw Classify(ex); } }
+        {
+            try { return inner.Read(buffer, offset, count); }
+            catch (Exception ex) when (ex is not FileAccessException and not OperationCanceledException)
+            { throw Classify(ex); }
+        }
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct)
-        { try { return await inner.ReadAsync(buffer, ct); } catch (Exception ex) { throw Classify(ex); } }
+        {
+            try { return await inner.ReadAsync(buffer, ct); }
+            catch (Exception ex) when (ex is not FileAccessException and not OperationCanceledException)
+            { throw Classify(ex); }
+        }
         protected override void Dispose(bool disposing) { if (disposing) inner.Dispose(); }
         public override async ValueTask DisposeAsync() => await inner.DisposeAsync();
         public override long Position

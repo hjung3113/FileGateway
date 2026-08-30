@@ -166,6 +166,79 @@ public sealed class LocalFileAccessTests : IDisposable
         Assert.Single(listing.Files, f => f.Name == "a.log");
     }
 
+    [Fact] // L13 — design §9.2: read 중 일반 IO 오류는 IoFailure로 변환
+    public async Task AC_22_3_StreamReadMapsIOExceptionToFileAccessIoFailure()
+    {
+        await using var stream = CreateLocalStream(new ThrowingReadStream(
+            () => new IOException("simulated streaming read failure")));
+
+        var sync = Assert.Throws<FileAccessException>(() => stream.Read(new byte[1], 0, 1));
+        Assert.Equal(FileAccessError.IoFailure, sync.Error);
+
+        var asyncEx = await Assert.ThrowsAsync<FileAccessException>(
+            () => stream.ReadAsync(new byte[1], CancellationToken.None).AsTask());
+        Assert.Equal(FileAccessError.IoFailure, asyncEx.Error);
+    }
+
+    [Fact] // L13 — design §9.2: 취소는 변환 없이 그대로 전파(클라이언트 단절 분류 회귀 방지)
+    public async Task AC_22_3_StreamReadPropagatesCancellationWithoutMapping()
+    {
+        await using var stream = CreateLocalStream(new ThrowingReadStream(
+            () => new OperationCanceledException()));
+
+        Assert.Throws<OperationCanceledException>(() => stream.Read(new byte[1], 0, 1));
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => stream.ReadAsync(new byte[1], CancellationToken.None).AsTask());
+    }
+
+    [Fact] // L13 — TaskCanceledException(OperationCanceledException 파생)도 변환 없이 전파
+    public async Task AC_22_3_StreamReadPropagatesTaskCanceledWithoutMapping()
+    {
+        await using var stream = CreateLocalStream(new ThrowingReadStream(
+            () => new TaskCanceledException()));
+
+        var sync = Assert.Throws<TaskCanceledException>(() => stream.Read(new byte[1], 0, 1));
+        Assert.IsNotType<FileAccessException>(sync);
+        var asyncEx = await Assert.ThrowsAsync<TaskCanceledException>(
+            () => stream.ReadAsync(new byte[1], CancellationToken.None).AsTask());
+        Assert.IsNotType<FileAccessException>(asyncEx);
+    }
+
+    private static Stream CreateLocalStream(Stream inner)
+    {
+        var streamType = typeof(LocalFileAccess).GetNestedType(
+            "LocalFileStream", BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("LocalFileStream was not found.");
+        var constructor = streamType.GetConstructors(
+                BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+            .SingleOrDefault()
+            ?? throw new InvalidOperationException("LocalFileStream constructor was not found.");
+        return (Stream)(constructor.Invoke([inner])
+            ?? throw new InvalidOperationException("LocalFileStream was not created."));
+    }
+
+    private sealed class ThrowingReadStream(Func<Exception> factory) : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => 0;
+        public override long Position
+        {
+            get => 0;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw factory();
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct)
+            => ValueTask.FromException<int>(factory());
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        protected override void Dispose(bool disposing) { }
+    }
+
 
     [Fact] // L14 — AC-22-3
     public void AC_22_3_ClassifyMapsUnauthorizedIoAndOtherExceptions()
