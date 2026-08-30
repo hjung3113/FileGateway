@@ -33,7 +33,7 @@ _Avoid_: `equipmentId + configurationType`이 항상 파일 하나를 식별한�
 _Avoid_: 현재 파일을 불변 snapshot으로 간주, PM1/PM2를 별도 subtype으로 모델링
 
 **Configuration Snapshot Set**:
-별도 시스템이 특정 시점에 `Current Configuration Set`의 파일들을 그대로 복사해 보관한 히스토리 파일 집합이다. 현재 운영 계획에서는 자정에 날짜 폴더를 만들고 Current 파일 집합을 복사하며 Current 원본은 그대로 유지한다. 같은 Snapshot Set의 파일들은 동일한 `snapshotTimestamp`를 공유한다. History 생산자가 만든 완료 marker 파일이 존재해야 FileGateway 조회 대상이 된다.
+별도 시스템이 특정 시점에 `Current Configuration Set`의 파일들을 그대로 복사해 보관한 히스토리 파일 집합이다. 물리 batch(날짜 폴더와 복사 완료 marker가 이루는 단위) 안에서 같은 `snapshotTimestamp`를 공유하는 파일들의 집합이며, metadata rule이 있으면 하나의 물리 batch에 여러 Snapshot Set이 있을 수 있다. History 생산자가 만든 물리 batch 완료 marker가 존재해야 FileGateway 조회 대상이 된다.
 _Avoid_: Snapshot을 항상 단일 파일 하나라고 가정
 
 **Configuration Snapshot File**:
@@ -41,11 +41,11 @@ _Avoid_: Snapshot을 항상 단일 파일 하나라고 가정
 _Avoid_: FileGateway가 생성하는 configuration backup, 생성 완료 후 내용이 바뀌는 snapshot 파일
 
 **Configuration Snapshot Timestamp (`snapshotTimestamp`)**:
-Configuration Snapshot Set이 생성된 논리 시각이다. 현재 운영 계획에서는 날짜 폴더에 대응하는 자정 시각이며, 파일명/경로 규칙에서 추출하고 FTP modified time과 동일시하지 않는다.
+Configuration Snapshot File이 속한 Snapshot Set의 논리 시각이다. 정의에 metadata rule이 없으면 물리 날짜 폴더에 대응하는 Site local 자정이고, rule이 있으면 파일명 규칙에서 추출한 시각이다. 추출된 timestamp의 Site local 날짜는 물리 날짜 슬롯과 일치해야 하며, FTP modified time과 동일시하지 않는다.
 _Avoid_: FTP modified time
 
 **History Completion Marker**:
-Configuration History 생산자가 Snapshot Set 복사 완료 후 생성하는 marker 파일이다. marker 이름/위치는 기준정보의 `historyRule`이 정의하며 FileGateway는 **존재 여부만 확인**하고 marker 내용은 읽거나 해석하지 않는다.
+Configuration History 생산자가 물리 batch(날짜 폴더 복사) 완료 후 생성하는 marker 파일이다. marker는 개별 Snapshot Set이 아니라 물리 batch의 완성을 표시하므로 한 batch에 여러 Snapshot Set이 포함될 수 있다. marker 이름/위치는 기준정보의 `historyRule`이 정의하며 FileGateway는 **존재 여부만 확인**하고 marker 내용은 읽거나 해석하지 않는다.
 _Avoid_: marker 내용을 업무 metadata로 해석, FileGateway가 marker를 생성
 
 **Logical Timestamp (`timestamp`)**:

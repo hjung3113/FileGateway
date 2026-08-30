@@ -16,7 +16,7 @@ FileGateway가 담당한다.
 - 기준정보를 이용한 물리 서버/경로 탐색
 - Configuration logical identity와 pagination 의미 관리
 - 논리 `fileId` 발급/해석
-- History 생산자가 제공한 완료 marker 존재 여부를 확인해 완료된 Snapshot Set만 조회 대상으로 삼기
+- History 생산자가 제공한 완료 marker 존재 여부를 확인해 완료된 물리 batch의 Snapshot File만 조회 대상으로 삼기
 
 FileGateway가 담당하지 않는다.
 
@@ -65,9 +65,16 @@ EquipmentConfigurationDefinition
 ```
 
 - `currentRule`: 현재 Configuration File 집합의 위치/후보 패턴을 해석하는 규칙
-- `historyRule`: 날짜별 히스토리 디렉터리/파일 패턴, `snapshotTimestamp`, Snapshot Set 완료 marker 이름/위치를 해석하는 규칙
+- `historyRule`: 날짜별 히스토리 디렉터리/파일 패턴, Snapshot File의 `snapshotTimestamp` 파생 규칙, 물리 batch 완료 marker 이름/위치를 해석하는 규칙
 
-`currentRule.pathTemplate`과 `historyRule.pathTemplate`은 `/`로 구분하는 상대 경로와 리터럴, `{yyyy}` `{MM}` `{dd}` `{HH}` 토큰을 사용한다. 토큰은 논리 슬롯의 Site local(`Asia/Seoul`) 구성요소로 치환하며 토큰 없는 고정 경로도 허용한다. `..`, rooted 경로, `:`는 금지한다.
+`currentRule.pathTemplate`과 `historyRule.pathTemplate`은 `/`로 구분하는 상대 경로다. 빈 세그먼트는 제거한 뒤 파싱한다. 각 세그먼트는 다음 두 종류다.
+
+- Template 세그먼트: 리터럴과 `{yyyy}` `{MM}` `{dd}` `{HH}` token을 사용하며 논리 슬롯의 Site local(`Asia/Seoul`) 구성요소로 치환한다. token 없는 고정 경로도 허용한다.
+- Regex 세그먼트: `regex:PATTERN` 접두사 뒤의 pattern으로 자식 디렉터리 이름을 매칭한다. pattern은 비어 있지 않고 `/`를 포함하지 않으며 `^...$` anchor가 필요하다.
+
+선두의 연속된 Template 세그먼트는 슬롯으로 확장한 **확정 prefix**가 되고, 뒤따르는 Regex 세그먼트마다 해당 prefix의 자식 디렉터리를 열거해 모든 매칭 경로로 fan-out한다. 이후 Template 세그먼트는 각 branch에 결합하며, 여러 leaf의 파일 결과는 하나의 결과 집합으로 합친다. Regex 세그먼트가 없으면 기존처럼 확정된 단일 경로만 조회한다. 비-regex 세그먼트에는 `..`, rooted 경로, `:`를 금지한다. 빈 세그먼트 제거는 기존 동작을 보존한다. `MarkerPathTemplate`은 확정된 Template 경로만 허용하고 Regex 세그먼트를 허용하지 않는다.
+
+`CurrentFileMatchMode`와 `HistoryFileMatchMode`는 `Literal | Glob | Regex`다. NULL/빈 값은 기존 의미인 `Glob`이며, `Literal`은 case-insensitive 전체 동등, `Glob`은 기존 glob, `Regex`는 파일명 전체 매칭이다. Regex pattern은 anchor와 컴파일 가능성을 검증한다.
 
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
@@ -78,18 +85,22 @@ MVP Windows/IIS FTP 환경에서는 Configuration `fileName` 비교를 case-inse
 이 규칙은 다음에 동일하게 적용한다.
 
 - Current/Snapshot 후보 파일명 matching
+- Configuration path의 directory segment matching
+- Configuration file `Regex` matching
+- Configuration metadata matching
 - Current logical identity의 `fileName`
 - Snapshot logical identity의 `fileName`
 - Current `fileName ASC` 정렬
 - History 동일 timestamp 내 `fileName ASC` 정렬과 cursor 비교
 
-대소문자만 다른 파일명은 같은 논리 파일명으로 취급한다. 향후 case-sensitive 저장소를 지원할 때 재검토한다.
+대소문자만 다른 파일명은 같은 논리 파일명으로 취급한다. 정규식은 .NET에서 `OrdinalIgnoreCase` 옵션이 없으므로 `IgnoreCase | CultureInvariant`를 표준 근사로 사용한다. PM1, Port3, Config 같은 ASCII 이름에서는 `OrdinalIgnoreCase`와 동등하다. 향후 case-sensitive 저장소를 지원할 때 fileName 계약과 함께 재검토한다.
 
 동일 탐색 결과에 `PM1.cfg`와 `pm1.cfg`처럼 case-insensitive 기준 동일한 서로 다른 원격 파일이 함께 발견되면 임의 dedupe하지 않고 `FileDefinitionConflict`로 처리한다.
 
 ## Current Configuration
 
 - 시간 필터와 무관하게 현재 파일 집합을 조회한다.
+- `CurrentFileMatchMode`는 `Literal | Glob | Regex`이며 NULL/빈 값은 `Glob`이다. Regex는 파일명 전체를 매칭한다.
 - 동일 `equipmentId + configurationType` 아래 현재 파일이 여러 개 존재할 수 있다.
 - 개별 파일을 `subtype`/`attributes`로 세분화하지 않는다.
 - Current 조회 응답은 개별 Current Configuration File들의 배열이다.
@@ -103,6 +114,8 @@ MVP Windows/IIS FTP 환경에서는 Configuration `fileName` 비교를 case-inse
 - Current File의 `fileId`는 특정 바이트 버전을 고정하지 않고 동일 논리 identity의 다운로드 시점 현재 내용을 가리킨다.
 - FileGateway는 Current 파일이 생산 중 어떤 방식으로 쓰이거나 교체되는지 판정·보정하지 않는다.
 - 과거 특정 버전이 필요하면 History의 개별 Snapshot File `fileId`를 사용한다.
+
+Current path에 날짜 token이 있으면 `CurrentResolver`는 `ResolveAsync` 시작 시 주입된 `TimeProvider`에서 Site local 현재 시각을 정확히 한 번 캡처해 모든 token을 같은 slot으로 확장한다. 목록 조회와 fileId 재해석은 각각의 resolve에서 독립적으로 캡처한다. Current에는 metadata rule을 두지 않는다. Current identity와 API 응답에는 timestamp가 없고, file match mode가 확장자와 무관한 파일명 선택을 담당하므로 History처럼 timestamp를 추출할 필요가 없다.
 
 Current용으로 계산된 디렉터리가 실제로 존재하지 않으면 정상적인 현재 파일 0개로 취급한다. 파일 서버 연결/인증/프로토콜 장애와 구분한다.
 
@@ -122,28 +135,46 @@ Current 조회와 같은 Resolver 규칙을 사용한다.
 
 ## Configuration Snapshot History
 
-- 별도 시스템이 자정에 날짜 폴더를 만들고 해당 시점의 Current Configuration Set을 그대로 복사한다.
+- 별도 시스템이 날짜 폴더를 만들고 해당 시점의 Current Configuration Set을 그대로 복사한다.
 - snapshot 생성 후에도 Current 원본 파일은 그대로 유지된다.
-- 한 날짜/시점의 복사 결과는 하나의 `Configuration Snapshot Set`이며 그 안에 PM1, PM2, PM3, PM4처럼 여러 파일이 존재할 수 있다.
-- 같은 Snapshot Set의 모든 파일은 동일한 `snapshotTimestamp`를 공유한다.
-- 현재 운영 계획에서 `snapshotTimestamp`는 해당 날짜의 Site local `00:00`이며 날짜 폴더/경로 규칙에서 해석한다.
-- History 생산자는 Snapshot Set 복사 완료 시 marker 파일을 생성한다.
+- **물리 batch**는 날짜 폴더와 그 복사 완료 marker가 이루는 단위다.
+- metadata rule이 없는 경우 물리 batch의 Snapshot File들은 동일한 `snapshotTimestamp`를 공유하며 해당 날짜의 Site local `00:00`으로 해석한다. metadata rule이 있으면 fileName에서 추출한 timestamp가 각 Snapshot File의 `snapshotTimestamp`가 된다.
+- 한 물리 batch에 여러 `Configuration Snapshot Set`이 있을 수 있다. Snapshot Set은 `snapshotTimestamp`만을 그룹핑 키로 하며, PM1, PM2, PM3, PM4처럼 여러 파일이 하나의 Set에 속할 수 있다.
+- History 생산자는 Snapshot Set별이 아니라 물리 batch(날짜 폴더 복사) 완료 시 marker 파일을 생성한다.
 - marker 파일명/위치는 `historyRule` 기준정보로 설정한다.
 - FileGateway는 marker 파일의 **존재 여부만 확인**하고 내용은 읽거나 해석하지 않는다.
-- marker가 존재하는 Snapshot Set만 조회 대상으로 삼고 복사 중인 부분 Snapshot Set은 노출하지 않는다.
+- marker가 존재하는 물리 batch의 Snapshot File만 조회 대상으로 삼고 복사 중인 batch는 노출하지 않는다. 한 물리 batch 안의 여러 Snapshot Set은 동일 marker로 함께 게이팅된다.
 - 완료 marker 자체는 Configuration File 결과에 포함하지 않는다.
 - 생성이 완료된 Snapshot File은 불변이다. 기존 파일을 수정하지 않고 다음 snapshot에서 새 파일로 반영한다.
 - FTP modified time을 snapshot 시각으로 사용하지 않는다.
 - timezone 없는 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 - 시간 범위는 `[from, to)` 규칙을 사용한다.
 - History 조회에서는 `from`과 `to`를 모두 필수로 요구한다. 전체 히스토리 또는 임의 기본 기간을 암묵적으로 조회하지 않는다.
-- `[from, to)` 경계는 `snapshotTimestamp`에 정확히 적용한다. `from`이 자정이 아니면 그날 Site local 자정에 생성된 Snapshot Set은 제외한다.
+- `[from, to)` 경계는 `snapshotTimestamp`에 정확히 적용한다. metadata rule이 있으면 추출된 timestamp 기준으로 필터링하고, 없으면 기존처럼 날짜 폴더의 Site local 자정 기준으로 적용한다. Rule이 없는 경우 `from`이 자정이 아니면 그날 자정에 생성된 Snapshot Set은 제외한다.
 - History 조회에는 설정 가능한 `Configurations.HistoryMaxQueryRange`를 적용하고 초과 요청은 `InvalidRequest`로 처리한다.
-- History API는 Snapshot Set을 별도 중첩 객체로 만들지 않고 개별 Snapshot File을 반환하며, 같은 시점의 파일들은 동일한 `snapshotTimestamp`로 구분할 수 있다.
+- History API는 Snapshot Set을 별도 중첩 객체로 만들지 않고 개별 Snapshot File을 반환하며, 같은 `snapshotTimestamp`의 파일들로 Set을 구분할 수 있다.
 - Snapshot File용 `fileId`는 `equipmentId + configurationType + snapshotTimestamp + fileName`의 논리 identity로 특정 파일 하나를 가리키며 `fileName`은 case-insensitive 비교한다.
+- Metadata rule이 있는 정의에서 추출 timestamp의 Site local 날짜가 물리 날짜 슬롯과 다르면 파일을 누락하지 않고 `FileDefinitionConflict`로 거부한다.
 - `subtype`/`attributes`는 MVP Configuration 모델에 두지 않는다.
 
 History 조회에서 계산된 날짜 디렉터리가 실제로 존재하지 않으면 해당 날짜의 정상 결과 0개로 취급한다. marker가 없거나 Snapshot File이 없는 상태도 파일 서버 장애와 구분한다.
+
+## 오류와 빈 결과
+
+| 상황 | 결과 |
+|---|---|
+| 계산된 상위/leaf 디렉터리 부재(`Exists=false`) | 해당 branch 또는 날짜의 정상 결과 0건 |
+| Regex 세그먼트에 매칭 자식 없음 | 정상 결과 0건 |
+| 파일 매칭 0건 | `200 OK`, `items=[]` |
+| 여러 leaf의 파일 결과 결합 | 모든 결과를 포함하며, Current 집합 내 또는 동일 `snapshotTimestamp` 내 case-insensitive 동일 fileName 충돌은 `FileDefinitionConflict` |
+| 후보의 metadata 매칭/추출 실패 | `FileDefinitionConflict` |
+| Regex runtime timeout | `FileDefinitionConflict` |
+| 물리 날짜 슬롯과 metadata 추출 timestamp의 Site local 날짜 불일치 | `FileDefinitionConflict` |
+| 연결/인증/프로토콜 장애 | `FileServerUnavailable`/`FileServerProtocolError` 등 파일 서버 오류 |
+| 무효 정의의 load/refresh | refresh 전체 거부(fail closed), LKG stale 유지 또는 최초면 `ReferenceDataUnavailable` |
+| Snapshot fileId 재해석 대상 부재(정확한 ts + ci 이름 일치 0건) | `FileNotFound` |
+
+정상적인 no-match/부재와 기준정보 품질 오류 및 파일 서버 장애를 같은 빈 결과로 뭉개지 않는다.
 
 ## 토큰 의미
 
@@ -162,7 +193,9 @@ Configurations는 Current/Snapshot `fileId`와 Configuration History pagination�
 - logical identity: `equipmentId + configurationType + snapshotTimestamp + fileName`
 - `fileName` 비교는 case-insensitive
 - 생성 완료된 불변 Snapshot File을 가리킴
-- 재해석 시 해당 Snapshot Set의 완료 marker 존재 여부를 다시 확인
+- 재해석 시 해당 물리 batch의 완료 marker 존재 여부를 다시 확인
+- 재해석 predicate는 `snapshotTimestamp` 정확 일치와 case-insensitive `fileName` 일치다. 이름만으로 선택하거나 다른 timestamp를 허용하지 않는다.
+- 물리 슬롯 날짜와 metadata 추출 timestamp의 Site local 날짜가 다르면 `FileDefinitionConflict`
 - marker가 사라졌으면 실제 Snapshot File이 남아 있어도 `FileNotFound`
 
 ### History continuationToken
