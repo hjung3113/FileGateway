@@ -61,7 +61,11 @@ builder.Services.AddSingleton<ITokenCodec, DataProtectionTokenCodec>();
 builder.Services.AddSingleton<FtpConcurrencyLimiter>();
 builder.Services.AddSingleton<FtpOptions>(sp => sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value.Ftp
     ?? throw new InvalidOperationException("Ftp options required"));
-builder.Services.AddSingleton<IFileAccess, FtpFileAccess>(); // 싱글톤 서비스에만 주입되어 사실상 단일 인스턴스 — FtpFileAccess는 상태 없이 안전
+builder.Services.AddSingleton<FtpFileAccess>();
+builder.Services.AddSingleton<LocalFileAccess>();
+builder.Services.AddSingleton<IFileAccess>(sp => new RoutingFileAccess( // 구체형 2개를 해석해 composite로 — 선언 타입 기준 해석의 순환 참조 방지
+    sp.GetRequiredService<LocalFileAccess>(),
+    sp.GetRequiredService<FtpFileAccess>())); // 상위 서비스는 이 등록만 바라봄; 구성원은 모두 stateless singleton이라 수명 조합 이슈 없음
 builder.Services.AddSingleton<IReferenceDataSource>(sp => new SpReferenceDataSource(
     builder.Configuration.GetConnectionString("ReferenceData")
     ?? throw new InvalidOperationException("ReferenceData connection string required")));

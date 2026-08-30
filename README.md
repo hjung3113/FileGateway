@@ -2,7 +2,7 @@
 
 분산 파일 서버에 이미 저장된 **설비 로그와 Configuration File**을 여러 애플리케이션/시스템에 조회·다운로드 형태로 제공하는 읽기 전용 File Gateway입니다.
 
-API 소비자는 실제 파일 서버 주소나 물리 경로를 알 필요 없이 `equipmentId`와 논리 조회 조건만 사용합니다. FileGateway는 MSSQL 기준정보를 통해 대상 서버와 파일 탐색 규칙을 해석하고 FTP/FTPS로 파일을 읽어 제공합니다.
+API 소비자는 실제 파일 서버 주소나 물리 경로를 알 필요 없이 `equipmentId`와 논리 조회 조건만 사용합니다. FileGateway는 MSSQL 기준정보를 통해 대상 서버와 파일 탐색 규칙을 해석하고 FTP/FTPS(또는 서버가 `localhost`로 등록된 경우 동일 머신 파일시스템 직접 접근)로 파일을 읽어 제공합니다.
 
 > 설비 직접 접속, 로그 수집/가공, Configuration History 생성·복사·보관은 별도 시스템 책임이며 FileGateway 범위가 아닙니다.
 
@@ -27,12 +27,12 @@ flowchart TB
         Logs["FileGateway.Logs<br/>로그 탐색 / 필터 / pagination"]
         Cfg["FileGateway.Configurations<br/>Current / History"]
         Core["FileGateway.Core<br/>IFileAccess 계약 · Token codec"]
-        Infra["FileGateway.Infrastructure<br/>기준정보 cache · FTP/FTPS Adapter"]
+        Infra["FileGateway.Infrastructure<br/>기준정보 cache · File Access(FTP/FTPS · localhost 로컬)"]
     end
 
     subgraph Backend["기준정보 & 파일 서버 (운영자 관리 영역)"]
         MSSQL[("MSSQL<br/>FileGateway_GetReferenceData")]
-        FS[("분산 파일 서버<br/>FTP / FTPS")]
+        FS[("파일 저장소<br/>FTP/FTPS 서버 · localhost 로컬 경로")]
     end
 
     WPF -- "HTTPS + X-Api-Key" --> API
@@ -44,7 +44,7 @@ flowchart TB
     Cfg --> Core
     Core --> Infra
     Infra -- "SP 호출" --> MSSQL
-    Infra -- "FTP/FTPS" --> FS
+    Infra -- "FTP/FTPS · localhost 직접 접근" --> FS
 ```
 
 - API 사용자는 `Gateway`/`Backend` 내부 구조를 몰라도 됩니다 — `equipmentId` + 논리 조건만으로 호출합니다.
@@ -56,7 +56,7 @@ flowchart TB
 
 - .NET 10 SDK (`global.json` 고정 버전 — `dotnet --version`으로 확인)
 - MSSQL 인스턴스 + `dbo.FileGateway_GetReferenceData` Stored Procedure(`db/mvp-stored-procedure.sql`, 테스트/개발용 스키마는 `db/mvp-schema.sql`)
-- FTP/FTPS로 접근 가능한 분산 파일 서버 및 해당 계정
+- FTP/FTPS로 접근 가능한 분산 파일 서버 및 해당 계정 — 개발/단일 머신 구성에서는 `Host`가 `localhost`인 서버를 기준정보에 등록하면 FTP 없이 로컬 파일시스템을 직접 읽습니다([`docs/03-server-access-core.md`](docs/03-server-access-core.md))
 - (통합 테스트 실행 시) Docker — Testcontainers가 MSSQL 컨테이너를 띄움
 
 ### 로컬 개발 실행
@@ -227,7 +227,7 @@ sequenceDiagram
     participant A as FileGateway.Api
     participant S as Logs/Configurations Service
     participant R as ReferenceData Cache
-    participant F as FTP/FTPS 파일서버
+    participant F as 파일 서버(FTP/FTPS 또는 localhost 로컬)
 
     C->>A: GET /api/v1/logs?equipmentId&logType&from&to (X-Api-Key)
     A->>A: ApiKey 인증
@@ -585,9 +585,9 @@ Console.WriteLine($"saved {fileName} ({fileStream.Length} bytes)");
 - `FileGateway.Logs`: 로그 탐색/필터/논리 identity/pagination 의미
 - `FileGateway.Configurations`: Current/History 탐색 및 Configuration identity
 - `FileGateway.Core`: 프로토콜 비종속 파일 I/O 계약과 공통 token codec 계약
-- `FileGateway.Infrastructure`: MSSQL, 기준정보 cache, FTP/FTPS, Secret/Key 공급
+- `FileGateway.Infrastructure`: MSSQL, 기준정보 cache, File Access(FTP/FTPS Adapter + localhost 로컬 접근), Secret/Key 공급
 
-MVP는 ASP.NET Core/.NET을 Windows Server + IIS에서 운영하며, 실제 파일 접근은 `IFileAccess` 뒤의 FTP/FTPS Adapter가 담당합니다.
+MVP는 ASP.NET Core/.NET을 Windows Server + IIS에서 운영하며, 실제 파일 접근은 `IFileAccess` 뒤의 FTP/FTPS Adapter가 담당합니다. 단, 기준정보에서 `Host`가 `localhost`로 등록된 서버는 FTP를 거치지 않고 `LocalFileAccess`가 동일 머신 파일시스템에서 직접 읽습니다(라우팅/검증 규칙: [`docs/03-server-access-core.md`](docs/03-server-access-core.md)).
 
 ## 주요 기술 선택
 
