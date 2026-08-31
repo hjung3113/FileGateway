@@ -272,12 +272,15 @@ flowchart TD
 - `subtype` / 동적 attributes 기반 로그 필터
 - Current Configuration File 집합 조회
 - Configuration Snapshot History 조회
+- 기준정보 기반 Configuration discovery — glob/literal/regex 파일명 모드, `regex:` 경로 세그먼트 fan-out, metadata 규칙 기반 `snapshotTimestamp` 추출(상세 스펙: [`docs/06-reference-data.md`](docs/06-reference-data.md) "FgConfigurationDefinition 조회 결과 상세 스펙")
 - 논리 `fileId` 기반 파일 metadata 조회 및 streaming download
 - 조건 기반 직접 다운로드
 - `limit + continuationToken` 기반 목록 pagination
 - DB 기준정보 기반 파일 종류/탐색 규칙 확장
 
 기존 계약으로 표현 가능한 새 `logType` 또는 `configurationType`은 DB 기준정보 추가만으로 확장하고, 파일 종류별 코드 분기를 늘리지 않는 것을 기본 원칙으로 합니다.
+
+Configuration 정의의 경로/파일명/규칙 작성 방법(상대경로 규칙, Template token, `regex:` 세그먼트, match mode 기본값, metadata JSON 형식)은 [`docs/06-reference-data.md`](docs/06-reference-data.md)의 상세 스펙을 기준으로 작성합니다.
 
 설비사나 설비 종류에 따라 제공 파일이 달라도 `equipmentId`별 기준정보 차이로 표현합니다.
 

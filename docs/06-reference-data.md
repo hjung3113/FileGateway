@@ -125,6 +125,58 @@ MVP Configuration 정의에는 `subtype`/동적 `attributes` 규칙을 추가하
 
 FTP 비밀번호 등 credential은 SP에서 반환하지 않는다.
 
+### `FgConfigurationDefinition` 조회 결과 상세 스펙
+
+SP `FileGateway_GetReferenceData`의 4번째 result set `ConfigurationDefinitions`는 위 순서 그대로 13개 컬럼을 반환한다. 이 절은 각 컬럼 값이 **정확히 어떻게 작성되고 해석되는지**의 상세 계약이다. SP는 NULL을 빈 문자열로 변환(`ISNULL(..., '')`)해 반환하며, 신규 5개 tail 컬럼의 NULL/빈 값은 모두 "기존(8컬럼 시대) 정의와 동일한 의미"로 해석된다.
+
+공통 규칙:
+
+- 모든 값은 앞뒤 공백이 제거되지 않은 채 전달된다. 경로는 파싱 시 세그먼트 단위로 `Trim`된다.
+- `EquipmentId + ConfigurationType`이 하나의 정의를 식별한다(PK). 대소문자 정책은 아래 컬럼 표 참조.
+- 경로 구분자는 `/` 뿐이다. `\`는 치환하지 않고 비-regex 세그먼트에서는 안전 위반으로 거부한다(regex 세그먼트의 `\d`, `\.` 등 .NET escape 보존).
+
+| 컬럼 | 상세 스펙 |
+|---|---|
+| `EquipmentId` | 논리 설비 식별자(nvarchar(64), NOT NULL). 표시명이 아닌 안정 식별자이며 배포 범위에서 유일. 다른 컬럼과 마찬가지로 Equipment 매핑 result set에 존재해야 하고, `ServerId`도 `Servers`에 존재해야 한다. 값 자체는 대소문자를 구분해 매칭한다(기준정보 내 Equipments 집합과의 정확한 일치). |
+| `ConfigurationType` | 업무 Configuration 종류(nvarchar(128), NOT NULL). `EquipmentId + ConfigurationType`이 정의의 PK다. API query 값과의 비교는 case-insensitive다. |
+| `CurrentPathTemplate` | Current 파일 집합 디렉터리. **`RootPath` 기준 상대경로**(선행 `/`·`\` 금지, `/` 세그먼트 구분, 드라이브/절대경로 표현 금지). 빈 세그먼트(`a//b`)와 앞뒤 공백은 제거한 뒤 파싱. 각 세그먼트는 (1) Template 세그먼트 = literal + 날짜 token `{yyyy}` `{MM}` `{dd}` `{HH}`(token 없는 고정 경로 허용) 또는 (2) `regex:PATTERN` 세그먼트. 비-regex 세그먼트는 `..`, `:`, `\`, rooted 표현 금지. `regex:`는 예약어 접두사다. Current는 날짜 token 의무 없음 — token이 있으면 resolve 시작 시 `TimeProvider`의 Site local 현재 시각으로 정확히 한 번 캡처해 모든 token을 같은 slot으로 확장한다. |
+| `CurrentFilePattern` | Current 후보 **파일명** 패턴(nvarchar(256)). 경로(`/`) 포함 금지 — 파일명만 매칭한다. 기본 해석은 glob(`*`, `?`, case-insensitive). `CurrentFileMatchMode`로 해석이 전환된다. |
+| `CurrentFileMatchMode` | `Literal \| Glob \| Regex`(nvarchar(16), 기본 `''`). **빈 값/NULL = `Glob`**(기존 정의 호환). `Literal` = case-insensitive 전체 동등(빈 값 금지, `/` 금지). `Regex` = 패턴이 `^...$` anchor 필수, 컴파일 가능해야 하며 파일명 전체 매칭(`\A(?:...)\z` wrap으로 부분 일치 불가), `IgnoreCase \| CultureInvariant` 비교, runtime timeout 250ms 초과 시 `FileDefinitionConflict`. |
+| `HistoryPathTemplate` | History 날짜별 디렉터리. 경로 규칙(상대경로, 빈 세그먼트 제거, Template/Regex 세그먼트, 비-regex 세그먼트 제약)은 `CurrentPathTemplate`과 동일. 단 **비-regex 세그먼트에 `{yyyy}` `{MM}` `{dd}`가 필수이고 `{HH}`는 금지**다(regex 세그먼트의 `{2}` 같은 수량자는 token 검사 대상이 아니다). Template token은 조회 슬롯 날짜의 Site local(`Asia/Seoul`) 구성요소로 확장한다. `regex:^PM[0-9]$` 같은 세그먼트가 있으면 서버가 해당 prefix의 자식 디렉터리를 열거해 매칭(fan-out)하고, 매칭 자식이 없으면 그 branch는 정상 결과 0건이다. |
+| `HistoryFilePattern` | Snapshot 후보 파일명 패턴(nvarchar(256)). 파일명만 매칭, `/` 금지. 기본 해석 glob(ci). `HistoryFileMatchMode`로 전환. |
+| `HistoryFileMatchMode` | `Literal \| Glob \| Regex`. 빈 값/NULL = `Glob`. 규칙은 `CurrentFileMatchMode`와 동일(ci Literal, anchored 전체 일치 Regex + 250ms timeout → `FileDefinitionConflict`). |
+| `HistoryMarkerPathTemplate` | 물리 batch 완료 marker의 확정 경로(nvarchar(512)). `RootPath` 기준 상대경로이며 **Template 세그먼트만 허용**(`regex:` 세그먼트 금지) — 존재 여부만 확인하는 확정 1개 경로다. 날짜 규칙은 HistoryPathTemplate와 동일하게 비-regex 세그먼트에 `{yyyy}{MM}{dd}` 필수, `{HH}` 금지. marker 내용은 읽지 않는다. |
+| `HistoryMetadataMode` | `'' \| Template \| Regex`(nvarchar(16), 기본 `''`). **빈 값 = metadata rule 없음** — 기존 동작대로 `snapshotTimestamp`가 해당 날짜 폴더의 Site local 자정(`00:00`)이 된다. `Template` = fileName의 첫 `.` 앞 stem에 매칭(확장자 독립). `Regex` = fileName 전체 매칭(anchor 필수). 둘 다 `IgnoreCase` 정책. |
+| `HistoryMetadataPattern` | mode별 문법(nvarchar(1024), 기본 `''`). `Template`: token `{yyyy}` `{MM}` `{dd}` 필수 + `{HH}` `{mm}` 선택, 그 외 `{...}` token 금지. 시/분 token은 범위 검사(`HH` 0–23, `mm` 0–59)를 통과해야 하고 없으면 `00`으로 해석한다. `Regex`: `^...$` anchor 필수, 컴파일 가능, timestamp 전체를 담는 단일 named group이 있어야 한다. |
+| `HistoryMetadataMappings` | Logs의 `MetadataMappings`와 동일한 JSON 배열 `[{"group":"...","target":"...","format":"..."}]`(nvarchar(max), 기본 `''` = 빈 매핑). Configuration에서는 `Regex` 모드일 때 **정확히 1개 mapping**만 허용하며 `target`은 `"timestamp"`만, `format`은 필수다. `format`은 `DateTime.TryParseExact`(InvariantCulture) 형식이고 문자 letter는 `y M d H m`만 허용되며 `y`, `M`, `d`는 필수다(offset/ampm/fraction 지정자 금지). `Template` 모드에서는 mappings가 반드시 비어 있어야 한다. 예: `[{"group":"ts","target":"timestamp","format":"yyyyMMddHHmm"}]` |
+
+#### snapshotTimestamp 파생 규칙
+
+- metadata rule이 없으면(`HistoryMetadataMode` 빈 값) 같은 물리 batch(날짜 폴더)의 모든 Snapshot File이 해당 날짜의 Site local `00:00`을 공유한다.
+- rule이 있으면 `HistoryFilePattern`을 통과한 후보의 fileName에서 timestamp를 추출한 값이 `snapshotTimestamp`다. Template은 stem 기반, Regex는 named group 값 전체를 format으로 해석하며, 해석된 값은 offset 지정 없이 Site local(`Asia/Seoul`)로 해석한다.
+- 후보가 rule에 매칭되지 않거나 timestamp 해석에 실패하면 누락시키지 않고 `FileDefinitionConflict`다. regex runtime timeout도 같은 오류로 변환된다.
+- **추출 timestamp의 Site local 날짜가 물리 날짜 폴더 슬롯과 일치하지 않으면 `FileDefinitionConflict`**다(예: `2026-08-29` 폴더 안 파일에서 `2026-08-28` timestamp 추출).
+
+#### 배포 순서 요약
+
+신규 컬럼/mode/regex 기준정보는 위 "Schema/SP 및 애플리케이션 배포 순서"의 3단계를 그대로 따른다: (1) schema 5컬럼 + 신규 SP 동시 배포(기존 row는 빈 값 유지 → 기존 의미), (2) 13컬럼 result set을 읽는 app 전 인스턴스 배포, (3) 신규 mode/`regex:`/metadata 값 활성화. 신규 app + 구 SP 조합은 최초 로딩에서 shape 오류로 즉시 실패한다(fail-closed).
+
+#### 예시 정의 rows
+
+등대 시나리오 — 물리 구조: `RootPath` 아래 `config/current/`, `config/history/{yyyy}{MM}{dd}/PM1/` 같은 자식 폴더, snapshot 파일명은 10자리 `yyyyMMddHH` 시각을 담는 `^\d{10}(\.txt)?\.gz$` 형태(예: `2026082910.txt.gz`)인 경우:
+
+| EquipmentId | ConfigurationType | ServerId | CurrentPathTemplate | CurrentFilePattern | HistoryPathTemplate | HistoryFilePattern | HistoryMarkerPathTemplate | CurrentFileMatchMode | HistoryFileMatchMode | HistoryMetadataMode | HistoryMetadataPattern | HistoryMetadataMappings |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| `EQ-LH-001` | `PM` | `srv-lh` | `config/current` | `PM*.cfg` | `config/history/{yyyy}{MM}{dd}` | `*` | `config/history/{yyyy}{MM}{dd}/DONE.marker` | `` | `` | `` | `` | `` |
+| `EQ-LH-002` | `PM` | `srv-lh` | `config/current` | `^PM[0-9]{1}\.cfg$` | `config/history/{yyyy}{MM}{dd}/regex:^PM[0-9]$` | `^\d{10}(\.txt)?\.gz$` | `config/history/{yyyy}{MM}{dd}/DONE.marker` | `Regex` | `Regex` | `Regex` | `^(?<ts>\d{10})(\.txt)?\.gz$` | `[{"group":"ts","target":"timestamp","format":"yyyyMMddHH"}]` |
+| `EQ-LH-003` | `Recipe` | `srv-lh` | `config/current` | `RECIPE` | `config/history/{yyyy}{MM}{dd}` | `RECIPE_*` | `config/history/{yyyy}{MM}{dd}/DONE.marker` | `Literal` | `` | `Template` | `RECIPE_{yyyy}{MM}{dd}` | `` |
+
+해석 예:
+
+- row 1: 전부 기본값 — `2026-08-29` 폴더의 파일들은 marker가 있으면 `snapshotTimestamp = 2026-08-29T00:00:00+09:00`로 조회된다.
+- row 2: History 경로가 날짜 폴더 + `PM0`~`PM9` 자식 디렉터리로 fan-out되고, 파일명 `2026082910.txt.gz`에서 named group `ts` 값 `2026082910`이 format `yyyyMMddHH`로 해석돼 `snapshotTimestamp = 2026-08-29T10:00:00+09:00`가 된다(자정 아님). 추출 날짜가 폴더 날짜와 다르면 `FileDefinitionConflict`.
+- row 3: Current는 `RECIPE`와 case-insensitive 전체 동등인 파일 1종. History는 `RECIPE_20260829.dat`, `RECIPE_20260829.txt.gz`처럼 확장자가 달라도 stem(`RECIPE_20260829`)이 Template에 매칭되고, `{HH}` `{mm}` 선택 token 부재로 자정 `00:00` snapshot이 된다.
+
 ## 설비별 제공 파일 종류 조회
 
 외부 `GET /api/v1/equipments/{equipmentId}/file-types`는 별도의 물리 파일 catalog를 만들지 않고 **검증 완료된 기준정보 snapshot에서 해당 설비의 정의를 투영**해 반환한다.
