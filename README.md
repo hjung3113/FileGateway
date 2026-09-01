@@ -344,7 +344,7 @@ curl -s "https://gateway.example/api/v1/logs?equipmentId=EQ-001&logType=EventLog
 }
 ```
 
-- `from`/`to` 생략 시 최근 24시간, `from`만 있으면 `[from, from+2일)`. `to`만 단독으로 주거나 `from >= to`이면 `400 InvalidRequest`.
+- `from`/`to` 생략 시 최근 2일, `from`만 있으면 `[from, from+2일)`. `to`만 단독으로 주거나 `from >= to`이면 `400 InvalidRequest`.
 - 다음 페이지: 같은 조회조건에 `continuationToken`만 추가(`limit`은 페이지마다 바꿔도 됨). **`continuationToken`을 유지한 채 `equipmentId`/`logType`/`from`/`to`/`subtype`/`attr.*` 등 결과 집합을 바꾸는 조건을 변경하면 `400 InvalidRequest`** — 조건을 바꾸려면 토큰 없이 첫 페이지부터 새로 조회합니다.
 - Continuous `logType`은 `from`/`to`를 주면 `400 InvalidRequest`.
 - 조회 범위가 `Logs.MaxQueryRange`(기본 31일)를 초과해도 `400 InvalidRequest`.

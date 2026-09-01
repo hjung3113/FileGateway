@@ -159,7 +159,7 @@ MVP에서 `(equipmentId, logType)`은 정확히 하나의 정의와 하나의 `d
 
 Hourly/Daily:
 
-- `from`,`to` 없음 → 최근 24시간
+- `from`,`to` 없음 → 최근 2일
 - `from`만 → `[from, from + 2일)`
 - `to`만 → `InvalidRequest`
 - 둘 다 → 지정 `[from,to)`
@@ -171,7 +171,7 @@ Continuous:
 
 - 현재 파일만 조회
 - `from` 또는 `to`가 있으면 `InvalidRequest`
-- 최근 24시간 기본값 적용 안 함
+- 최근 2일 기본값 적용 안 함
 - 명확한 논리 시간이 없으면 `timestamp=null`
 - 정렬 `fileName ASC`
 - cursor `fileName`

@@ -61,7 +61,7 @@ public sealed class LogQueryService(
         }
 
         var def = await FindDefinitionAsync(query.EquipmentId, query.LogType, ct);
-        // continuation은 첫 페이지의 effective range를 토큰에서 재사용한다(from/to==null 기본 24h의
+        // continuation은 첫 페이지의 effective range를 토큰에서 재사용한다(from/to==null 기본 2일의
         // 재계산 금지). 첫 페이지에서만 Normalize가 range를 결정하고 이후 페이지는 그 값을 고정한다.
         var range = cursor?.Range
             ?? EffectiveRangePlanner.Normalize(query, def.Definition.GenerationType, maxQueryRange, clock);

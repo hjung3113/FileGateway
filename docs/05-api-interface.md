@@ -104,7 +104,7 @@ GET /api/v1/logs
 
 `from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준 반개구간 `[from, to)`다. `from`은 포함하고 `to`는 제외한다.
 
-- `from`, `to` 모두 없음 → 최근 24시간
+- `from`, `to` 모두 없음 → 최근 2일
 - `from`만 있음 → `[from, from + 2일)`
 - `to`만 있음 → `InvalidRequest`
 - `from`, `to` 모두 있음 → 지정한 `[from, to)`
@@ -117,7 +117,7 @@ GET /api/v1/logs
 Continuous는 시간 범위를 사용하지 않고 현재 파일을 조회한다.
 
 - `from` 또는 `to`가 포함되면 `InvalidRequest`
-- Hourly/Daily의 최근 24시간 기본값을 적용하지 않음
+- Hourly/Daily의 최근 2일 기본값을 적용하지 않음
 - 명확한 논리 시각이 없으면 `timestamp=null`
 
 Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 현재 시각이나 FTP modified time으로 대체하지 않는다.

@@ -179,7 +179,7 @@ cursor의 `fileName` 비교도 case-insensitive다. `limit`은 페이지 크기�
 
 - 시간 범위 개념을 사용하지 않고 현재 존재 파일을 조회한다.
 - `from` 또는 `to`가 요청에 포함되면 `InvalidRequest`로 처리한다.
-- Hourly/Daily의 최근 24시간 기본값을 적용하지 않는다.
+- Hourly/Daily의 최근 2일 기본값을 적용하지 않는다.
 - 명확한 논리 시각이 없으면 `timestamp=null`이다.
 - 목록 정렬은 case-insensitive `fileName ASC`를 사용하고 pagination cursor는 `fileName`이다.
 - 다운로드 시작 직전 파일 크기를 확정하고 그 크기까지만 전송한다.
@@ -203,7 +203,7 @@ Hourly/Daily에서 `from`/`to`는 `timestamp` 기준 반개구간 `[from, to)`�
 
 Hourly/Daily 시간 범위 입력은 다음과 같이 해석한다.
 
-- `from`, `to` 모두 없음: 최근 24시간
+- `from`, `to` 모두 없음: 최근 2일
 - `from`만 있음: `[from, from + 2일)`
 - `to`만 있음: 지원하지 않으며 `InvalidRequest`
 - `from`, `to` 모두 있음: 지정한 `[from, to)`
