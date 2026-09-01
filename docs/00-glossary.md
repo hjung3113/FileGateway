@@ -89,7 +89,7 @@ key ring은 DataProtection가 관리하며 자동 rotation을 사용한다. 기�
 _Avoid_: 공통 token 계층에 Log/Configuration 업무 규칙을 넣는 것
 
 **Reference Data Snapshot**:
-Stored Procedure에서 읽어 전체 검증을 통과한 하나의 일관된 기준정보 집합이다. refresh 시 새 snapshot 전체 검증 성공 후 cache를 atomic 교체하며, 검증 실패 시 일부만 적용하지 않는다.
+Stored Procedure에서 읽어 필수 result set과 Equipment/Server 전역 식별자 검증을 통과하고, 개별 Log/Configuration 정의 검증을 거친 유효 정의만 담은 하나의 일관된 기준정보 집합이다. refresh 시 새 snapshot을 atomic 교체하며, 무효 정의는 새 snapshot에서 제외한다.
 _Avoid_: 검증되지 않은 일부 정의만 기존 cache와 혼합
 
 **Subtype (`subtype`)**:

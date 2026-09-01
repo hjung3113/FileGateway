@@ -1,9 +1,11 @@
 // src/FileGateway.Infrastructure/ReferenceData/ReferenceDataCache.cs
 using FileGateway.Core.Errors;
+using Microsoft.Extensions.Logging;
 
 namespace FileGateway.Infrastructure.ReferenceData;
 
-public sealed class ReferenceDataCache(IReferenceDataSource source, TimeSpan ttl) : IReferenceDataView
+public sealed class ReferenceDataCache(
+    IReferenceDataSource source, TimeSpan ttl, ILogger<ReferenceDataCache>? logger = null) : IReferenceDataView
 {
     private readonly object _gate = new();
     private Task<ReferenceDataSnapshot>? _inFlight;
@@ -82,7 +84,7 @@ public sealed class ReferenceDataCache(IReferenceDataSource source, TimeSpan ttl
             // background refresh의 ct는 호출자 요청 취소와 분리한다(CancellationToken.None) —
             // 취소된 요청이 cache 상태를 좌우하지 않게 한다.
             var raw = await source.ReadAsync(CancellationToken.None);
-            var snapshot = ReferenceDataSnapshotBuilder.Build(raw); // 검증 실패 → 새 스냅샷 전체 거부
+            var snapshot = ReferenceDataSnapshotBuilder.Build(raw, logger); // 전역 검증 실패 → 새 스냅샷 전체 거부
             lock (_gate)
             {
                 CurrentSnapshot = snapshot;   // atomic 참조 교체

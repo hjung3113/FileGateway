@@ -44,7 +44,7 @@ MVP Windows/IIS FTP 환경에서는 `fileName` 관련 비교를 case-insensitive
 GET /api/v1/equipments/{equipmentId}/file-types
 ```
 
-해당 설비에서 FileGateway를 통해 제공 가능한 파일 종류를 반환한다. 실제 FTP 파일/폴더를 스캔하는 API가 아니라 **MSSQL에서 읽어 검증 완료된 기준정보 snapshot**을 조회한다.
+해당 설비에서 FileGateway를 통해 제공 가능한 파일 종류를 반환한다. 실제 FTP 파일/폴더를 스캔하는 API가 아니라 **MSSQL에서 읽어 전역 계약을 통과하고 정의 단위 검증을 거친 기준정보 snapshot**을 조회한다.
 
 응답 예:
 
@@ -73,6 +73,7 @@ GET /api/v1/equipments/{equipmentId}/file-types
 
 - `equipmentId`가 존재하지 않으면 `404 EquipmentNotFound`
 - 유효한 설비지만 제공 정의가 없으면 `200 OK`와 빈 `logs`/`configurations` 배열
+- 정의 단위 검증에 실패한 Log/Configuration은 catalog에 포함하지 않으며, 해당 타입을 직접 조회하면 각각 `LogDefinitionNotFound`/`ConfigurationDefinitionNotFound`를 반환
 - Log는 `logType`과 해당 조회 의미를 알 수 있는 `generationType`만 노출
 - Configuration은 `configurationType`만 노출
 - `serverId`, host/rootPath, pathTemplate, filePattern, metadataRule, marker 등 내부 기준정보는 노출하지 않음

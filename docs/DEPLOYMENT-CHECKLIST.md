@@ -16,7 +16,7 @@
 | 4 | API Key 신/구 overlap 회전(두 key 동시 활성 → 구 key 폐기) | ☐ 통과 ☐ 차단 | |
 | 5 | MSSQL 연결(SP `FileGateway_GetReferenceData` 실행, 기준정보 로딩) | ☐ 통과 ☐ 차단 | |
 | 6 | 설비별 제공 파일 종류 API가 DB 기준정보와 일치, FTP 접근 없이 동작 | ☐ 통과 ☐ 차단 | |
-| 7 | 기준정보 구조 validation/atomic cache 교체/stale fallback/single-flight (잘못된 정의 1건 주입 → 전체 refresh 거부 확인) | ☐ 통과 ☐ 차단 | |
+| 7 | 기준정보 전역 구조 validation/atomic cache 교체/stale fallback/single-flight 및 개별 invalid 정의 격리(잘못된 정의 1건 주입 → 정상 정의 유지·invalid 정의 제외 확인) | ☐ 통과 ☐ 차단 | |
 | 8 | 기준정보 refresh가 FTP 실재 검사를 하지 않는지 확인(FTP 중단 상태에서 catalog 정상 응답) | ☐ 통과 ☐ 차단 | |
 | 9 | 각 파일 서버 21번 제어 연결(FTP 커맨드 포트) | ☐ 통과 ☐ 차단 | |
 | 10 | IIS FTP SSL 설정(FTP vs FTPS) 확인 및 `FileGateway:Ftp:Security` 값 확정 | ☐ 통과 ☐ 차단 | |
@@ -27,7 +27,7 @@
 | 15 | FTP 전체/서버별 동시성 제한(`MaxConcurrentGlobal`/`MaxConcurrentPerServer`, 동시 다운로드 부하 시도) | ☐ 통과 ☐ 차단 | |
 | 16 | Configuration History marker 존재 조건, Snapshot `fileId` 재검증(marker 삭제 → 404) | ☐ 통과 ☐ 차단 | |
 | 17 | DataProtection 키 재시작 내구성(IIS 재시작 후 기존 `fileId` 유효) + rotation 시 기존 `fileId` TTL 유지 | ☐ 통과 ☐ 차단 | |
-| 18 | rootPath 경계/traversal 차단(경계 위반 정의 주입 → refresh 거부) | ☐ 통과 ☐ 차단 | |
+| 18 | rootPath 경계/traversal 차단(경계 위반 정의 주입 → 해당 정의 격리, 정상 정의 유지) | ☐ 통과 ☐ 차단 | |
 | 19 | 로그/Secret에 민감정보 비노출(API Key/FTP credential/물리 경로 — 감사로그·응용로그 샘플 검토) | ☐ 통과 ☐ 차단 | |
 
 ## Step 2. MVP 완료 기준 최종 확인

@@ -20,6 +20,26 @@ public class CatalogEndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
             "PM/current", "PM_*.cfg", "PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg",
             "PM/history/{yyyy}/{MM}/{dd}/_DONE")]));
 
+    private static ReferenceDataSnapshot SnapshotWithQuarantinedDefinitions() => ReferenceDataSnapshotBuilder.Build(new(
+        ["EQ-001"],
+        [new RawServer("SRV1", "ftp1", "ftproot")],
+        [
+            new RawLogDefinition("EQ-001", "EventLog", "SRV1", "Hourly",
+                "Logs/{yyyy}/{MM}/{dd}/{HH}", "Event_*.zip", "Multiple", "Template",
+                "Logs/{yyyy}/{MM}/{dd}/{HH}/Event_{subtype}.zip", "[]"),
+            new RawLogDefinition("EQ-001", "BrokenLog", "SRV1", "Hourly",
+                "Logs/{yyyy}/{MM}/{dd}/{HH}", "Broken_*.zip", "Multiple", "Regex",
+                "Logs/(?<name>.*)", "[]")
+        ],
+        [
+            new RawConfigurationDefinition("EQ-001", "PM", "SRV1",
+                "PM/current", "PM_*.cfg", "PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg",
+                "PM/history/{yyyy}/{MM}/{dd}/_DONE"),
+            new RawConfigurationDefinition("EQ-001", "Broken", "SRV1",
+                "/unsafe/current", "Broken_*.cfg", "PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg",
+                "PM/history/{yyyy}/{MM}/{dd}/_DONE")
+        ]));
+
     private async Task<JsonElement> GetAsync(string path)
     {
         var client = factory.CreateClient(); // ApiFactory: FixedSnapshotView(Snapshot()) + key "test-key" 기본 헤더
@@ -63,5 +83,18 @@ public class CatalogEndpointTests(ApiFactory factory) : IClassFixture<ApiFactory
         var body = await GetAsync("/api/v1/equipments/EQ-EMPTY/file-types");
         Assert.Equal(0, body.GetProperty("logs").GetArrayLength());
         Assert.Equal(0, body.GetProperty("configurations").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Quarantined_definitions_are_not_exposed_in_catalog()
+    {
+        factory.SetSnapshot(SnapshotWithQuarantinedDefinitions());
+
+        var body = await GetAsync("/api/v1/equipments/EQ-001/file-types");
+
+        Assert.Equal(["EventLog"], body.GetProperty("logs").EnumerateArray()
+            .Select(item => item.GetProperty("logType").GetString()!).ToArray());
+        Assert.Equal(["PM"], body.GetProperty("configurations").EnumerateArray()
+            .Select(item => item.GetProperty("configurationType").GetString()!).ToArray());
     }
 }

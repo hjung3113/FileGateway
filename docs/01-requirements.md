@@ -137,9 +137,10 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - 파일 서버 접근: FTP/FTPS 가능 구조, 실제 IIS FTP SSL 설정은 배포 전 확인
 - 기준정보: MSSQL Stored Procedure
 - 기준정보 캐시: 프로세스 메모리
-- 새 기준정보는 전체 검증 성공 후 atomic cache 교체
-- 갱신/검증 실패 시 last-known-good cache가 있으면 전체를 계속 사용
-- 최초 로딩부터 usable 기준정보가 없으면 `ReferenceDataUnavailable`
+- 새 기준정보는 필수 result set과 Equipment/Server 전역 식별자 검증 후, 유효한 Log/Configuration 정의만 담아 atomic cache 교체
+- 개별 Log/Configuration 정의 validation 실패는 해당 정의만 제외하고 나머지 정상 정의는 새 snapshot에서 제공
+- DB/SP 조회, result set 또는 Equipment/Server 전역 식별자 검증 실패 시 last-known-good cache가 있으면 전체를 계속 사용
+- 최초 로딩부터 전역 검증을 통과한 usable 기준정보가 없으면 `ReferenceDataUnavailable`
 - 주요 파일 크기: 대부분 100MB 이하 기준
 - 규모: 파일 서버 수십~수백 대, 동시 다운로드 수십 건 수준 고려
 

@@ -30,6 +30,14 @@ public class ConfigurationEndpointTests : IClassFixture<ApiFactory>
             "PM/history/{yyyy}{MM}{dd}", "PM*.cfg",
             "PM/history/{yyyy}{MM}{dd}.marker")]));
 
+    private static ReferenceDataSnapshot SnapshotWithQuarantinedConfiguration() => ReferenceDataSnapshotBuilder.Build(new(
+        ["EQ-001"],
+        [new RawServer("SRV1", "ftp1", "ftproot")],
+        [],
+        [new RawConfigurationDefinition("EQ-001", "Broken", "SRV1",
+            "/unsafe/current", "Broken_*.cfg",
+            "PM/history/{yyyy}{MM}{dd}", "PM_*.cfg", "PM/history/{yyyy}{MM}{dd}.marker")]));
+
     private static void SeedFtp(FakeFileAccess ftp)
     {
         ftp.AddFile("PM/current/PM1.cfg", "pm1-current"u8.ToArray());
@@ -121,6 +129,20 @@ public class ConfigurationEndpointTests : IClassFixture<ApiFactory>
     public async Task Unknown_type_is_404_ConfigurationDefinitionNotFound()
         => Assert.Equal("ConfigurationDefinitionNotFound",
             (await GetError("/api/v1/configurations/current?equipmentId=EQ-001&configurationType=NOPE")).code);
+
+    [Fact]
+    public async Task Quarantined_configuration_definition_is_404_not_500()
+    {
+        using var factory = new ApiFactory();
+        factory.SetSnapshot(SnapshotWithQuarantinedConfiguration());
+
+        using var response = await factory.CreateClient()
+            .GetAsync("/api/v1/configurations/current?equipmentId=EQ-001&configurationType=Broken");
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(404, (int)response.StatusCode);
+        Assert.Equal("ConfigurationDefinitionNotFound", body.GetProperty("code").GetString());
+    }
 
     private async Task<JsonElement> GetJson(string path)
     {

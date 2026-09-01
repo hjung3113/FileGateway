@@ -71,7 +71,8 @@ builder.Services.AddSingleton<IReferenceDataSource>(sp => new SpReferenceDataSou
     ?? throw new InvalidOperationException("ReferenceData connection string required")));
 builder.Services.AddSingleton<IReferenceDataView>(sp => new ReferenceDataCache(
     sp.GetRequiredService<IReferenceDataSource>(),
-    sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value.ReferenceData.CacheTtl));
+    sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value.ReferenceData.CacheTtl,
+    sp.GetRequiredService<ILogger<ReferenceDataCache>>()));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ILogQueryService>(sp =>
 {
