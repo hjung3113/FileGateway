@@ -53,14 +53,19 @@ public class LogResolverTests
     }
 
     [Fact]
-    public async Task Metadata_parse_failure_is_definition_conflict()
+    public async Task File_pattern_matches_non_log_files_but_resolver_returns_parseable_files()
     {
-        // glob(Event_*.zip)은 대소문자 무시라 통과, 메타 템플릿 정규식은 대소문자 구분이라 파싱 실패
-        var ftp = new FakeFileAccess();
-        ftp.AddFile("Logs/2026/08/22/18/Event_A.ZIP", "x"u8.ToArray());
-        var ex = await Assert.ThrowsAsync<FileGatewayException>(() =>
-            new LogResolver(ftp).ResolveAsync(Def(), Range(2026, 8, 22, 18), CancellationToken.None));
-        Assert.Equal("FileDefinitionConflict", ex.Code);
+        var ftp = new ListingFileAccess(new RemoteDirectoryListing(true,
+        [
+            new RemoteFileEntry("Event_A.zip", 1),
+            new RemoteFileEntry("Event_backup.txt", 2),
+            new RemoteFileEntry("Event_old.gz", 3),
+        ]));
+        var files = await new LogResolver(ftp).ResolveAsync(
+            Def(filePattern: "Event_*"), Range(2026, 8, 22, 18), CancellationToken.None);
+
+        var file = Assert.Single(files);
+        Assert.Equal("Event_A.zip", file.Entry.Name);
     }
 
     [Fact]
@@ -125,6 +130,22 @@ public class LogResolverTests
         var ex = await Assert.ThrowsAsync<FileGatewayException>(() =>
             new LogResolver(ftp).ResolveAsync(Def(card: Cardinality.Single), Range(2026, 8, 22, 18), CancellationToken.None));
         Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
+    public async Task Single_cardinality_ignores_duplicate_files_outside_requested_range()
+    {
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/all/2026082217_Event_A.zip", "x"u8.ToArray());
+        ftp.AddFile("Logs/all/2026082217_Event_B.zip", "y"u8.ToArray());
+        ftp.AddFile("Logs/all/2026082218_Event_C.zip", "z"u8.ToArray());
+        var def = Def(GenerationType.Hourly, "Logs/all", "Logs/all/{yyyy}{MM}{dd}{HH}_Event_{subtype}.zip",
+            Cardinality.Single, "*_Event_*.zip");
+
+        var files = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+
+        var file = Assert.Single(files);
+        Assert.Equal("2026082218_Event_C.zip", file.Entry.Name);
     }
 
     [Fact]

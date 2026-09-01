@@ -65,7 +65,7 @@ MVP에서는 root부터 하위 전체를 훑는 무제한 recursive scan을 허�
 
 MetadataRule은 물리 FTP root를 제외한 **정규화된 논리 relative path + fileName**을 입력으로 사용한다. 경로 구분자는 플랫폼/FTP 표현과 무관하게 `/`로 통일한다. 단순한 결정적 레이아웃은 `Template`, 복잡한 예외는 `Regex` named group을 사용한다.
 
-후보 파일이 `filePattern`에 일치했지만 필수 metadata를 해석하지 못하면 누락시키지 않고 `FileDefinitionConflict`로 취급한다.
+후보 파일이 `filePattern`에 일치했지만 필수 metadata를 해석하지 못하면 해당 파일만 결과 후보에서 제외한다. Hourly/Daily는 요청 시간 범위 `[from,to)`로 후보를 먼저 제한한 뒤 범위 안의 파일에 대해서만 `cardinality=Single` 및 logical identity 충돌을 검증한다.
 
 `logType`은 업무적인 로그 종류이고 `generationType`은 파일 생성 주기/생명주기다. 두 값을 같은 분류로 취급하지 않는다.
 
@@ -308,7 +308,7 @@ SP 결과 전체에 대해 cache 교체 전에 **정의의 구조·문법·invar
 - 계산된 디렉터리가 존재하지 않음 → 해당 슬롯의 정상 결과 0개
 - `cardinality=Single`인데 하나의 논리 생성 슬롯에서 여러 파일 발견 → `FileDefinitionConflict`
 - case-insensitive 기준 동일 파일명이 둘 이상 발견 → `FileDefinitionConflict`
-- 후보 파일의 필수 metadata 해석 실패 → `FileDefinitionConflict`
+- `filePattern` 후보의 필수 metadata 해석 실패 → 해당 파일만 결과 후보에서 제외
 - Regex runtime timeout → `FileDefinitionConflict`
 - 물리 날짜 슬롯과 metadata 추출 timestamp의 Site local 날짜 불일치 → `FileDefinitionConflict`
 - 파일 서버 연결/인증/프로토콜 장애 → 파일 서버 오류

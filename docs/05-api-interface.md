@@ -171,7 +171,7 @@ Log continuation token은 서버에 이전 FTP 결과 전체를 저장하지 않
 - Continuous cursor: `fileName`
 - cursor의 `fileName` 비교는 case-insensitive
 
-탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
+탐색 규칙의 `filePattern`에 후보로 일치했지만 필수 metadata 규칙으로 해석하지 못한 파일은 해당 조회 후보에서 제외한다. Hourly/Daily의 logical identity/cardinality 충돌 검사는 요청 시간 범위 `[from,to)` 안에 남은 후보에만 적용한다.
 
 조건 기반 존재 여부 전용 HEAD endpoint는 추가하지 않는다. 조건 기반 존재 확인은 목록 조회를 사용하고, 특정 `fileId`의 현재 상태/존재 확인은 공통 `GET /api/v1/files?fileId=...`를 사용한다.
 
@@ -386,7 +386,7 @@ query parameter는 목록과 동일하게 해석한다. `limit`/`continuationTok
 - 1개 일치: 단일 파일 스트리밍 다운로드(`Content-Type: application/octet-stream`, open 시점 크기의 `Content-Length`, `Content-Disposition: attachment`)
 - 2개 이상 정상 파일이 사용자 조건에 일치: zip 스트리밍 다운로드(아래 계약)
 - 기준정보의 `cardinality=Single`인데 하나의 논리 생성 슬롯에서 실제 탐색 결과가 2개 이상: `FileDefinitionConflict` (500)
-- 후보 파일이 필수 metadata 규칙으로 해석되지 않음: `FileDefinitionConflict` (500)
+- `filePattern` 후보가 필수 metadata 규칙으로 해석되지 않음: 해당 파일만 결과 후보에서 제외
 
 `MultipleFilesMatched`는 이 endpoint에서 더 이상 반환되지 않는다. 오류 코드 자체는 Current Configuration 직접 다운로드가 계속 사용하므로 유지한다.
 

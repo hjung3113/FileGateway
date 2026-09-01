@@ -98,7 +98,7 @@ Logs/2026/08/22/18/Event_A.zip
 
 mapping target `attribute.<key>`와 API query prefix `attr.<name>`는 서로 다른 이름공간이며 서로 치환하지 않는다.
 
-`filePattern`에 후보로 일치한 파일이 필수 metadata를 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`로 처리한다. 정의가 예상한 파일을 해석하지 못한 상태를 정상 결과로 숨기지 않는다.
+`filePattern`에 후보로 일치한 파일이 필수 metadata를 해석하지 못하면 해당 파일만 후보에서 제외한다. Hourly/Daily는 metadata 해석에 성공한 후보를 요청 시간 범위 `[from,to)`로 먼저 제한한 뒤, 범위 안의 파일에 대해서만 logical identity/cardinality 충돌을 검사한다. 디렉터리 listing 자체의 I/O 오류는 전체 요청 실패로 상향한다.
 
 `timestamp`는 파일명/경로 규칙에서 추출한 **로그의 논리 시각**이다. FTP modified time이나 파일시스템 수정 시각과 동일한 개념으로 사용하지 않는다.
 

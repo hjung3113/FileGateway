@@ -7,7 +7,7 @@ namespace FileGateway.Logs.Internal;
 
 public sealed record ResolvedLogFile(ParsedMetadata Metadata, RemoteFileEntry Entry, string RelativePath);
 
-/// <summary>슬롯→디렉터리(중복 제거)→목록→glob→metadata→ci 중복 검사→cardinality→시간 필터→정렬.</summary>
+/// <summary>슬롯→디렉터리(중복 제거)→목록→glob→동일 디렉터리 파일명 중복→metadata→시간 필터→논리 중복→cardinality→정렬.</summary>
 public sealed class LogResolver(IFileAccess fileAccess)
 {
     public async Task<IReadOnlyList<ResolvedLogFile>> ResolveAsync(
@@ -43,16 +43,15 @@ public sealed class LogResolver(IFileAccess fileAccess)
                 var relativePath = dir + "/" + entry.Name;
                 var meta = MetadataRuleParser.Parse(d.MetadataRule, d.GenerationType, relativePath);
                 if (meta is null)
-                    throw new FileGatewayException("FileDefinitionConflict",
-                        $"file matched pattern but metadata unparseable: {relativePath}");
+                    continue;
                 files.Add(new(meta, entry, relativePath));
             }
         }
 
-        CheckCardinality(d, rule.Cardinality, files);
-
         if (d.GenerationType != GenerationType.Continuous)
             files = files.Where(f => f.Metadata.Timestamp >= range.From && f.Metadata.Timestamp < range.To).ToList();
+
+        CheckCardinality(d, rule.Cardinality, files);
 
         return d.GenerationType == GenerationType.Continuous
             ? files.OrderBy(f => f.Entry.Name, FileNameComparison.Comparer).ToList()
