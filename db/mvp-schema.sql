@@ -1,23 +1,24 @@
 -- db/mvp-schema.sql (테스트/개발용 계약 구현)
 CREATE TABLE dbo.FgEquipment (EquipmentId nvarchar(64) NOT NULL PRIMARY KEY);
 CREATE TABLE dbo.FgServer (ServerId nvarchar(64) NOT NULL PRIMARY KEY,
-    Host nvarchar(255) NOT NULL, RootPath nvarchar(512) NOT NULL);
+    Host nvarchar(255) NOT NULL, FileRootPath nvarchar(512) NOT NULL);
 CREATE TABLE dbo.FgLogDefinition (
     EquipmentId nvarchar(64) NOT NULL, LogType nvarchar(128) NOT NULL,
     ServerId nvarchar(64) NOT NULL, GenerationType nvarchar(16) NOT NULL,
-    PathTemplate nvarchar(512) NOT NULL, FilePattern nvarchar(256) NOT NULL,
-    Cardinality nvarchar(16) NOT NULL, MetadataMode nvarchar(16) NOT NULL,
-    MetadataPattern nvarchar(1024) NOT NULL, MetadataMappings nvarchar(max) NOT NULL DEFAULT '[]',
+    DirectoryTemplate nvarchar(512) NOT NULL, FileNamePattern nvarchar(256) NOT NULL,
+    SlotCardinality nvarchar(16) NOT NULL, MetadataParseMode nvarchar(16) NOT NULL,
+    RelativePathMetadataPattern nvarchar(1024) NOT NULL,
+    MetadataGroupMappings nvarchar(max) NOT NULL DEFAULT '[]',
     CONSTRAINT PK_FgLogDefinition PRIMARY KEY (EquipmentId, LogType));
 CREATE TABLE dbo.FgConfigurationDefinition (
     EquipmentId nvarchar(64) NOT NULL, ConfigurationType nvarchar(128) NOT NULL,
     ServerId nvarchar(64) NOT NULL,
-    CurrentPathTemplate nvarchar(512) NOT NULL, CurrentFilePattern nvarchar(256) NOT NULL,
-    HistoryPathTemplate nvarchar(512) NOT NULL, HistoryFilePattern nvarchar(256) NOT NULL,
-    HistoryMarkerPathTemplate nvarchar(512) NOT NULL,
-    CurrentFileMatchMode nvarchar(16) NOT NULL DEFAULT '',
-    HistoryFileMatchMode nvarchar(16) NOT NULL DEFAULT '',
-    HistoryMetadataMode nvarchar(16) NOT NULL DEFAULT '',
-    HistoryMetadataPattern nvarchar(1024) NOT NULL DEFAULT '',
-    HistoryMetadataMappings nvarchar(max) NOT NULL DEFAULT '',
+    CurrentDirectoryTemplate nvarchar(512) NOT NULL, CurrentFileNamePattern nvarchar(256) NOT NULL,
+    CurrentFileNameMatchMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryDirectoryTemplate nvarchar(512) NOT NULL, HistoryFileNamePattern nvarchar(256) NOT NULL,
+    HistoryFileNameMatchMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryCompletionMarkerPathTemplate nvarchar(512) NOT NULL,
+    HistoryTimestampParseMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryFileNameTimestampPattern nvarchar(1024) NOT NULL DEFAULT '',
+    HistoryTimestampMappings nvarchar(max) NOT NULL DEFAULT '',
     CONSTRAINT PK_FgConfigurationDefinition PRIMARY KEY (EquipmentId, ConfigurationType));

@@ -3,16 +3,18 @@ CREATE OR ALTER PROCEDURE dbo.FileGateway_GetReferenceData AS
 BEGIN
     SET NOCOUNT ON;
     SELECT EquipmentId FROM dbo.FgEquipment;
-    SELECT ServerId, Host, RootPath FROM dbo.FgServer;
-    SELECT EquipmentId, LogType, ServerId, GenerationType, PathTemplate, FilePattern,
-           Cardinality, MetadataMode, MetadataPattern, MetadataMappings
+    SELECT ServerId, Host, FileRootPath FROM dbo.FgServer;
+    SELECT EquipmentId, LogType, ServerId, GenerationType, DirectoryTemplate, FileNamePattern,
+           SlotCardinality, MetadataParseMode, RelativePathMetadataPattern, MetadataGroupMappings
     FROM dbo.FgLogDefinition;
-    SELECT EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, CurrentFilePattern,
-           HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate,
-           ISNULL(CurrentFileMatchMode, '') AS CurrentFileMatchMode,
-           ISNULL(HistoryFileMatchMode, '') AS HistoryFileMatchMode,
-           ISNULL(HistoryMetadataMode, '') AS HistoryMetadataMode,
-           ISNULL(HistoryMetadataPattern, '') AS HistoryMetadataPattern,
-           ISNULL(HistoryMetadataMappings, '') AS HistoryMetadataMappings
+    SELECT EquipmentId, ConfigurationType, ServerId,
+           CurrentDirectoryTemplate, CurrentFileNamePattern,
+           ISNULL(CurrentFileNameMatchMode, '') AS CurrentFileNameMatchMode,
+           HistoryDirectoryTemplate, HistoryFileNamePattern,
+           ISNULL(HistoryFileNameMatchMode, '') AS HistoryFileNameMatchMode,
+           HistoryCompletionMarkerPathTemplate,
+           ISNULL(HistoryTimestampParseMode, '') AS HistoryTimestampParseMode,
+           ISNULL(HistoryFileNameTimestampPattern, '') AS HistoryFileNameTimestampPattern,
+           ISNULL(HistoryTimestampMappings, '') AS HistoryTimestampMappings
     FROM dbo.FgConfigurationDefinition;
 END

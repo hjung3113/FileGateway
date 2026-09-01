@@ -56,6 +56,34 @@ public class ReferenceDataLoggingTests
     }
 
     [Fact]
+    public async Task Quarantine_reason_uses_current_sp_contract_column_names()
+    {
+        var raw = new ReferenceDataRaw(
+            ["EQ-LOG"],
+            [new RawServer("SRV1", "host", "root")],
+            [
+                new RawLogDefinition("EQ-LOG", "BrokenMetadataMode", "SRV1", "Hourly",
+                    "Logs/{yyyy}/{MM}/{dd}/{HH}", "*.log", "Multiple", "Bogus",
+                    "{yyyy}/{MM}/{dd}/{HH}/Event.log", "[]")
+            ],
+            []);
+
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            new StaticSource(raw),
+            TimeSpan.FromMinutes(15),
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        await cache.GetSnapshotAsync(CancellationToken.None);
+        var warnings = logs.Entries.Where(e => e.Level == LogLevel.Warning).ToList();
+
+        // 진단 문자열은 현재 SP 컬럼명(metadataParseMode)을 써야 한다 — 구 컬럼명(metadataMode)이 아니다.
+        Assert.Contains(warnings, e => e.Message.Contains("unsupported metadataParseMode", StringComparison.Ordinal));
+        Assert.DoesNotContain(warnings, e => e.Message.Contains("unsupported metadataMode:", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Global_failure_logs_no_quarantine_warnings_for_individual_definitions()
     {
         var raw = new ReferenceDataRaw(

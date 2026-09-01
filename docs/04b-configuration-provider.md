@@ -74,7 +74,7 @@ EquipmentConfigurationDefinition
 
 선두의 연속된 Template 세그먼트는 슬롯으로 확장한 **확정 prefix**가 되고, 뒤따르는 Regex 세그먼트마다 해당 prefix의 자식 디렉터리를 열거해 모든 매칭 경로로 fan-out한다. 이후 Template 세그먼트는 각 branch에 결합하며, 여러 leaf의 파일 결과는 하나의 결과 집합으로 합친다. Regex 세그먼트가 없으면 기존처럼 확정된 단일 경로만 조회한다. 비-regex 세그먼트에는 `..`, rooted 경로, `:`를 금지한다. 빈 세그먼트 제거는 기존 동작을 보존한다. `MarkerPathTemplate`은 확정된 Template 경로만 허용하고 Regex 세그먼트를 허용하지 않는다.
 
-`CurrentFileMatchMode`와 `HistoryFileMatchMode`는 `Literal | Glob | Regex`다. NULL/빈 값은 기존 의미인 `Glob`이며, `Literal`은 case-insensitive 전체 동등, `Glob`은 기존 glob, `Regex`는 파일명 전체 매칭이다. Regex pattern은 anchor와 컴파일 가능성을 검증한다.
+기준정보의 `CurrentFileNameMatchMode`와 `HistoryFileNameMatchMode`는 `Literal | Glob | Regex`다. NULL/빈 값은 기존 의미인 `Glob`이며, `Literal`은 case-insensitive 전체 동등, `Glob`은 기존 glob, `Regex`는 파일명 전체 매칭이다. Regex pattern은 anchor와 컴파일 가능성을 검증한다.
 
 Current와 History는 의미가 다르므로 하나의 범용 discovery rule로 합치지 않는다.
 
@@ -100,7 +100,7 @@ MVP Windows/IIS FTP 환경에서는 Configuration `fileName` 비교를 case-inse
 ## Current Configuration
 
 - 시간 필터와 무관하게 현재 파일 집합을 조회한다.
-- `CurrentFileMatchMode`는 `Literal | Glob | Regex`이며 NULL/빈 값은 `Glob`이다. Regex는 파일명 전체를 매칭한다.
+- `CurrentFileNameMatchMode`는 `Literal | Glob | Regex`이며 NULL/빈 값은 `Glob`이다. Regex는 파일명 전체를 매칭한다.
 - 동일 `equipmentId + configurationType` 아래 현재 파일이 여러 개 존재할 수 있다.
 - 개별 파일을 `subtype`/`attributes`로 세분화하지 않는다.
 - Current 조회 응답은 개별 Current Configuration File들의 배열이다.
