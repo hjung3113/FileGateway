@@ -74,6 +74,24 @@ public class LogQueryServiceTests
     }
 
     [Fact]
+    public async Task Default_range_limits_resolver_to_last_two_days()
+    {
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/all/2026082311_Event.zip", "new"u8.ToArray());
+        ftp.AddFile("Logs/all/2026082112_Event.zip", "lower-bound"u8.ToArray());
+        ftp.AddFile("Logs/all/2026082111_Event.zip", "too-old"u8.ToArray());
+        var now = new DateTimeOffset(2026, 8, 23, 3, 0, 0, TimeSpan.Zero); // 12:00 KST
+        var svc = Service(ftp, clock: new FixedTimeProvider(now));
+
+        var page = await svc.ListAsync(
+            new LogListQuery("EQ-001", "EventLog", null, null, null, NoAttrs, null, null),
+            CancellationToken.None);
+
+        Assert.Equal(["2026082311_Event.zip", "2026082112_Event.zip"],
+            page.Items.Select(item => item.FileName));
+    }
+
+    [Fact]
     public async Task Unknown_equipment_or_type_is_definition_not_found()
     {
         var svc = Service(new FakeFileAccess());
@@ -203,7 +221,7 @@ public class LogQueryServiceTests
     [Fact]
     public async Task Continuation_reuses_first_page_effective_range()
     {
-        // from/to==null 첫 페이지의 기본 24h 범위가 토큰에 고정되는지: 시계가 크게 진행한 뒤에도
+        // from/to==null 첫 페이지의 기본 2일 범위가 토큰에 고정되는지: 시계가 크게 진행한 뒤에도
         // 두 번째 페이지가 같은 파일 집합을 반환해야 한다(재계산이면 하한이 17시 파일을 밀어낸다).
         var ftp = new FakeFileAccess();
         ftp.AddFile("Logs/all/2026082218_Event.zip", "1"u8.ToArray());
@@ -218,9 +236,9 @@ public class LogQueryServiceTests
         var p1 = await At(now).ListAsync(q, CancellationToken.None);
         Assert.Equal("2026082218_Event.zip", Assert.Single(p1.Items).FileName);
 
-        // 17시(KST) 파일의 UTC 시각은 08:00Z — now+16h의 기본 하한(08-23 12:00Z - 24h = 08-22 12:00Z)보다 오래돼
+        // 17시(KST) 파일의 UTC 시각은 08:00Z — now+64h의 기본 하한(08-25 12:00Z - 2d = 08-23 12:00Z)보다 오래돼
         // 재계산 시 사라진다. 토큰 고정 range라면 그대로 반환된다.
-        var p2 = await At(now.AddHours(16)).ListAsync(q with { ContinuationToken = p1.ContinuationToken },
+        var p2 = await At(now.AddHours(64)).ListAsync(q with { ContinuationToken = p1.ContinuationToken },
             CancellationToken.None);
         Assert.Equal("2026082217_Event.zip", Assert.Single(p2.Items).FileName);
         Assert.Null(p2.ContinuationToken);

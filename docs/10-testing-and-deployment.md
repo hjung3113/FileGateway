@@ -17,14 +17,14 @@
 - 여러 논리 시간 슬롯이 동일 디렉터리를 계산하는 구조 허용 및 동일 디렉터리 중복 탐색 제거
 - 한 디렉터리 안의 여러 시간대 파일을 MetadataRule로 구분해 범위 필터 적용
 - Hourly/Daily 로그 시간 범위 규칙
-  - `from`/`to` 없음 → 최근 24시간
+  - `from`/`to` 없음 → 최근 2일
   - `from`만 있음 → `[from, from + 2일)`
   - `to`만 있음 → `InvalidRequest`
   - `from`/`to` 모두 있음 → 지정 범위
   - `Logs.MaxQueryRange` 초과 → `InvalidRequest`
   - `Logs.MaxQueryRange`가 2일 미만이면 설정 검증 실패
 - Continuous에 `from` 또는 `to`가 들어오면 `InvalidRequest`
-- Continuous에는 최근 24시간 기본 범위를 적용하지 않음
+- Continuous에는 최근 2일 기본 범위를 적용하지 않음
 - Daily timestamp의 Site local `00:00` 처리
 - Continuous timestamp가 없는 경우 `null` 처리
 - Hourly/Daily 정렬 `timestamp DESC + fileName ASC`

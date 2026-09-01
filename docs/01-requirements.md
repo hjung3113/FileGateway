@@ -78,7 +78,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 
 - 시간 범위를 사용하지 않고 현재 파일을 조회
 - `from` 또는 `to`가 들어오면 `InvalidRequest`
-- Hourly/Daily의 최근 24시간 기본값을 적용하지 않음
+- Hourly/Daily의 최근 2일 기본값을 적용하지 않음
 - 다운로드 시작 시점의 파일 크기까지만 전송
 
 ## 6. Configuration File
@@ -103,7 +103,7 @@ MVP 제공 대상은 **설비 로그와 Configuration File**이다. `Configurati
 - timezone 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다.
 - API에서는 UTC offset이 포함된 ISO-8601 값으로 표현한다.
 - Hourly/Daily의 `from`/`to`는 `[from, to)`로 해석해 `from`은 포함하고 `to`는 제외한다.
-- Hourly/Daily에서 `from`/`to`가 모두 없으면 최근 24시간을 조회한다.
+- Hourly/Daily에서 `from`/`to`가 모두 없으면 최근 2일을 조회한다.
 - Hourly/Daily에서 `from`만 있으면 `[from, from + 2일)`을 조회한다.
 - Hourly/Daily에서 `to`만 있는 형태는 지원하지 않고 `InvalidRequest`로 처리한다.
 - Hourly/Daily에서 `from`/`to`가 모두 있으면 지정한 `[from, to)`를 조회한다.

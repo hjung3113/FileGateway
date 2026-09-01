@@ -77,7 +77,7 @@ public class LogCursorTests
     [Fact]
     public void Decode_round_trips_effective_range()
     {
-        // from/to==null 첫 페이지의 effective range(기본 24h)가 토큰에 그대로 담겨야 한다
+        // from/to==null 첫 페이지의 effective range(기본 2일)가 토큰에 그대로 담겨야 한다
         var q = new LogListQuery("EQ-1", "Event", null, null, null, NoAttrs, 50, null);
         var range = new EffectiveRange(
             DateTimeOffset.Parse("2026-08-21T20:00:00Z", CultureInfo.InvariantCulture),

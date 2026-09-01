@@ -1397,7 +1397,7 @@
           mode: "json",
           form: "logs",
           inputGroup: "logs",
-          note: "Hourly/Daily use from and to; Continuous logs reject time filters."
+          note: "Hourly/Daily default to the recent 2 days when from and to are both blank; Continuous logs reject time filters."
         },
         {
           id: "logs-download",
@@ -1811,8 +1811,18 @@
           fields.append(
             createField(operation, { name: "equipmentId", label: "Equipment ID", required: true, placeholder: "EQ-001" }),
             createField(operation, { name: "logType", label: "logType", required: true, placeholder: "EventLog" }),
-            createField(operation, { name: "from", label: "from", placeholder: "2026-08-28T00:00:00+09:00" }),
-            createField(operation, { name: "to", label: "to", placeholder: "2026-08-29T00:00:00+09:00" }),
+            createField(operation, {
+              name: "from",
+              label: "from",
+              placeholder: "2026-08-28T00:00:00+09:00",
+              hint: "For Hourly/Daily, leave both from and to blank for the recent 2 days; Continuous rejects time filters."
+            }),
+            createField(operation, {
+              name: "to",
+              label: "to",
+              placeholder: "2026-08-29T00:00:00+09:00",
+              hint: "For Hourly/Daily, leave both from and to blank for the recent 2 days; Continuous rejects time filters."
+            }),
             createField(operation, { name: "subtype", label: "subtype" }),
             createField(operation, { name: "limit", label: "limit", inputmode: "numeric", placeholder: "50" })
           );

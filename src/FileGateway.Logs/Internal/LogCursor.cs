@@ -37,7 +37,7 @@ public static class LogCursor
             ["bind"] = Canonical(q),
             ["lastTs"] = lastTimestamp?.ToString("O", CultureInfo.InvariantCulture) ?? "",
             ["lastName"] = lastFileName ?? "",
-            // 첫 페이지의 effective range를 고정: from/to==null 기본 24h가 이후 페이지에서
+            // 첫 페이지의 effective range를 고정: from/to==null 기본 2일이 이후 페이지에서
             // 진행된 시계로 재계산되어 하한이 파일을 지나쳐 사라지는 일을 막는다.
             ["efFrom"] = effectiveRange.From.ToString("O", CultureInfo.InvariantCulture),
             ["efTo"] = effectiveRange.To.ToString("O", CultureInfo.InvariantCulture),

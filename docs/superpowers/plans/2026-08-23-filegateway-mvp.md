@@ -45,8 +45,8 @@
 모든 Task의 요구사항에 암묵적으로 포함된다. 출처는 통합 Spec/역할별 문서.
 
 - 파일명 비교는 case-insensitive, 원본 casing은 응답에 보존. `subtype`/`attributes` 비교는 case-sensitive.
-- 시간 범위는 반개구간 `[from, to)`. `from >= to` → `InvalidRequest`. `to` 단독 → `InvalidRequest`. `from` 단독 → `[from, from+2일)`. 둘 다 없음 → 최근 24시간. `Logs.MaxQueryRange` ≥ 2일(시작 시 검증), 초과 → `InvalidRequest`.
-- Continuous는 `from`/`to` 입력 시 `InvalidRequest`, 최근 24시간 기본값 미적용, `timestamp` 없으면 `null`.
+- 시간 범위는 반개구간 `[from, to)`. `from >= to` → `InvalidRequest`. `to` 단독 → `InvalidRequest`. `from` 단독 → `[from, from+2일)`. 둘 다 없음 → 최근 2일. `Logs.MaxQueryRange` ≥ 2일(시작 시 검증), 초과 → `InvalidRequest`.
+- Continuous는 `from`/`to` 입력 시 `InvalidRequest`, 최근 2일 기본값 미적용, `timestamp` 없으면 `null`.
 - Configuration History는 `from`/`to` 모두 필수, `Configurations.HistoryMaxQueryRange` 초과 → `InvalidRequest`, Current를 포함하지 않는다.
 - 정렬: Hourly/Daily `timestamp DESC` + case-insensitive `fileName ASC`. Continuous `fileName ASC`. Current `fileName ASC`. History `snapshotTimestamp DESC` + `fileName ASC`.
 - pagination은 `limit + opaque stateless continuationToken`. `limit`은 결과집합 조건이 아니라 페이지 크기(페이지마다 변경 허용). 토큰 유지 중 결과집합 조건 변경 → `InvalidRequest`. continuation token 오류(만료/변조/형식)는 전부 `400 InvalidRequest`(410 없음).
@@ -2292,8 +2292,8 @@ public class EffectiveRangeTests
     private static LogListQuery Q(DateTimeOffset? from = null, DateTimeOffset? to = null)
         => new("EQ-001", "EventLog", from, to, null, [], null, null);
 
-    [Fact] public void No_bounds_defaults_to_last_24h()
-        => Assert.Equal(TimeSpan.FromHours(24),
+    [Fact] public void No_bounds_defaults_to_last_two_days()
+        => Assert.Equal(TimeSpan.FromDays(2),
              EffectiveRangePlanner.Normalize(Q(), GenerationType.Hourly, Max).To
                - EffectiveRangePlanner.Normalize(Q(), GenerationType.Hourly, Max).From);
 
@@ -2490,7 +2490,7 @@ public static class EffectiveRangePlanner
         if (q.To is not null && q.From >= q.To)
             throw new FileGatewayException("InvalidRequest", "from must be before to");
 
-        var from = q.From ?? DateTimeOffset.UtcNow.AddHours(-24);
+        var from = q.From ?? DateTimeOffset.UtcNow.AddDays(-2);
         var to = q.To ?? (q.From is not null ? q.From.Value.AddDays(2) : DateTimeOffset.UtcNow);
         if (to - from > maxRange)
             throw new FileGatewayException("InvalidRequest", $"query range exceeds limit ({maxRange})");
