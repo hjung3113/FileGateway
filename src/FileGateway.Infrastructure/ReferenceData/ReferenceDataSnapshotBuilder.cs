@@ -94,13 +94,13 @@ public static class ReferenceDataSnapshotBuilder
             }
             if (!TryParseEnum<MetadataMode>(row.MetadataParseMode, out var metadataMode))
             {
-                errors.Add(prefix + $"unsupported metadataMode: {row.MetadataParseMode}");
+                errors.Add(prefix + $"unsupported metadataParseMode: {row.MetadataParseMode}");
                 LogInvalidDefinition(logger, "log", i, row.EquipmentId, row.LogType, errors, sensitive);
                 continue;
             }
             if (!TryDeserializeMappings(row.MetadataGroupMappingsJson, out var mappings))
             {
-                errors.Add(prefix + "invalid metadataMappings JSON");
+                errors.Add(prefix + "invalid metadataGroupMappings JSON");
                 LogInvalidDefinition(logger, "log", i, row.EquipmentId, row.LogType, errors, sensitive);
                 continue;
             }
@@ -199,19 +199,19 @@ public static class ReferenceDataSnapshotBuilder
         {
             if (!string.IsNullOrWhiteSpace(row.HistoryFileNameTimestampPattern) ||
                 !string.IsNullOrWhiteSpace(row.HistoryTimestampMappings))
-                errors.Add(prefix + "metadata pattern/mappings require historyMetadataMode");
+                errors.Add(prefix + "metadata pattern/mappings require historyTimestampParseMode");
             return string.IsNullOrWhiteSpace(row.HistoryFileNameTimestampPattern) &&
                 string.IsNullOrWhiteSpace(row.HistoryTimestampMappings);
         }
 
         if (!TryParseEnum<ConfigurationMetadataMode>(row.HistoryTimestampParseMode, out var mode))
         {
-            errors.Add(prefix + $"unsupported historyMetadataMode: {row.HistoryTimestampParseMode}");
+            errors.Add(prefix + $"unsupported historyTimestampParseMode: {row.HistoryTimestampParseMode}");
             return false;
         }
         if (!TryDeserializeConfigurationMappings(row.HistoryTimestampMappings, out var mappings))
         {
-            errors.Add(prefix + "invalid historyMetadataMappings JSON");
+            errors.Add(prefix + "invalid historyTimestampMappings JSON");
             return false;
         }
 
