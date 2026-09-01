@@ -7,7 +7,7 @@ namespace FileGateway.Logs.Internal;
 
 public sealed record ResolvedLogFile(ParsedMetadata Metadata, RemoteFileEntry Entry, string RelativePath);
 
-/// <summary>슬롯→디렉터리(중복 제거)→목록→glob→동일 디렉터리 파일명 중복→metadata→시간 필터→논리 중복→cardinality→정렬.</summary>
+/// <summary>슬롯→디렉터리(중복 제거)→목록→glob→metadata→시간 필터→동일 디렉터리 파일명 중복→논리 중복→cardinality→정렬.</summary>
 public sealed class LogResolver(IFileAccess fileAccess)
 {
     public async Task<IReadOnlyList<ResolvedLogFile>> ResolveAsync(
@@ -30,26 +30,34 @@ public sealed class LogResolver(IFileAccess fileAccess)
             var listing = await fileAccess.ListFilesAsync(def.Server, dir, ct); // I/O 오류는 그대로 상향(전체 실패)
             if (!listing.Exists) continue;                                      // 디렉터리 부재 = 정상 0개
 
-            // 중복 판정은 "동일 탐색 결과(동일 디렉터리)" 기준이다(문서: 동일 탐색 범위의 case-insensitive 동일 파일명).
-            // 서로 다른 디렉터리의 같은 basename은 논리 timestamp가 다른 한 별개 파일이다 —
-            // (timestamp, fileName) 전역 유일성은 아래 SortAndCheckIdentity에서 강제한다.
-            var seenNames = new HashSet<string>(FileNameComparison.Comparer);
+            // glob 매칭 + metadata 파싱 + 시간범위 필터를 먼저 끝낸 뒤에만 이름 중복을 검사한다 —
+            // 요청 범위 밖의 파일(예: 다른 슬롯의 case-only 동명 파일)이 정상 범위 조회를 충돌로 오판하면 안 된다.
+            var candidates = new List<ResolvedLogFile>();
             foreach (var entry in listing.Files)
             {
                 if (!glob.Matches(entry.Name)) continue;
-                if (!seenNames.Add(entry.Name))
-                    throw new FileGatewayException("FileDefinitionConflict",
-                        $"case-insensitive duplicate file name in {dir}: {entry.Name}");
                 var relativePath = dir + "/" + entry.Name;
                 var meta = MetadataRuleParser.Parse(d.MetadataRule, d.GenerationType, relativePath);
                 if (meta is null)
                     continue;
-                files.Add(new(meta, entry, relativePath));
+                candidates.Add(new(meta, entry, relativePath));
+            }
+
+            if (d.GenerationType != GenerationType.Continuous)
+                candidates = candidates.Where(f => f.Metadata.Timestamp >= range.From && f.Metadata.Timestamp < range.To).ToList();
+
+            // 중복 판정은 "동일 탐색 결과(동일 디렉터리)" 기준이다(문서: 동일 탐색 범위의 case-insensitive 동일 파일명).
+            // 서로 다른 디렉터리의 같은 basename은 논리 timestamp가 다른 한 별개 파일이다 —
+            // (timestamp, fileName) 전역 유일성은 아래 SortAndCheckIdentity에서 강제한다.
+            var seenNames = new HashSet<string>(FileNameComparison.Comparer);
+            foreach (var candidate in candidates)
+            {
+                if (!seenNames.Add(candidate.Entry.Name))
+                    throw new FileGatewayException("FileDefinitionConflict",
+                        $"case-insensitive duplicate file name in {dir}: {candidate.Entry.Name}");
+                files.Add(candidate);
             }
         }
-
-        if (d.GenerationType != GenerationType.Continuous)
-            files = files.Where(f => f.Metadata.Timestamp >= range.From && f.Metadata.Timestamp < range.To).ToList();
 
         CheckCardinality(d, rule.Cardinality, files);
 

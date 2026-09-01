@@ -71,11 +71,13 @@ public class LogResolverTests
     [Fact]
     public async Task Case_insensitive_duplicate_names_are_conflict()
     {
-        // FakeFileAccess는 경로 키가 대소문자 무시라 이 시나리오를 담을 수 없다 → 고정 listing stub 사용
+        // FakeFileAccess는 경로 키가 대소문자 무시라 이 시나리오를 담을 수 없다 → 고정 listing stub 사용.
+        // Template 리터럴("Event_"/".zip")은 대소문자를 구분하므로, 두 파일 모두 metadata가 파싱되면서도
+        // 이름만 case-only로 다르도록 {subtype} 캡처 문자만 대소문자를 바꾼다.
         var ftp = new ListingFileAccess(new RemoteDirectoryListing(true,
         [
             new RemoteFileEntry("Event_A.zip", 1),
-            new RemoteFileEntry("event_a.ZIP", 2),
+            new RemoteFileEntry("Event_a.zip", 2),
         ]));
         var ex = await Assert.ThrowsAsync<FileGatewayException>(() =>
             new LogResolver(ftp).ResolveAsync(Def(), Range(2026, 8, 22, 18), CancellationToken.None));
@@ -119,6 +121,27 @@ public class LogResolverTests
         var ex = await Assert.ThrowsAsync<FileGatewayException>(() =>
             new LogResolver(ftp).ResolveAsync(def, range, CancellationToken.None));
         Assert.Equal("FileDefinitionConflict", ex.Code);
+    }
+
+    [Fact]
+    public async Task Case_insensitive_duplicate_names_outside_requested_range_are_not_conflict()
+    {
+        // flat 디렉터리에 여러 슬롯이 모인다 — 17시 case-only 중복 파일이 있어도 18시 조회는
+        // 시간범위 필터 후에만 이름 중복을 검사하므로 그 중복과 무관하게 정상 결과를 반환해야 한다.
+        // FakeFileAccess는 경로 키가 대소문자 무시라 이 시나리오를 담을 수 없다 → 고정 listing stub 사용
+        var ftp = new ListingFileAccess(new RemoteDirectoryListing(true,
+        [
+            new RemoteFileEntry("2026082217_Event_A.zip", 1),
+            new RemoteFileEntry("2026082217_event_a.zip", 2), // 17시 case-only 중복
+            new RemoteFileEntry("2026082218_Event_C.zip", 3),
+        ]));
+        var def = Def(GenerationType.Hourly, "Logs/all", "Logs/all/{yyyy}{MM}{dd}{HH}_Event_{subtype}.zip",
+            filePattern: "*_Event_*.zip");
+
+        var files = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+
+        var file = Assert.Single(files);
+        Assert.Equal("2026082218_Event_C.zip", file.Entry.Name);
     }
 
     [Fact]
