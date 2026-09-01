@@ -121,3 +121,8 @@ Impeccable frontend design/audit skill은 각 에이전트 runtime에 프로젝�
 **프로젝트 규칙 우선순위:** vendored skill의 기본 문서 구조보다 이 `AGENTS.md`와 `docs/INDEX.md`가 우선합니다. 특히 `domain-modeling`이 제안하는 루트 `CONTEXT.md`/`docs/adr/` 자동 생성은 FileGateway에서 기본 동작으로 채택하지 않습니다. 기존 역할별 설계 문서에 먼저 반영하고, 새 문서가 정말 필요할 때만 생성한 뒤 `docs/INDEX.md`에 등록합니다.
 
 출처, 기준 커밋, 포함/제외 범위는 `.mattpocock/UPSTREAM.md`를 참조합니다.
+
+### Slice Orchestration
+
+이슈 단위 구현(계획 → 워크트리 디스패치 → 독립 검증 → 리뷰 → PR)을 오케스트레이션할 때 사용하는 절차는
+`.claude/skills/slice-orchestration/SKILL.md`를 따릅니다.

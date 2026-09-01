@@ -2,17 +2,91 @@
 
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
-## 2026-08-28 세션 상태 (다음 세션이 여기부터 이어감)
 
-Task 0~20(자동화 구현) 완료 후, MVP 범위 밖 부가 작업 진행 중. **Task 21(수동 배포 검증)은 아직 미착수 — 여전히 유일한 MVP 완료 조건.**
+## 2026-09-01 세션 상태 #6 — 브랜치 정리 + Issue #26~32 클러스터 착수 (최신)
 
-- **merge 완료(main)**: PR #9(배포 체크리스트/API 매뉴얼), PR #10·#11(Python/C# 클라이언트 샘플 최초분 + fileId query param 이동), PR #14(`samples/` 8개 유즈케이스별 Python/C# 샘플 재작성 — `93e716e`/`3399e2b`). 클라이언트 샘플 코드는 omp(glm-5.3-high) 리뷰 반영 완료 상태로 merge됨.
-- **main에 uncommitted 상태로 남아있는 작업 (커밋 안 됨, 다음 세션이 이어받을 것)**:
-  - `src/FileGateway.Api/Program.cs`, `FileGateway.Api.csproj`: Development 전용 Scalar UI(`/scalar/v1`, `/openapi/v1.json`) + 커스텀 웹 API 테스터(`/tester`) 추가. `Microsoft.AspNetCore.OpenApi`, `Scalar.AspNetCore` 패키지 참조 추가됨.
-  - `src/FileGateway.Api/wwwroot/tester/index.html` (untracked, 새 파일): 순수 HTML/CSS/vanilla JS 단일 파일 API 테스터, same-origin 서빙(CORS 미들웨어 없음). FeedbackOps(github.com/hjung3113/FeedbackOps) DESIGN.md 라이트 테마 토큰 적용.
-  - 진행 순서: 설계 → sol(gpt-5.6-sol high) 설계 리뷰 → luna(gpt-5.6-luna max) 구현 → opus(세션 서브에이전트, openrouter credit 부족으로 omp 경유 실패해서 Agent 서브에이전트로 전환) 디자인 리뷰 → 지적사항 5건 직접 반영(폰트 스택, 필드 2단 그리드, 다운로드 안내 중복 제거, 헤딩/설명 통일, API Key 인풋 폭 제한) → 코드 아키텍처 리뷰(glm-5.3-high) 시도했으나 omp가 세 번 연속(헤드리스 2회 + orca-cli TUI 1회) rumination 루프에 빠져 실패, 결국 컨트롤러가 직접 6개 항목 정적 리뷰 수행(문제 없음 확인: ApiKeyMiddleware가 `/api` prefix에만 적용돼 `/tester` 인증 불필요, innerHTML 0건, downloadFile object URL revoke 정상, YAGNI 위반 없음).
-  - **다음 세션 할 일**: 이 상태를 사용자와 함께 검토(피드백 반영 필요할 수도 있음) → 커밋 → PR → merge. 커밋 전 `dotnet build`/`dotnet test` 재검증 필수(마지막 확인 시 0 warning, 단위 166 + 통합 84 전부 통과).
+**세션 시작 시 `feat/dev-tester-scalar` 로컬 체크아웃이 완전히 stale함을 발견.** 로컬 `main` ref가 오래돼 있었고, 실제 `origin/main`(`daebc96`)은 이미 #18/#21/#22까지 전부 merge된 상태. 그 브랜치의 미커밋 `8a31b56`(`DevTools:Enabled`)은 **origin/main에 이미 동일 내용이 `544d3a6`으로 별도 merge되어 존재**(README/Program.cs/FileGatewayOptions.cs 동일) — 완전 중복 작업이었다. 세션 #2~#5 기록(위 항목들)은 그동안 로컬에서 커밋되지 않고 남아있던 것을 이번에 복구해 커밋함.
+
+- **정리**: `origin/main` 기준 새 브랜치(`docs/session-handoff-and-slice-orchestration`)로 문서 변경분(이 HANDOFF 갱신 + `.claude/skills/slice-orchestration/` skill)만 이관해 커밋·PR. `feat/dev-tester-scalar` 로컬/원격 브랜치와 그 안의 `8a31b56`은 폐기 대상(원본 작업은 이미 main에 별도로 반영돼 있으므로 손실 없음).
+- **`.claude/skills/slice-orchestration/SKILL.md`를 다른 프로젝트(`context_recognized_parser`)에서 그대로 복사해온 미어댑트 상태로 발견 — 프로젝트 비종속적으로 일반화**: 하드코딩된 프로젝트명/이슈번호/문서경로(`docs/17_implementation_plan.md` 등, FileGateway에 없음)를 제거하고, step 0에서 매 실행 시 현재 저장소의 설계 소스와 모델 라우팅 관례를 스스로 확인하도록 변경. 또한 사용자 지시로 "과도한 fail-closed/all-or-nothing" 패턴(설정 하나 잘못됐다고 전체 실패, 파일 하나 문제 있다고 정상 결과까지 못 받는 것)을 기본으로 승인하지 말고 기본적으로 결함 후보로 취급하라는 원칙과, 리뷰 라운드를 무한정 반복하지 말라는 원칙을 스킬에 명시.
+- **다음 작업**: Issue #26~32(오늘 생성된 reference-data/log-query 견고성 클러스터) 처리. 사용자가 "설정 잘못됐다고 전체 실패" / "파일 하나 잘못된거 있다고 정상적인거 못받는" 과도한 엄격함을 명시적으로 우선 해제 요청 — **#29(정의 단위 fail-closed 격리)와 #31(비매칭 로그 파일 필터링)을 최우선 병렬 트랙으로 착수**, 이어서 #26(컬럼명 기반 SP 읽기) + #32(시간범위 기본 2일) 병렬, #28(검증 진단 노출, #29 후행) → #30(캐시 warm-up) → #27(equipment catalog API, 완전 독립이라 아무 때나 병렬 가능)로 진행 예정.
+  - 코드 확인 결과 실제 결함 위치: `ReferenceDataSnapshotBuilder.Build`(#29, 오류 1건이라도 있으면 전체 snapshot reject), `LogResolver.ResolveAsync`(#31, `MetadataPattern` 불일치 파일 하나로 `FileDefinitionConflict` 전체 실패 + `Cardinality=Single` 검사가 시간범위 필터보다 먼저 실행), `SpReferenceDataSource`(#26, ordinal 기반 컬럼 읽기), `EffectiveRangePlanner.Normalize`(`src/FileGateway.Logs/LogListQuery.cs`, #32, 기본 24h → 2일 변경 대상).
+
+## 2026-08-30 세션 상태 #5 — Issue #21 완료
+
+**Issue #21(Configuration regex/pattern 디렉터리·파일·metadata 매칭) 설계 리뷰 3회 → 구현 → PR 리뷰 → 보강 → merge 완료. PR #24 → main merge, Issue CLOSED. Task 21(수동 배포 검증)은 여전히 유일한 남은 MVP 완료 조건.**
+
+- **설계 리뷰 사이클**(구현 전, 전부 별도 모델): 1차 codex gpt-5.6-luna max(반려, P1 5/P2 4 — `regex:` 세그먼트가 기존 safe-path/token 검사와 충돌, IsUnderRoot 좌표계 오류, SP 양방향 호환 허위, metadata mapping 계약 불일치, per-file ts와 fileId 재해석 충돌) → 2차 sol(반려, 신규 P1 2 — 0행 SP shape 우회, 물리 슬롯≠추출 ts 날짜일 때 fileId round-trip 실패) → 3차 sol(**조건부 승인**). 조건 4건 중 빈 세그먼트는 "기존 normalize 보존"(거부 tightening은 기존 무변경 수용기준 위반)으로, caller별 wiring test는 과도해 생략으로 판정. 리뷰 산출물·설계 확정본은 워크트리 삭제와 함께 소실 — 필요시 PR #24 커밋 메시지와 docs 갱신 내용으로 추적.
+- **구현(사용자 지시 방식)**: 작업 분할 + 병렬. Wave1 병렬 — Core(glm-5.3 low omp TUI) + db/docs(codex luna max headless). Wave2 병렬 — Configurations(glm low) + Infrastructure/SP reader/test doubles(codex luna). Wave3 직렬(glm low) — DI 연결·전체 게이트·PR. 최종 fix 커밋 `75a7d69`(PR 리뷰 P1 4: timeout→FileDefinitionConflict, backslash 변형 금지, HH/mm 범위 검증, fileId 재해석 단일 슬롯 순회 + P2: 캐시 수명 정의 바인딩/Compiled, docs 03/05/09 정합화). 게이트: build 0 warning, 단위 271/271, 통합 98/98.
+- **PR 리뷰**: codex gpt-5.6-sol high — 보강 필요(P1 4/P2 4) → 전부 수정 후 재리뷰 직전 codex 사용량 한도 도달(4:01 AM 리셋). **사용자 판정: 재리뷰 생략, 수정 보고+게이트 통과로 merge.** "적당히 하드닝해" — 리뷰 라운드는 핵심 계약 위반에 한정하고 과다 반복 금지 원칙 확립.
+- **정리 완료**: 워크트리 issue16/18/21/22 전부 `git worktree remove`. main 체크아웃은 여전히 `feat/dev-tester-scalar`(fast-forward 가능).
+- **프로세스 교훈(세션 #5)**: (1) orca `terminal create`가 codex/omp 간헐적 타임아웃 실패 + codex TUI pane은 `agent_prompt_blocked`로 프롬프트 차단 — **codex는 `codex exec` headless + `--output-last-message`가 안정 경로**. (2) `terminal split`은 동작하지만 같은 이유로 send 불가. (3) 동일 워크트리 병렬 에이전트는 파일 영역 분리(Core/Infra/Configurations/docs·db)로 충돌 없이 가능 — 각자 자기 파일만 커밋 지시. (4) omp TUI 세션은 세션 종료 후 `connected:false`가 됨 — 재사용 불가, 새 terminal create 필요.
+
+## 2026-08-30 세션 상태 #4 — Issue #18/#22 완료, #21 설계 진행 중 (직전 히스토리)
+
+**이번 세션에서 이슈 3개(#18, #22, #21) 순차 처리. #18/#22는 merge 완료, #21은 설계 문서만 완료(코드 미착수).**
+
+- **Issue #18 — logs/download 범위(from/to) 다운로드**. PR #20 → main merge. `/api/v1/logs/download`가 목록과 동일 `ListAsync` 경로를 재사용해 1건이면 기존 단일 스트리밍, 2건 이상이면 zip 스트리밍(`ZipDownloadResult`, `ILogQueryService.ListLocatedAsync` 신설로 파일별 재-resolve 없이 N+1 방지). PR 리뷰(사람+Codex bot) 4건 중 3건 실 버그로 반영(부분 zip이 유효 200으로 완성되던 문제 → `ctx.Abort()`, N+1 원격 listing, 실패 시 audit 필드 누락) — omp(glm-5.3 high) 세션에 맡겨 고치고 build/test 258/258 재검증 후 merge. 1건("Filtered/Original 스코프")은 코드 확인 후 오탐으로 판단(이 코드베이스에 그 개념 자체가 없음).
+- **Issue #22 — host=="localhost" 서버는 FTP 대신 로컬 파일시스템 직접 읽기**. PR #23 → main merge(`a4ad5b2`). `RoutingFileAccess`(composite, 라우팅 조건은 여기만) + `LocalFileAccess`(root 밖 탈출 방지 이중→삼중 방어, `FileAccessException` 계약 유지). PR 리뷰(Codex bot + 사람) P1 2건 실 버그: `Exists()` 선판정이 권한거부를 '없음'으로 오분류하던 문제, symlink/junction으로 root 우회 가능하던 문제 — orca-cli로 띄운 omp TUI(glm-5.3 high)가 진단·수정·테스트·커밋·push·merge까지 전부 완료(`4e5004e`, `961b58d`). 최종 300/300 통과.
+- **Issue #21 — Configuration regex/pattern 기반 디렉터리·파일·메타데이터 매칭**. **설계만 완료, 구현 착수 전.** 워크트리 `../FileGateway-issue21`(branch `feat/issue21-regex-config-discovery`), orca-cli omp TUI(glm-5.3 high)가 `.review/ISSUE-21-DESIGN.md` 작성 완료(경로 세그먼트 Literal/DateFormat/Regex 모델, 파일명 Literal/Glob/Regex, 메타데이터 추출을 파일 suffix와 분리해 다중 확장자 지원, 기존 Logs 도메인 Regex/Template 메타데이터 패턴과 정합성 확인, root 이탈 방지 4계층, regex 안전성/타임아웃, 승인기준 15개 전부 매핑). **다음 세션 할 일**: 이 설계 문서를 사용자와 검토 → 독립 리뷰 → 실행계획 DAG → 구현 dispatch → 검증 → PR. 아직 어떤 코드도 작성되지 않음.
+
+- **이번 세션에서 얻은 중요 프로세스 교훈 (다음 세션 필독)**:
+  1. **CONDUCTOR(오케스트레이터)는 오케스트레이션만 하고 직접 작업(파일을 직접 읽고 분석, 빌드/테스트 직접 실행, 코드 직접 리뷰)에 토큰을 쓰지 말라는 것이 사용자의 명시적 지시(2026-08-30 세션 #4).** 검증/리뷰/구현은 전부 별도 에이전트(omp 등)에 위임하고, 이 세션은 디스패치·상태확인·전달만 한다.
+  2. **백그라운드 fork(Agent tool, subagent_type: "fork")에게 전체 파이프라인(설계→리뷰→구현→검증→PR)을 통째로 맡기면 안 됨.** 사용자가 "왜 막혀도 보고 안 하냐" "왜 오케스트레이션을 네가 안 하고 서브에이전트한테 시키냐"고 명확히 지적함 — fork가 blocker를 찍어도 자기 턴이 끝날 때까지 사용자에게 안 보이고, CONDUCTOR 자신도 파일을 직접 뒤져야 상태를 알 수 있는 블랙박스가 됨. `.agent-workflow` 툴킷의 conductor-persona.md 설계 의도 자체가 "CONDUCTOR가 직접 orchestrate하며 매 단계 보이게" 하는 것 — 이 세션은 그 취지를 어기고 fork에 전권 위임했다가 정정함.
+  3. **대신 검증된 대안**: orca-cli로 이슈별 워크트리에 `omp` TUI 터미널을 직접 띄우고(`orca terminal create --worktree path:<worktree> --command 'omp --model glm-5.3 --thinking <effort>'`), `orca terminal wait --for tui-idle`로 대기, `orca terminal read`로 진행상황을 직접 확인하면서 이 세션(CONDUCTOR)이 매 단계를 눈으로 보고 다음 지시를 내리는 방식. Issue #22의 PR 리뷰 보강, Issue #21 설계가 이 방식으로 진행됨 — fork보다 느리지만 훨씬 투명함.
+  4. **omp TUI는 `tui-idle` wait 타임아웃(최대 5분) 동안 자율적으로 여러 단계(수정→빌드→테스트→커밋→push→merge)를 연달아 끝낼 수 있다.** 중간에 `terminal read`로 스냅샷을 찍으면 과거 스크롤백이 섞여 "아직 안 끝났나?" 헷갈릴 수 있으니, `git log`/`gh pr view`로 실제 상태를 직접 확인하는 게 터미널 텍스트보다 신뢰도 높다. Issue #22에서 이걸 오인해 "다른 세션이 끼어든 줄" 착각하고 불필요하게 STOP 지시를 보낸 해프닝 있었음 — 사실은 같은 TUI가 이미 다 끝내고 merge까지 한 뒤였음.
+  5. **정리 필요**: 워크트리 `../FileGateway-issue18`, `../FileGateway-issue22`는 merge 완료로 삭제 대상(`git worktree remove`). `../FileGateway-issue21`은 설계만 끝나서 유지 중. `../FileGateway-issue16`도 이전 세션분 그대로 남아있으면 정리 대상.
+
+## 2026-08-30 세션 상태 #3 — Issue #22 완료 (localhost 로컬 파일 접근, 최신)
+
+**PR #23(`feat/issue22-local-file-access` → main) merge됨(`a4ad5b2`), Issue #22 CLOSED. Task 21(수동 배포 검증)은 여전히 유일한 남은 MVP 완료 조건.**
+
+- **내용**: `FileServerConnection.Host == "localhost"` 서버를 FTP 대신 로컬 파일시스템(`System.IO`)으로 직접 읽는 `LocalFileAccess` + 라우팅 composite `RoutingFileAccess`. 라우팅 조건은 composite에만 존재(상위 계층은 분기 모름). 최종 테스트: 300/300 통과(208 unit + 92 integration).
+- **PR 리뷰 보강(이 세션, 컨트롤러 직접 수정 + 재검증)**: 리뷰 P1 2건·P2 2건 반영(`4e5004e`)
+  1. `Exists`(Directory/FileInfo.Exists) 선판정 제거 — 권한 거부가 '없음'으로 오분류되던 문제. 4개 public 메서드 모두 실제 enumerate/메타데이터 조회/open 결과 기반 분류(`FileNotFound*`만 없음, `UnauthorizedAccessException`/`IOException`은 `IoFailure`).
+  2. `RejectReparsePoints` — root~대상 경로 구성요소 중 symlink/junction(reparse point) 전면 거부. `Path.GetFullPath`는 링크를 해석하지 않으므로 lexical prefix 검사만으론 root 탈출 가능했음. macOS symlink 실측 테스트로 검증.
+  3. `ListFilesAsync` 나열 루프에서 취소 토큰 관찰(대량 디렉터리 스캔 즉시 중단).
+  4. 상대 `RootPath`는 CWD 절대화 대신 `ProtocolError` fail-fast(`Path.IsPathFullyQualified` 검사).
+- **문서 동기화(`961b58d`)**: `docs/03-server-access-core.md`(삼중 방어·에러 계약), `docs/02-architecture.md`, `docs/06-reference-data.md`(localhost 라우팅/RootPath 절대경로 계약), `README.md`(intro·다이어그램·사전요구사항·구조 섹션).
+- **정리 가능 산출물**: 워크트리 `../FileGateway-issue22`(merge 완료, `git worktree remove` 대상). main 체크아웃은 아직 `feat/dev-tester-scalar` — 세션 #2 PR은 이미 merge돼 fast-forward 가능.
+
+## 2026-08-28 세션 상태 #2 — Issue #16 완료 (직전 히스토리)
+
+**PR #15 + PR #17 모두 main에 merge됨(`baeed30`), Issue #16 CLOSED. Task 21(수동 배포 검증)이 여전히 유일한 남은 MVP 완료 조건.**
+
+- **이번 세션에서 한 일**: `agent-workflow` 툴킷(`.agent-workflow/`, PRODUCT_HOME=메인 체크아웃)으로 이슈 #16(/tester Scalar 기반 UI 재구성)을 이슈→DAG→구현→독립리뷰→검증→PR→보강→merge까지 종단 수행.
+  - 실행계획 DAG: `.agent-workflow/plans/issue16-dag.md`. 검증 프로파일: `.agent-workflow/profiles/dotnet.json`(build + `dotnet test`, test_count extractor `Total:\s+([0-9]+)`, slnx 사용 — `*.sln` 없음).
+  - 구현 seat: codex(gpt-5.6-luna, max) 3라운드 — `705eb1a`(재구성), `3cc5d13`(리뷰 fix: 짝 operation 입력 공유 + operation별 응답 보존), `2076831`(잔여 fix: files 쌍 fileId 공유 + copy 라벨 보존 등). 독립리뷰 seat: omp(glm-5.3, high) 3라운드. 런타임 분리 유지(구현=codex, 리뷰=omp).
+  - 최종 증거: host VERIFY PASS @ `2076831`(build 0 error + 250 tests), canonical REVIEW `.review/ISSUE-16-REVIEW.json` **pass** @ `2076831`(checklist 13/13, 남은 nit 3건 비차단), 브라우저 smoke(입력 공유 EQ-01/fid-abc, 401 Problem Details 전환 후 복원) 확인.
+  - PR #17(feat/issue16-tester-ui → feat/dev-tester-scalar, stacked) merge → PR #15(→ main) merge. "Closes #16"이 비-default-base PR에는 자동 적용 안 돼 이슈는 수동 close함.
+- **agent-workflow 툴킷 운영 교훈 (재사용 시 필독)**:
+  - codex 구현은 headless prompt에 "무인 실행, 승인 요청 금지"를 최상단에 명시해야 함(없으면 설계만 제안하고 exit 0으로 종료 → PR-DRAFT 부재로 refused). sandbox 쓰기는 worktree 내로 제한 지시 필요(`/tmp` apply_patch는 sandbox가 거부하고 재시도로 stall). 큰 파일 교체는 작은 write 단위로(stall-timeout 600 권장).
+  - `target-verify.sh`의 VERIFY artifact는 HEAD별 run을 누적 집계하므로, 프로파일 수정 직후엔 `.review/ISSUE-N-VERIFY.json`을 지우고 재실행해야 최신 run 기준 판정.
+  - ROUND-STATE admission은 `head_sha`가 live HEAD와 일치해야 함 — 구현 커밋마다 ROUND-STATE head_sha를 갱신 후 dispatch. `artifact_pointers`에 pr_draft/review 포인터 필수.
+  - omp reviewer의 canonical REVIEW 전사가 final assistant message content 인덱스 불일치로 실패할 수 있음(seat는 refused로 기록). 이 경우 `.review/ISSUE-16-review-attempt1-output.log`(omp NDJSON 트랜스크립트)에서 ````json` fenced block을 추출해 HEAD-bound 검증 후 REVIEW.json으로 확정하면 내용은 리뷰어 산출 그대로 유효.
+  - git worktree 사용 시 codex wrapper가 자동으로 main repo `.git`을 writable_roots에 추가함(`codex-safe.sh`) — 정상 동작.
+- **남은 정리 가능 산출물**: 워크트리 `../FileGateway-issue16`(merge 완료 후 불필요, `git worktree remove`로 정리), `.agent-workflow/{profiles,prompts,plans}`(재사용 가치 있음), `.review/` 산출물(이슈 종료 증거 보존용 유지 권장).
+
+## 2026-08-28 세션 상태 #1 (직전 히스토리)
+
+Task 0~20(자동화 구현) 완료 후, MVP 범위 밖 부가 작업 진행 중. **Task 21(수동 배포 검증)은 아직 미착수 — 여전히 유일한 MVP 완료 조건.** 아래 PR #15 관련 기술은 이후 세션 #2에서 해소 완료.
+
+## 2026-08-28 세션 상태 #1 — 세부 (참고용 히스토리)
+
+
+- **merge 완료(main)**: PR #9(배포 체크리스트/API 매뉴얼), PR #10·#11(Python/C# 클라이언트 샘플 최초분 + fileId query param 이동), PR #14(`samples/` 8개 유즈케이스별 Python/C# 샘플 재작성 — `93e716e`/`3399e2b`).
+- **PR #15 오픈, 아직 merge 안 함(사용자 지시)**: `feat/dev-tester-scalar` → main. https://github.com/hjung3113/FileGateway/pull/15
+  - 내용: Development 전용 Scalar UI(`/scalar/v1`, `/openapi/v1.json`) + 커스텀 웹 API 테스터(`/tester`, `src/FileGateway.Api/wwwroot/tester/index.html`, 순수 HTML/CSS/vanilla JS 단일 파일) + `npx impeccable install`로 프로젝트 레벨 vendoring한 impeccable 디자인 감사 skill(`.claude/.agents/.opencode/skills/impeccable`, `AGENTS.md`에 절 추가).
+  - **이번 세션에서 적용된 파이프라인(사용자 명시 요구: 구현/리뷰는 반드시 별도 세션·별도 모델)**:
+    1. 구현: orca-cli로 별도 터미널 띄워 `omp --model luna --thinking max` — 빌드/테스트 검증 → 브랜치 생성 → 커밋 → push → `gh pr create`(merge 안 함). 커밋 2개: `b4808ea`(feat), `37826e2`(vendor impeccable skill).
+    2. 코드 리뷰: 별도 터미널 `omp --model glm-5.3 --thinking high` — PR 목적 + 스코프 diff(vendored impeccable 산출물 제외, 실질 diff만)만 주고 진행. 결과: **P0~P2 없음, merge 가능**, P3 5건(다운로드 objectURL revoke 타이밍 WebKit 레이스 가능성, API Key localStorage 평문 저장은 dev 도구라 허용범위, 속성 필터 중복 name silent drop, OpenAPI 문서에 `/tester` 노출, 패키지 참조 표준 관행). 로컬 실증(빌드/테스트/실구동 프로브)까지 다 확인함.
+    3. 디자인 리뷰: Agent 도구로 완전히 새 세션(모델 opus, 이 대화 맥락 전달 안 함) — PR 목적 + 대상 파일만 주고 진행. 결과: AI-생성 티(그라디언트/Inter/아이콘타일)는 잘 피함. P1 포커스 링 대비 사실상 안 보임(1.2:1, WCAG 요구 ≥3:1). P2 3건(실제 요청 URL 미표시, 다운로드 상세 라벨 11px 대비 미달, 결과 리스트 밀도 — item마다 풀 JSON dump로 스캔 불가). P3 4건(placeholder 잘림, copy 버튼 라벨 안 돌아옴 등, 이번엔 미반영).
+    4. P1+P2 4건은 사용자 승인 받아 다시 별도 luna 세션에 수정 지시 → 커밋 `26eeaee`(`fix(tester): clarify request results`) push 완료. 빌드/테스트 재검증(0 warning, 단위 166 + 통합 84 통과) 확인.
+  - **컨트롤러가 직접 만든 최소 수정 2건**(luna 작업 이전, impeccable 감사 중 발견): 미사용 `.sr-only` CSS 삭제, 폼 submit/download 버튼에 `withBusyButtons` 가드 추가(요청 중 중복 클릭 방지) — 이 두 건은 luna의 `b4808ea` 커밋에 포함됨.
+  - **사용자 피드백(중요, 앞으로도 적용)**: "구현이랑 검증 리뷰를 분리시켜라, 한 세션에서 하는 게 아니라 모델도 다르게" — 컨트롤러(오케스트레이터) 세션이 직접 코드를 고치고 그 코드를 스스로 감사/리뷰하는 건 안 됨. 구현은 항상 별도 세션(luna 등), 리뷰도 항상 별도 세션(omp/opus 등, diff+PR 목적만 전달, 대화 맥락 넘기지 않음)으로 분리할 것.
+  - **다음 세션 할 일 (사용자 지시, 2026-08-28 마지막 피드백)**: "/tester UI가 칸 크기가 다 다르고 뭔가 이상하다" — merge 보류. **luna(gpt-5.6-luna max)에게 별도 세션으로 (a) 실제 API 테스트용 웹 UI들(Postman/Insomnia/Hoppscotch/Swagger UI/Scalar 등) 리서치시키고, (b) 그 결과를 반영해서 `wwwroot/tester/index.html`의 필드/카드 크기 일관성 등 레이아웃을 개선**하게 지시. 개선 후 다시 이번 세션과 동일한 분리 리뷰 파이프라인(omp 코드 리뷰 → opus 디자인 리뷰 → 사용자 확인) 거친 뒤 PR #15 merge.
 - **omp 관련 교훈**: 이 환경에서 omp를 헤드리스(`-p`)로 돌릴 때 `< /dev/null`로 stdin을 반드시 닫을 것(안 그러면 `readPipedInput`에서 무한 대기). orca-cli로 TUI를 띄울 때는 (1) 새 터미널이 oh-my-zsh 업데이트 프롬프트 등에 걸려있지 않은 순수 shell 프롬프트인지 먼저 `terminal read`로 확인 후 커맨드 전송, (2) `terminal send`가 `accepted:false`를 반환하면 `terminal switch`(focus)부터 다시 하고 재시도, (3) TUI가 실제로 떴는지(모델 배너 등) `terminal read`로 확인한 뒤에만 프롬프트 텍스트를 보낼 것. openrouter 경유 `opus`/`claude-opus-5`는 이 계정 credit으로 65536 토큰 요청을 감당 못해 402 — 세션 서브에이전트(Agent tool, model: "opus")로 대체하는 편이 안정적.
+- **PR diff 리뷰 시 주의**: `gh pr diff`는 파일 300개 초과 시 실패한다(`too_large`). impeccable skill vendoring처럼 대량 산출물이 섞인 PR은 `git diff main..origin/<branch> -- <실제 변경 경로만>`으로 스코프를 좁혀서 리뷰 대상 diff를 따로 만들 것.
 
 - 설계 확정: `docs/00-glossary.md`~`10-testing-and-deployment.md` + 통합 스냅샷 `docs/superpowers/specs/2026-08-22-filegateway-design.md`
 - 구현계획 확정·병합: `docs/superpowers/plans/2026-08-23-filegateway-mvp.md` (PR #1 squash-merge, main `025f53a`). Task 0~21 / 스텝 116개
