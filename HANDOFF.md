@@ -3,7 +3,20 @@
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
 
-## 2026-09-01 세션 상태 #6 — 브랜치 정리 + Issue #26~32 클러스터 착수 (최신)
+## 2026-09-02 세션 상태 #7 — Issue #29/#31 merge 완료 (최신)
+
+**세션 #6이 착수해둔 #29/#31 워크트리(코드는 이미 커밋돼 있었으나 push/PR 전 상태)를 이어받아 검증→PR→리뷰반영→merge까지 완료. Issue #29, #31 CLOSED.**
+
+- **검증**: 두 워크트리 모두 `dotnet build`(0 warning) + `dotnet test`(#29: unit 278/278 + integration 102/102, #31: unit 272/272 + integration 98/98) 통과 확인 후 push, PR #34(#29)/#35(#31) 오픈.
+- **리뷰(codex bot 자동 + 사용자 수동 리뷰) 반영**:
+  - PR #34(#29): **P1** `ReferenceDataSnapshotBuilder.LogInvalidDefinition`이 quarantine warning에 원본 pathTemplate/pattern(`/unsafe/current` 등 물리 경로 성격 값)을 그대로 로그에 남기던 문제 — 정의별 raw path/pattern 값을 `<redacted>`로 치환하는 `Redact()` 추가. **P3** 전역 오류(duplicate equipmentId/serverId) 발생 시에도 정의별 quarantine 경고가 먼저 로깅되던 순서 문제 — `Build()`에서 전역 검증을 정의별 빌드/로깅보다 먼저 실행하도록 재배치. 회귀 테스트 2건 추가(raw path 미노출 검증, 전역 실패 시 quarantine 경고 0건 검증).
+  - PR #35(#31): **P2** `LogResolver.ResolveAsync`의 case-insensitive 파일명 중복(`seenNames`) 검사가 metadata 파싱/시간범위 필터보다 먼저 실행돼, flat 디렉터리에 여러 슬롯이 모이는 Hourly/Daily에서 요청 범위 밖 슬롯의 case-only 중복 파일 때문에 정상 범위 조회가 `FileDefinitionConflict`로 실패하던 문제 — 디렉터리별로 glob 매칭→metadata 파싱→`[from,to)` 필터까지 마친 후보에 대해서만 이름 중복을 검사하도록 재구성. 회귀 테스트 1건 추가, 기존 `Case_insensitive_duplicate_names_are_conflict` 테스트는 두 파일이 metadata까지 파싱되도록(리터럴 대소문자는 유지하고 subtype 캡처 문자만 대소문자를 바꿔) 수정.
+  - 커밋: #29 `38a0307`, #31 `2146bf2`. 최종 게이트: #29 build 0 warning + unit 279/279 + integration 103/103, #31 build 0 warning + unit 273/273 + integration 98/98.
+- **merge**: PR #34 `c5dac53`, PR #35 `2f0ea51` (둘 다 `--merge`, origin 브랜치 자동 삭제). Issue #29/#31 "Closes #N"으로 자동 CLOSE.
+- **정리**: 워크트리 `issue-29-isolate-invalid-refdata`, `issue-31-filter-nonmatching-logs` 모두 `git worktree remove` 완료. 원격 브랜치는 merge 시 자동 삭제됨.
+- **다음 작업**: 세션 #6 계획대로 **#26(컬럼명 기반 SP 읽기) + #32(시간범위 기본 2일)** 병렬 착수 → #28(검증 진단 노출, #29 후행) → #30(캐시 warm-up) → #27(equipment catalog API, 완전 독립). 결함 위치는 세션 #6 기록 참조: `SpReferenceDataSource`(#26, ordinal 기반 컬럼 읽기), `EffectiveRangePlanner.Normalize`(`src/FileGateway.Logs/LogListQuery.cs`, #32, 기본 24h → 2일 변경 대상). 아직 워크트리 미생성 — 다음 세션에서 새로 시작.
+
+## 2026-09-01 세션 상태 #6 — 브랜치 정리 + Issue #26~32 클러스터 착수 (직전 히스토리)
 
 **세션 시작 시 `feat/dev-tester-scalar` 로컬 체크아웃이 완전히 stale함을 발견.** 로컬 `main` ref가 오래돼 있었고, 실제 `origin/main`(`daebc96`)은 이미 #18/#21/#22까지 전부 merge된 상태. 그 브랜치의 미커밋 `8a31b56`(`DevTools:Enabled`)은 **origin/main에 이미 동일 내용이 `544d3a6`으로 별도 merge되어 존재**(README/Program.cs/FileGatewayOptions.cs 동일) — 완전 중복 작업이었다. 세션 #2~#5 기록(위 항목들)은 그동안 로컬에서 커밋되지 않고 남아있던 것을 이번에 복구해 커밋함.
 
