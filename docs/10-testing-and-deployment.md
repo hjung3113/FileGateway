@@ -35,7 +35,7 @@
 - case-insensitive 기준 동일 파일명 2개 발견 시 `FileDefinitionConflict`
 - attribute filter의 case-sensitive 일치
 - `cardinality`의 슬롯 단위 검증
-- 후보 파일 metadata 파싱 실패 → `FileDefinitionConflict`
+- `filePattern` 후보 metadata 파싱 실패 → 해당 파일만 결과 후보에서 제외
 - 계산된 목록 디렉터리 없음 → 해당 탐색 결과 0개
 - 설비별 Log/Configuration 정의를 제공 파일 종류 응답으로 투영
 - 제공 파일 종류 응답이 `logType + generationType`, `configurationType`만 포함하고 내부 경로/rule 정보를 포함하지 않음
