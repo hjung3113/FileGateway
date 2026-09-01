@@ -76,7 +76,7 @@ public class ReferenceDataCacheTests
     }
 
     [Fact]
-    public async Task Validation_failure_rejects_new_snapshot_entirely()
+    public async Task Global_validation_failure_rejects_new_snapshot_entirely()
     {
         var good = Raw();
         var broken = new ReferenceDataRaw(["EQ-1", "EQ-1"], [], [], []); // 장비 중복
@@ -88,6 +88,34 @@ public class ReferenceDataCacheTests
 
         await Task.Delay(100);
         Assert.Same(first, await cache.GetSnapshotAsync(CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Partial_validation_refresh_replaces_snapshot_and_keeps_valid_definitions()
+    {
+        var server = new RawServer("SRV1", "h", "ftproot");
+        var validLog = new RawLogDefinition("EQ-001", "EventLog", "SRV1", "Hourly",
+            "Logs/{yyyy}/{MM}/{dd}/{HH}", "*.zip", "Multiple", "Template",
+            "Logs/{yyyy}/{MM}/{dd}/{HH}/Event.zip", "[]");
+        var brokenLog = validLog with
+        {
+            LogType = "BrokenLog",
+            MetadataMode = "Regex",
+            MetadataPattern = "Logs/(?<timestamp>.*)"
+        };
+        var good = new ReferenceDataRaw(["EQ-001"], [server], [validLog], []);
+        var partial = good with { LogDefinitions = [validLog, brokenLog] };
+        var src = new FakeSource(good);
+        src.Next = () => { src.Next = () => Task.FromResult(partial); return Task.FromResult(good); };
+        var cache = new ReferenceDataCache(src, TimeSpan.FromMilliseconds(50));
+
+        var first = await cache.GetSnapshotAsync(CancellationToken.None);
+        await Task.Delay(100);
+        var refreshed = await cache.GetSnapshotAsync(CancellationToken.None);
+
+        Assert.NotSame(first, refreshed);
+        Assert.NotNull(refreshed.FindLog("EQ-001", "EventLog"));
+        Assert.Null(refreshed.FindLog("EQ-001", "BrokenLog"));
     }
 
     [Fact]

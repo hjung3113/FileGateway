@@ -179,13 +179,14 @@ SP `FileGateway_GetReferenceData`의 4번째 result set `ConfigurationDefinition
 
 ## 설비별 제공 파일 종류 조회
 
-외부 `GET /api/v1/equipments/{equipmentId}/file-types`는 별도의 물리 파일 catalog를 만들지 않고 **검증 완료된 기준정보 snapshot에서 해당 설비의 정의를 투영**해 반환한다.
+외부 `GET /api/v1/equipments/{equipmentId}/file-types`는 별도의 물리 파일 catalog를 만들지 않고 **전역 계약을 통과하고 정의 단위 검증을 거친 기준정보 snapshot에서 해당 설비의 유효 정의를 투영**해 반환한다.
 
 - Log: 해당 `equipmentId`의 `EquipmentLogDefinition`들에서 `logType + generationType` 추출
 - Configuration: 해당 `equipmentId`의 `EquipmentConfigurationDefinition`들에서 `configurationType` 추출
 - FTP 디렉터리/파일 존재 여부를 확인하지 않음
 - serverId/host/rootPath/discoveryRule/metadataRule/currentRule/historyRule 같은 내부 정보는 API에 노출하지 않음
 - 유효한 설비에 정의가 하나도 없으면 빈 목록으로 반환 가능
+- 정의 단위 검증에 실패한 Log/Configuration은 목록에서 제외하며, 직접 조회하면 각각 `LogDefinitionNotFound`/`ConfigurationDefinitionNotFound`
 - 기존 계약으로 표현 가능한 새 Log/Configuration 종류가 기준정보에 추가되면 정상 cache refresh 후 자동으로 조회 결과에 포함
 
 설비사/설비 종류별로 제공 가능한 파일이 다른 것은 **`equipmentId`에 최종적으로 연결된 정의 집합의 차이**로 표현한다. DB 내부에서 설비사 공통 정의를 정규화하거나 재사용하는 방식은 DB/SP 구현 세부사항이며, FileGateway 코드에 설비사별 분기를 만들지 않는다.
@@ -259,7 +260,7 @@ raw API Key를 Stored Procedure에 전달하지 않는다.
 - TTL 경과 후 실제 요청이 들어오면 lazy refresh로 Stored Procedure 갱신을 시도한다.
 - MVP에서는 별도 background refresh worker를 두지 않는다.
 
-기준정보 갱신은 **새 기준정보 전체를 검증한 뒤 한 번에 atomic 교체**한다. 일부 정의만 새 값으로 적용하는 혼합 상태는 만들지 않는다.
+기준정보 갱신은 **필수 result set과 Equipment/Server 전역 식별자를 먼저 검증한 뒤, 각 Log/Configuration 정의를 독립적으로 검증하고 유효 정의만 담은 새 snapshot을 한 번에 atomic 교체**한다. 무효 정의를 이전 snapshot의 정의로 보완하는 혼합 상태는 만들지 않는다.
 
 lazy refresh는 프로세스당 하나만 실행하는 **single-flight** 방식으로 동기화한다.
 
@@ -269,11 +270,13 @@ lazy refresh는 프로세스당 하나만 실행하는 **single-flight** 방식�
 
 갱신 시도 결과:
 
-- 새 기준정보 전체 검증 성공 → cache 전체를 새 기준정보로 atomic 교체
-- 조회 실패 또는 검증 실패 + 이전 정상 cache 존재 → 새 데이터를 적용하지 않고 마지막 정상 cache 전체를 stale 상태로 계속 사용
-- 최초 로딩에서 조회/검증 실패하여 정상 cache가 없음 → `ReferenceDataUnavailable`
+- DB/SP 조회 실패, 필수 result set/shape 누락, Equipment/Server 전역 식별자 검증 실패 → 새 snapshot을 만들지 않음
+- 위 전역 검증 성공 → invalid Log/Configuration 정의를 해당 key 단위로 격리하고, 나머지 정상 정의를 담은 새 snapshot으로 atomic 교체
+- 전역 검증 실패 + 이전 정상 cache 존재 → 새 데이터를 적용하지 않고 마지막 정상 cache 전체를 stale 상태로 계속 사용
+- 최초 로딩에서 조회 또는 전역 검증 실패하여 usable cache가 없음 → `ReferenceDataUnavailable`
+- 개별 정의가 invalid인 경우에도 전역 검증을 통과하면 refresh는 성공하며, 해당 정의는 새 snapshot에서 제외된다
 
-하나의 잘못된 정의가 있으면 해당 refresh 전체를 거부한다. MVP에서는 부분 갱신 가용성보다 기준정보 집합의 일관성을 우선한다.
+동일 `equipmentId + logType` 또는 `equipmentId + configurationType`이 여러 행에 나타나 authoritative row를 정할 수 없으면 충돌한 모든 행을 invalid 처리한다. 하나를 임의의 승자로 선택하지 않는다.
 
 stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation 실패 원인은 운영 로그/메트릭에서 관측 가능해야 한다.
 
@@ -281,13 +284,17 @@ stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation �
 
 ## 필수 검증
 
-SP 결과 전체에 대해 cache 교체 전에 **정의의 구조·문법·invariant만** 검증한다. 이 단계에서 FTP 서버에 접속해 실제 디렉터리, 파일, marker 존재 여부를 확인하지 않는다. 원격 저장소의 실재 상태는 실제 조회/metadata/download 요청 시 확인한다.
+SP 결과 전체에 대해 cache 교체 전에 **result set 계약, 전역 식별자, 각 정의의 구조·문법·invariant만** 검증한다. 이 단계에서 FTP 서버에 접속해 실제 디렉터리, 파일, marker 존재 여부를 확인하지 않는다. 원격 저장소의 실재 상태는 실제 조회/metadata/download 요청 시 확인한다.
+
+필수 result set 누락/shape 오류와 Equipment/Server 테이블의 전역 식별자 무결성 오류는 전체 refresh 실패다. 반면 특정 Log/Configuration 행의 enum/JSON/validator 오류, unknown reference 또는 정의 key 중복은 해당 정의만 invalid 처리한다.
 
 검증 항목:
 
 - 설비/서버 매핑 존재 여부
 - 로그/Configuration 정의 존재 여부
-- `equipmentId + logType` 중복 정의 여부
+- `equipmentId + logType` 중복 정의 여부(충돌한 모든 행 invalid)
+- `equipmentId + configurationType` 중복 정의 여부(충돌한 모든 행 invalid)
+- 개별 Log/Configuration의 enum, JSON, validator, `equipmentId`/`serverId` reference 오류
 - 중복/충돌 매핑
 - root/path template의 구조와 정규화 가능 여부
 - Configuration pathTemplate의 세그먼트 분류, 빈 세그먼트 제거 후 파싱, `regex:` pattern의 anchor/컴파일 가능성, marker template의 `regex:` 금지

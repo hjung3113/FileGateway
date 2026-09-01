@@ -118,12 +118,13 @@ API Key/FTP credential/물리 경로/요청 본문 전체와 token의 내부 pay
 - refresh는 프로세스당 하나만 실행하는 **single-flight** 방식으로 동기화한다.
 - last-known-good cache가 있으면 refresh 중인 다른 요청은 기존 cache로 계속 처리한다.
 - 최초 로딩이라 usable cache가 없으면 동시 요청들은 동일한 최초 refresh 결과를 공유한다.
-- 새 기준정보는 **전체 검증이 성공한 뒤 cache 전체를 atomic 교체**한다.
+- 필수 result set과 Equipment/Server 전역 식별자 검증 후, 유효한 Log/Configuration 정의만 담은 새 snapshot을 cache에 atomic 교체한다.
 - 기준정보 검증은 정의의 구조·문법·invariant만 대상으로 하며 refresh 과정에서 FTP 서버의 디렉터리/파일/marker 존재를 확인하지 않는다.
-- 조회 실패 또는 검증 실패 시 일부 새 정의만 적용하지 않는다.
-- 갱신 실패/검증 실패 + 마지막 정상 cache가 있으면 last-known-good 전체를 stale 상태로 계속 사용한다.
-- 최초 로딩에서 조회 또는 검증에 실패해 정상 cache가 없으면 파일 요청은 `ReferenceDataUnavailable`(503)을 반환한다.
-- 하나의 잘못된 정의가 있으면 해당 refresh 전체를 거부한다.
+- DB/SP 조회, 필수 result set 또는 Equipment/Server 전역 검증 실패 시 새 snapshot을 적용하지 않는다.
+- 개별 정의 validation 실패는 해당 정의만 격리하며, 이전 snapshot의 정의를 섞지 않고 정상 정의로 구성된 새 snapshot을 교체한다.
+- 전역 갱신 실패 + 마지막 정상 cache가 있으면 last-known-good 전체를 stale 상태로 계속 사용한다.
+- 최초 로딩에서 조회 또는 전역 검증에 실패해 정상 cache가 없으면 파일 요청은 `ReferenceDataUnavailable`(503)을 반환한다.
+- 개별 무효 정의는 catalog에 노출하지 않으며 직접 조회 시 해당 `*DefinitionNotFound` 오류로 처리한다.
 - stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation 실패 원인을 로그/메트릭으로 관측 가능하게 한다.
 - MVP에서는 별도 background refresh worker를 두지 않는다.
 

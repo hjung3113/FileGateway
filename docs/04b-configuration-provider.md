@@ -171,7 +171,8 @@ History 조회에서 계산된 날짜 디렉터리가 실제로 존재하지 않
 | Regex runtime timeout | `FileDefinitionConflict` |
 | 물리 날짜 슬롯과 metadata 추출 timestamp의 Site local 날짜 불일치 | `FileDefinitionConflict` |
 | 연결/인증/프로토콜 장애 | `FileServerUnavailable`/`FileServerProtocolError` 등 파일 서버 오류 |
-| 무효 정의의 load/refresh | refresh 전체 거부(fail closed), LKG stale 유지 또는 최초면 `ReferenceDataUnavailable` |
+| 개별 무효 Configuration 정의의 load/refresh | 해당 정의만 새 snapshot에서 제외, 나머지 정상 정의는 atomic 교체 |
+| DB/SP·result set·Equipment/Server 전역 검증 실패 | refresh 전체 거부(fail closed), LKG stale 유지 또는 최초면 `ReferenceDataUnavailable` |
 | Snapshot fileId 재해석 대상 부재(정확한 ts + ci 이름 일치 0건) | `FileNotFound` |
 
 정상적인 no-match/부재와 기준정보 품질 오류 및 파일 서버 장애를 같은 빈 결과로 뭉개지 않는다.

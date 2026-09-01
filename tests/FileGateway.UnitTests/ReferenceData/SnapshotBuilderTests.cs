@@ -59,38 +59,136 @@ public class SnapshotBuilderTests
     }
 
     [Fact]
-    public void Rejects_duplicate_equipment_logType()
-    {
-        var raw = Valid();
-        raw = raw with { LogDefinitions = [.. raw.LogDefinitions, raw.LogDefinitions[0]] };
-        Assert.Throws<ReferenceDataValidationException>(() => ReferenceDataSnapshotBuilder.Build(raw));
-    }
-
-    [Fact]
-    public void Rejects_unknown_server_and_unknown_equipment()
+    public void Quarantines_invalid_log_definition_and_keeps_valid_definitions()
     {
         var raw = Valid() with
         {
-            LogDefinitions = [Valid().LogDefinitions[0] with { ServerId = "NOPE" }]
+            LogDefinitions =
+            [
+                Valid().LogDefinitions[0],
+                new RawLogDefinition("EQ-002", "BrokenLog", "SRV1", "Continuous",
+                    "Trace/current", "Trace_*.log", "Multiple", "Regex",
+                    "Trace/(?<name>.*)", "[]")
+            ]
         };
-        Assert.Throws<ReferenceDataValidationException>(() => ReferenceDataSnapshotBuilder.Build(raw));
 
-        var raw2 = Valid() with
-        {
-            ConfigurationDefinitions = [new RawConfigurationDefinition(
-                "EQ-X", "PM", "SRV1", "PM", "PM_*.cfg", "History/{yyyy}/{MM}/{dd}", "PM_*.cfg", "{yyyy}/{MM}/{dd}/_DONE")]
-        };
-        Assert.Throws<ReferenceDataValidationException>(() => ReferenceDataSnapshotBuilder.Build(raw2));
+        var snapshot = ReferenceDataSnapshotBuilder.Build(raw);
+
+        Assert.NotNull(snapshot.FindLog("EQ-001", "EventLog"));
+        Assert.Null(snapshot.FindLog("EQ-002", "BrokenLog"));
+        Assert.Equal(["EventLog"], snapshot.GetLogSummaries("EQ-001").Select(s => s.LogType));
+        Assert.Empty(snapshot.GetLogSummaries("EQ-002"));
     }
 
     [Fact]
-    public void Rejects_path_escape_attempt()
+    public void Quarantines_invalid_configuration_definition_and_keeps_valid_definitions()
+    {
+        var validConfiguration = new RawConfigurationDefinition(
+            "EQ-001", "PM", "SRV1", "PM/current", "PM_*.cfg",
+            "PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg", "PM/history/{yyyy}/{MM}/{dd}/_DONE");
+        var raw = Valid() with
+        {
+            ConfigurationDefinitions =
+            [
+                validConfiguration,
+                validConfiguration with { ConfigurationType = "Broken", CurrentPathTemplate = "/unsafe/current" }
+            ]
+        };
+
+        var snapshot = ReferenceDataSnapshotBuilder.Build(raw);
+
+        Assert.NotNull(snapshot.FindConfiguration("EQ-001", "PM"));
+        Assert.Null(snapshot.FindConfiguration("EQ-001", "Broken"));
+        Assert.Equal(["PM"], snapshot.GetConfigurationTypeSummaries("EQ-001"));
+    }
+
+    [Fact]
+    public void Duplicate_log_key_quarantines_every_conflicting_row()
+    {
+        var valid = Valid().LogDefinitions[0];
+        var duplicate1 = valid with { LogType = "DuplicateLog" };
+        var duplicate2 = duplicate1 with { PathTemplate = "Other/{yyyy}/{MM}/{dd}/{HH}" };
+        var raw = Valid() with { LogDefinitions = [valid, duplicate1, duplicate2] };
+
+        var snapshot = ReferenceDataSnapshotBuilder.Build(raw);
+
+        Assert.NotNull(snapshot.FindLog("EQ-001", "EventLog"));
+        Assert.Null(snapshot.FindLog("EQ-001", "DuplicateLog"));
+    }
+
+    [Fact]
+    public void Duplicate_configuration_key_quarantines_every_conflicting_row()
+    {
+        var valid = new RawConfigurationDefinition(
+            "EQ-001", "PM", "SRV1", "PM/current", "PM_*.cfg",
+            "PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg", "PM/history/{yyyy}/{MM}/{dd}/_DONE");
+        var duplicate1 = valid with { ConfigurationType = "Duplicate" };
+        var duplicate2 = duplicate1 with { CurrentFilePattern = "Other_*.cfg" };
+        var raw = Valid() with { ConfigurationDefinitions = [valid, duplicate1, duplicate2] };
+
+        var snapshot = ReferenceDataSnapshotBuilder.Build(raw);
+
+        Assert.NotNull(snapshot.FindConfiguration("EQ-001", "PM"));
+        Assert.Null(snapshot.FindConfiguration("EQ-001", "Duplicate"));
+    }
+
+    [Fact]
+    public void Unknown_references_quarantine_only_the_affected_definitions()
+    {
+        var validConfiguration = new RawConfigurationDefinition(
+            "EQ-001", "PM", "SRV1", "PM/current", "PM_*.cfg",
+            "PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg", "PM/history/{yyyy}/{MM}/{dd}/_DONE");
+        var raw = Valid() with
+        {
+            LogDefinitions =
+            [
+                Valid().LogDefinitions[0],
+                Valid().LogDefinitions[0] with { EquipmentId = "EQ-X", LogType = "UnknownEquipment" },
+                Valid().LogDefinitions[0] with { EquipmentId = "EQ-002", LogType = "UnknownServer", ServerId = "NOPE" }
+            ],
+            ConfigurationDefinitions =
+            [
+                validConfiguration,
+                validConfiguration with { EquipmentId = "EQ-X", ConfigurationType = "UnknownEquipment" },
+                validConfiguration with { EquipmentId = "EQ-002", ConfigurationType = "UnknownServer", ServerId = "NOPE" }
+            ]
+        };
+
+        var snapshot = ReferenceDataSnapshotBuilder.Build(raw);
+
+        Assert.NotNull(snapshot.FindLog("EQ-001", "EventLog"));
+        Assert.Null(snapshot.FindLog("EQ-X", "UnknownEquipment"));
+        Assert.Null(snapshot.FindLog("EQ-002", "UnknownServer"));
+        Assert.NotNull(snapshot.FindConfiguration("EQ-001", "PM"));
+        Assert.Null(snapshot.FindConfiguration("EQ-X", "UnknownEquipment"));
+        Assert.Null(snapshot.FindConfiguration("EQ-002", "UnknownServer"));
+    }
+
+    [Fact]
+    public void Duplicate_equipment_or_server_identity_is_still_a_global_failure()
+    {
+        var duplicateEquipment = Valid() with { EquipmentIds = ["EQ-001", "EQ-001"] };
+        Assert.Throws<ReferenceDataValidationException>(() => ReferenceDataSnapshotBuilder.Build(duplicateEquipment));
+
+        var server = Valid().Servers[0];
+        var duplicateServer = Valid() with { Servers = [server, server] };
+        Assert.Throws<ReferenceDataValidationException>(() => ReferenceDataSnapshotBuilder.Build(duplicateServer));
+
+        var emptyServerId = Valid() with { Servers = [server with { ServerId = "" }] };
+        Assert.Throws<ReferenceDataValidationException>(() => ReferenceDataSnapshotBuilder.Build(emptyServerId));
+    }
+
+    [Fact]
+    public void Quarantines_path_escape_definition()
     {
         var raw = Valid() with
         {
             LogDefinitions = [Valid().LogDefinitions[0] with { PathTemplate = "../other/{yyyy}" }]
         };
-        Assert.Throws<ReferenceDataValidationException>(() => ReferenceDataSnapshotBuilder.Build(raw));
+
+        var snapshot = ReferenceDataSnapshotBuilder.Build(raw);
+
+        Assert.Null(snapshot.FindLog("EQ-001", "EventLog"));
     }
 
     [Theory]
