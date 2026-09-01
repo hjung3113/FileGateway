@@ -3,7 +3,19 @@
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
 
-## 2026-09-02 세션 상태 #7 — Issue #29/#31 merge 완료 (최신)
+## 2026-09-02 세션 상태 #8 — Issue #26/#32 merge 완료 (최신)
+
+**세션 #7이 계획해둔 #26(컬럼명 기반 SP 읽기) + #32(시간범위 기본 2일) 병렬 트랙을 새 워크트리로 착수해 구현→검증→PR→리뷰반영→merge까지 완료. Issue #26, #32 CLOSED.**
+
+- **구현**: 워크트리 2개(`hjung3113/issue-26-sp-column-names`, `hjung3113/issue-32-default-range`) 신규 생성(base `origin/main` `2f0ea51`), `codex exec` headless(#26: gpt-5.6-luna, #32: gpt-5.6-sol, 둘 다 high effort)로 병렬 구현. #26은 SP Result Set 컬럼명 rename(`RootPath`→`FileRootPath`, LogDefinitions 6개, ConfigurationDefinitions 10개)+역할별 재정렬+`SpReferenceDataSource`를 ordinal index에서 `GetOrdinal` 이름 기반 조회로 전환+누락/오타/중복 컬럼 검증(`ReferenceDataIncomplete`). #32는 `EffectiveRangePlanner` 기본 range를 24시간→2일로 변경(`AddHours(-24)`→`AddDays(-2)`), from-only/명시범위/to-only 거부/MaxQueryRange 검증은 무변경, continuation은 첫 페이지 range 재사용 유지.
+- **CONDUCTOR 독립 검증**: 두 워크트리 모두 `dotnet build`(0 warning) + `dotnet test` 재실행 확인 후 push, PR #36(#26)/#37(#32) 오픈. #26: unit 280/280 + integration 108/108. #32: unit 289/289 + integration 103/103.
+- **독립 모델 리뷰(omp glm-5.3 high, diff-scoped)**: 두 PR 모두 P1/P2 없음, P3(비차단)만 소수 — merge 가능 판정.
+- **사용자 GitHub 리뷰 코멘트 반영**: PR #36에 사용자가 직접 남긴 리뷰 — `ReferenceDataSnapshotBuilder`의 quarantine 진단 문자열이 컬럼 rename 후에도 구 이름(`metadataMode`/`metadataMappings`/`historyMetadataMode`/`historyMetadataMappings`)을 그대로 출력하던 문제(운영자가 현재 SP 계약에 없는 이름으로 원인 추적하게 됨). CONDUCTOR가 직접 5개 진단 문자열을 새 계약명(`metadataParseMode`/`metadataGroupMappings`/`historyTimestampParseMode`/`historyTimestampMappings`)으로 수정 + 회귀 테스트 1건 추가(`ReferenceDataLoggingTests.Quarantine_reason_uses_current_sp_contract_column_names`, 새 이름 포함·구 이름 미포함 검증). PR #37은 사용자 리뷰에서 blocking 없음 판정. 커밋 `4a84e22`, 재검증: build 0 warning + unit 280/280 + integration 109/109(신규 1건 포함).
+- **merge**: PR #36 `6c5fa3f`, PR #37 `a3bf306`(둘 다 `--merge`, origin 브랜치 자동 삭제). Issue #26/#32 "Closes #N"으로 자동 CLOSE.
+- **정리**: 워크트리 `issue-26-sp-column-names`, `issue-32-default-range` 모두 `orca worktree rm --force` 완료.
+- **다음 작업**: 세션 #6/#7 계획대로 **#28(검증 진단 노출, #29 후행 — #29는 merge 완료라 착수 가능)** → **#30(캐시 warm-up)** → **#27(equipment catalog API, 완전 독립)**. 아직 워크트리 미생성 — 다음 세션에서 새로 시작.
+
+## 2026-09-02 세션 상태 #7 — Issue #29/#31 merge 완료 (직전 히스토리)
 
 **세션 #6이 착수해둔 #29/#31 워크트리(코드는 이미 커밋돼 있었으나 push/PR 전 상태)를 이어받아 검증→PR→리뷰반영→merge까지 완료. Issue #29, #31 CLOSED.**
 
