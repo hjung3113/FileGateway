@@ -106,14 +106,7 @@ public static class ReferenceDataSnapshotBuilder
                 new LogDiscoveryRule(row.PathTemplate, row.FilePattern, cardinality),
                 new LogMetadataRule(metadataMode, row.MetadataPattern, mappings));
 
-            try
-            {
-                errors.AddRange(LogDefinitionValidator.Validate(definition).Select(e => prefix + e));
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
-            {
-                errors.Add(prefix + $"validator failed: {ex.Message}");
-            }
+            errors.AddRange(LogDefinitionValidator.Validate(definition).Select(e => prefix + e));
 
             if (string.IsNullOrEmpty(row.EquipmentId) || !equipmentIds.Contains(row.EquipmentId))
                 errors.Add(prefix + $"unknown equipmentId: {row.EquipmentId}");
@@ -165,14 +158,7 @@ public static class ReferenceDataSnapshotBuilder
                 new HistoryRule(row.HistoryPathTemplate, row.HistoryFilePattern,
                     row.HistoryMarkerPathTemplate, row.HistoryFileMatchMode, metadata));
 
-            try
-            {
-                errors.AddRange(ConfigurationDefinitionValidator.Validate(definition).Select(e => prefix + e));
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
-            {
-                errors.Add(prefix + $"validator failed: {ex.Message}");
-            }
+            errors.AddRange(ConfigurationDefinitionValidator.Validate(definition).Select(e => prefix + e));
 
             if (string.IsNullOrEmpty(row.EquipmentId) || !equipmentIds.Contains(row.EquipmentId))
                 errors.Add(prefix + $"unknown equipmentId: {row.EquipmentId}");

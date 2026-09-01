@@ -179,6 +179,40 @@ public class SnapshotBuilderTests
     }
 
     [Fact]
+    public void Validator_crash_fails_log_snapshot_instead_of_quarantining_every_definition()
+    {
+        var valid = Valid().LogDefinitions[0];
+        var raw = Valid() with
+        {
+            LogDefinitions =
+            [
+                valid with { LogType = "BrokenLogA", PathTemplate = null! },
+                valid with { EquipmentId = "EQ-002", LogType = "BrokenLogB", PathTemplate = null! }
+            ]
+        };
+
+        Assert.ThrowsAny<Exception>(() => ReferenceDataSnapshotBuilder.Build(raw));
+    }
+
+    [Fact]
+    public void Validator_crash_fails_configuration_snapshot_instead_of_quarantining_every_definition()
+    {
+        var valid = new RawConfigurationDefinition(
+            "EQ-001", "PM", "SRV1", "PM/current", "PM_*.cfg",
+            "PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg", "PM/history/{yyyy}/{MM}/{dd}/_DONE");
+        var raw = Valid() with
+        {
+            ConfigurationDefinitions =
+            [
+                valid with { ConfigurationType = "BrokenConfigA", HistoryPathTemplate = null! },
+                valid with { EquipmentId = "EQ-002", ConfigurationType = "BrokenConfigB", HistoryPathTemplate = null! }
+            ]
+        };
+
+        Assert.ThrowsAny<Exception>(() => ReferenceDataSnapshotBuilder.Build(raw));
+    }
+
+    [Fact]
     public void Quarantines_path_escape_definition()
     {
         var raw = Valid() with
