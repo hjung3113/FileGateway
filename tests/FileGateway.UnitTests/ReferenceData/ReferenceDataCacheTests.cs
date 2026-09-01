@@ -100,8 +100,8 @@ public class ReferenceDataCacheTests
         var brokenLog = validLog with
         {
             LogType = "BrokenLog",
-            MetadataMode = "Regex",
-            MetadataPattern = "Logs/(?<timestamp>.*)"
+            MetadataParseMode = "Regex",
+            RelativePathMetadataPattern = "Logs/(?<timestamp>.*)"
         };
         var good = new ReferenceDataRaw(["EQ-001"], [server], [validLog], []);
         var partial = good with { LogDefinitions = [validLog, brokenLog] };

@@ -36,9 +36,9 @@ public class SnapshotBuilderTests
             ConfigurationDefinitions =
             [
                 new RawConfigurationDefinition("EQ-001", "PM", "SRV1",
-                    "PM/current", "PM*.cfg",
-                    "PM/history/{yyyy}/{MM}/{dd}", "^PM.*\\.cfg$", "PM/history/{yyyy}/{MM}/{dd}/_DONE",
-                    "Literal", "Regex", "Regex", "^(?<ts>\\d{10})\\.(zip|gz)$",
+                    "PM/current", "PM*.cfg", "Literal",
+                    "PM/history/{yyyy}/{MM}/{dd}", "^PM.*\\.cfg$", "Regex",
+                    "PM/history/{yyyy}/{MM}/{dd}/_DONE", "Regex", "^(?<ts>\\d{10})\\.(zip|gz)$",
                     "[{\"group\":\"ts\",\"target\":\"timestamp\",\"format\":\"yyyyMMddHH\"}]")
             ]
         };
@@ -91,7 +91,7 @@ public class SnapshotBuilderTests
             ConfigurationDefinitions =
             [
                 validConfiguration,
-                validConfiguration with { ConfigurationType = "Broken", CurrentPathTemplate = "/unsafe/current" }
+                validConfiguration with { ConfigurationType = "Broken", CurrentDirectoryTemplate = "/unsafe/current" }
             ]
         };
 
@@ -107,7 +107,7 @@ public class SnapshotBuilderTests
     {
         var valid = Valid().LogDefinitions[0];
         var duplicate1 = valid with { LogType = "DuplicateLog" };
-        var duplicate2 = duplicate1 with { PathTemplate = "Other/{yyyy}/{MM}/{dd}/{HH}" };
+        var duplicate2 = duplicate1 with { DirectoryTemplate = "Other/{yyyy}/{MM}/{dd}/{HH}" };
         var raw = Valid() with { LogDefinitions = [valid, duplicate1, duplicate2] };
 
         var snapshot = ReferenceDataSnapshotBuilder.Build(raw);
@@ -123,7 +123,7 @@ public class SnapshotBuilderTests
             "EQ-001", "PM", "SRV1", "PM/current", "PM_*.cfg",
             "PM/history/{yyyy}/{MM}/{dd}", "PM_*.cfg", "PM/history/{yyyy}/{MM}/{dd}/_DONE");
         var duplicate1 = valid with { ConfigurationType = "Duplicate" };
-        var duplicate2 = duplicate1 with { CurrentFilePattern = "Other_*.cfg" };
+        var duplicate2 = duplicate1 with { CurrentFileNamePattern = "Other_*.cfg" };
         var raw = Valid() with { ConfigurationDefinitions = [valid, duplicate1, duplicate2] };
 
         var snapshot = ReferenceDataSnapshotBuilder.Build(raw);
@@ -186,8 +186,8 @@ public class SnapshotBuilderTests
         {
             LogDefinitions =
             [
-                valid with { LogType = "BrokenLogA", PathTemplate = null! },
-                valid with { EquipmentId = "EQ-002", LogType = "BrokenLogB", PathTemplate = null! }
+                valid with { LogType = "BrokenLogA", DirectoryTemplate = null! },
+                valid with { EquipmentId = "EQ-002", LogType = "BrokenLogB", DirectoryTemplate = null! }
             ]
         };
 
@@ -204,8 +204,8 @@ public class SnapshotBuilderTests
         {
             ConfigurationDefinitions =
             [
-                valid with { ConfigurationType = "BrokenConfigA", HistoryPathTemplate = null! },
-                valid with { EquipmentId = "EQ-002", ConfigurationType = "BrokenConfigB", HistoryPathTemplate = null! }
+                valid with { ConfigurationType = "BrokenConfigA", HistoryDirectoryTemplate = null! },
+                valid with { EquipmentId = "EQ-002", ConfigurationType = "BrokenConfigB", HistoryDirectoryTemplate = null! }
             ]
         };
 
@@ -217,7 +217,7 @@ public class SnapshotBuilderTests
     {
         var raw = Valid() with
         {
-            LogDefinitions = [Valid().LogDefinitions[0] with { PathTemplate = "../other/{yyyy}" }]
+            LogDefinitions = [Valid().LogDefinitions[0] with { DirectoryTemplate = "../other/{yyyy}" }]
         };
 
         var snapshot = ReferenceDataSnapshotBuilder.Build(raw);

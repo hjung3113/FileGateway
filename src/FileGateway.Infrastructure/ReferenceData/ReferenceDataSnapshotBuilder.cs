@@ -42,7 +42,7 @@ public static class ReferenceDataSnapshotBuilder
                 globalErrors.Add("server with empty serverId");
                 continue;
             }
-            if (!servers.TryAdd(server.ServerId, new FileServerConnection(server.ServerId, server.Host, server.RootPath)))
+            if (!servers.TryAdd(server.ServerId, new FileServerConnection(server.ServerId, server.Host, server.FileRootPath)))
                 globalErrors.Add($"duplicate serverId: {server.ServerId}");
         }
 
@@ -75,7 +75,7 @@ public static class ReferenceDataSnapshotBuilder
             var prefix = $"log[{i}] {row.EquipmentId}/{row.LogType}: ";
             var errors = new List<string>();
             // 물리 경로/패턴 원문이 warning 로그에 노출되지 않도록 정의별 raw 값을 마스킹 대상으로 수집.
-            var sensitive = new[] { row.PathTemplate, row.FilePattern, row.MetadataPattern };
+            var sensitive = new[] { row.DirectoryTemplate, row.FileNamePattern, row.RelativePathMetadataPattern };
             var key = (row.EquipmentId, row.LogType);
             if (duplicateKeys.Contains(key))
                 errors.Add(prefix + "duplicate equipmentId + logType definition");
@@ -86,19 +86,19 @@ public static class ReferenceDataSnapshotBuilder
                 LogInvalidDefinition(logger, "log", i, row.EquipmentId, row.LogType, errors, sensitive);
                 continue;
             }
-            if (!TryParseEnum<Cardinality>(row.Cardinality, out var cardinality))
+            if (!TryParseEnum<Cardinality>(row.SlotCardinality, out var cardinality))
             {
-                errors.Add(prefix + $"unsupported cardinality: {row.Cardinality}");
+                errors.Add(prefix + $"unsupported cardinality: {row.SlotCardinality}");
                 LogInvalidDefinition(logger, "log", i, row.EquipmentId, row.LogType, errors, sensitive);
                 continue;
             }
-            if (!TryParseEnum<MetadataMode>(row.MetadataMode, out var metadataMode))
+            if (!TryParseEnum<MetadataMode>(row.MetadataParseMode, out var metadataMode))
             {
-                errors.Add(prefix + $"unsupported metadataMode: {row.MetadataMode}");
+                errors.Add(prefix + $"unsupported metadataMode: {row.MetadataParseMode}");
                 LogInvalidDefinition(logger, "log", i, row.EquipmentId, row.LogType, errors, sensitive);
                 continue;
             }
-            if (!TryDeserializeMappings(row.MetadataMappingsJson, out var mappings))
+            if (!TryDeserializeMappings(row.MetadataGroupMappingsJson, out var mappings))
             {
                 errors.Add(prefix + "invalid metadataMappings JSON");
                 LogInvalidDefinition(logger, "log", i, row.EquipmentId, row.LogType, errors, sensitive);
@@ -107,8 +107,8 @@ public static class ReferenceDataSnapshotBuilder
 
             var definition = new EquipmentLogDefinition(
                 row.EquipmentId, row.LogType, row.ServerId, generationType,
-                new LogDiscoveryRule(row.PathTemplate, row.FilePattern, cardinality),
-                new LogMetadataRule(metadataMode, row.MetadataPattern, mappings));
+                new LogDiscoveryRule(row.DirectoryTemplate, row.FileNamePattern, cardinality),
+                new LogMetadataRule(metadataMode, row.RelativePathMetadataPattern, mappings));
 
             errors.AddRange(LogDefinitionValidator.Validate(definition).Select(e => prefix + e));
 
@@ -149,9 +149,9 @@ public static class ReferenceDataSnapshotBuilder
             // 물리 경로/패턴 원문이 warning 로그에 노출되지 않도록 정의별 raw 값을 마스킹 대상으로 수집.
             var sensitive = new[]
             {
-                row.CurrentPathTemplate, row.CurrentFilePattern,
-                row.HistoryPathTemplate, row.HistoryFilePattern,
-                row.HistoryMarkerPathTemplate, row.HistoryMetadataPattern
+                row.CurrentDirectoryTemplate, row.CurrentFileNamePattern,
+                row.HistoryDirectoryTemplate, row.HistoryFileNamePattern,
+                row.HistoryCompletionMarkerPathTemplate, row.HistoryFileNameTimestampPattern
             };
             var key = (row.EquipmentId, row.ConfigurationType);
             if (duplicateKeys.Contains(key))
@@ -165,9 +165,9 @@ public static class ReferenceDataSnapshotBuilder
 
             var definition = new EquipmentConfigurationDefinition(
                 row.EquipmentId, row.ConfigurationType, row.ServerId,
-                new CurrentRule(row.CurrentPathTemplate, row.CurrentFilePattern, row.CurrentFileMatchMode),
-                new HistoryRule(row.HistoryPathTemplate, row.HistoryFilePattern,
-                    row.HistoryMarkerPathTemplate, row.HistoryFileMatchMode, metadata));
+                new CurrentRule(row.CurrentDirectoryTemplate, row.CurrentFileNamePattern, row.CurrentFileNameMatchMode),
+                new HistoryRule(row.HistoryDirectoryTemplate, row.HistoryFileNamePattern,
+                    row.HistoryCompletionMarkerPathTemplate, row.HistoryFileNameMatchMode, metadata));
 
             errors.AddRange(ConfigurationDefinitionValidator.Validate(definition).Select(e => prefix + e));
 
@@ -195,27 +195,27 @@ public static class ReferenceDataSnapshotBuilder
         out ConfigurationMetadataRule? metadata)
     {
         metadata = null;
-        if (string.IsNullOrWhiteSpace(row.HistoryMetadataMode))
+        if (string.IsNullOrWhiteSpace(row.HistoryTimestampParseMode))
         {
-            if (!string.IsNullOrWhiteSpace(row.HistoryMetadataPattern) ||
-                !string.IsNullOrWhiteSpace(row.HistoryMetadataMappings))
+            if (!string.IsNullOrWhiteSpace(row.HistoryFileNameTimestampPattern) ||
+                !string.IsNullOrWhiteSpace(row.HistoryTimestampMappings))
                 errors.Add(prefix + "metadata pattern/mappings require historyMetadataMode");
-            return string.IsNullOrWhiteSpace(row.HistoryMetadataPattern) &&
-                string.IsNullOrWhiteSpace(row.HistoryMetadataMappings);
+            return string.IsNullOrWhiteSpace(row.HistoryFileNameTimestampPattern) &&
+                string.IsNullOrWhiteSpace(row.HistoryTimestampMappings);
         }
 
-        if (!TryParseEnum<ConfigurationMetadataMode>(row.HistoryMetadataMode, out var mode))
+        if (!TryParseEnum<ConfigurationMetadataMode>(row.HistoryTimestampParseMode, out var mode))
         {
-            errors.Add(prefix + $"unsupported historyMetadataMode: {row.HistoryMetadataMode}");
+            errors.Add(prefix + $"unsupported historyMetadataMode: {row.HistoryTimestampParseMode}");
             return false;
         }
-        if (!TryDeserializeConfigurationMappings(row.HistoryMetadataMappings, out var mappings))
+        if (!TryDeserializeConfigurationMappings(row.HistoryTimestampMappings, out var mappings))
         {
             errors.Add(prefix + "invalid historyMetadataMappings JSON");
             return false;
         }
 
-        metadata = new ConfigurationMetadataRule(mode, row.HistoryMetadataPattern, mappings);
+        metadata = new ConfigurationMetadataRule(mode, row.HistoryFileNameTimestampPattern, mappings);
         return true;
     }
 
