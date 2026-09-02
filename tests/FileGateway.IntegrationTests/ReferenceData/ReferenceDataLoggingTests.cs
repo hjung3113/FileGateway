@@ -135,10 +135,38 @@ public class ReferenceDataLoggingTests
             () => cache.GetSnapshotAsync(CancellationToken.None));
         Assert.Equal("ReferenceDataUnavailable", exception.Code);
 
-        var entry = Assert.Single(logs.Entries, e => e.Level == LogLevel.Error);
-        Assert.Contains("global validation failure", entry.Message, StringComparison.Ordinal);
-        Assert.Contains("duplicate equipmentId: EQ-001", entry.Message, StringComparison.Ordinal);
-        Assert.Contains("duplicate serverId: SRV1", entry.Message, StringComparison.Ordinal);
+        var errors = logs.Entries.Where(e => e.Level == LogLevel.Error).ToList();
+        // 요약 1건 + 오류별 개별 로그 항목 — 하나의 무제한 문자열로 합치지 않는다(오류가 많을 때
+        // 로그 sink 크기 제한에 잘려 일부 원인이 관측 불가능해지는 것을 방지, PR #38 리뷰 반영).
+        var summary = Assert.Single(errors, e => e.Message.Contains("global validation failure", StringComparison.Ordinal));
+        Assert.Contains("2 error(s)", summary.Message, StringComparison.Ordinal);
+        Assert.Contains(errors, e => e.Message.Contains("duplicate equipmentId: EQ-001", StringComparison.Ordinal));
+        Assert.Contains(errors, e => e.Message.Contains("duplicate serverId: SRV1", StringComparison.Ordinal));
+        Assert.Equal(3, errors.Count); // 요약 1 + 오류 2건 각각 별도 항목
+    }
+
+    [Fact]
+    public async Task Cache_logs_every_global_validation_error_individually_when_many_exist()
+    {
+        var equipmentIds = Enumerable.Range(1, 6).SelectMany(i => new[] { $"EQ-{i:000}", $"EQ-{i:000}" }).ToList();
+        var raw = new ReferenceDataRaw(equipmentIds, [new RawServer("SRV1", "host", "root")], [], []);
+
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            new StaticSource(raw),
+            TimeSpan.FromMinutes(15),
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        await Assert.ThrowsAsync<FileGatewayException>(() => cache.GetSnapshotAsync(CancellationToken.None));
+
+        var errors = logs.Entries.Where(e => e.Level == LogLevel.Error).ToList();
+        Assert.Equal(7, errors.Count); // 요약 1 + 중복 equipmentId 6건, 각각 별도 항목으로 전부 관측 가능
+        for (var i = 1; i <= 6; i++)
+        {
+            var id = $"EQ-{i:000}";
+            Assert.Contains(errors, e => e.Message.Contains($"duplicate equipmentId: {id}", StringComparison.Ordinal));
+        }
     }
 
     [Fact]
