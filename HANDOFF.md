@@ -11,7 +11,8 @@
 - **정리**: 워크트리 `hjung3113-issue-27-equipment-catalog`를 `orca worktree rm --worktree path:<...> --force`로 정리(로컬 브랜치도 함께 삭제됨).
 - **P3 문서 보강(리뷰 항목 (2), docs/05-api-interface.md의 "ordinal" 명시)은 사용자 판단으로 생략** — 비차단이라 별도 후속 없이 종료.
 - **이슈 클러스터(#26~#32) 전체 완료 확인**: `gh issue list --state open` 결과 #26~#32는 전부 CLOSED, 세션 #6에서 계획했던 병렬/순차 트랙(#29/#31 → #26/#32 → #28 → #30 → #27)이 모두 종료됨.
-- **남은 open issue(이번 클러스터와 무관, 별도 판단 필요)**: #19(개발 API 테스터 UX 개선), #13(HTTPS용 서버 인증서 확보), #12(FTP localhost 조회 API 502 Bad Gateway, PASV 데이터채널 의심 — 버그). **다음 세션 할 일**: 사용자와 이 셋 중 우선순위 확인 후 착수. #12는 버그 리포트라 재현/원인 조사부터 필요할 가능성 높음.
+- **남은 open issue(이번 클러스터와 무관)**: #19(개발 API 테스터 UX 개선), #13(HTTPS용 서버 인증서 확보), #12(FTP localhost 조회 API 502 Bad Gateway, PASV 데이터채널 의심 — 버그).
+- **사용자 결정: 다음 세션에서 #19 착수.** Issue #19 범위: (1) `/tester` 조회→다운로드 흐름 연결(현재 각각 별도 입력), (2) 이전 조회 응답 기반 드롭다운(equipmentId/logType 등 직접입력 대체), (3) tester 화면에 API별 파라미터 설명 노출, (4) `/scalar/v1`에서 Logs 조회 필수 파라미터가 안 보이는 문제 — OpenAPI 스펙 required 마킹 누락 여부 확인. 대상 파일: `src/FileGateway.Api/wwwroot/tester/index.html`(1~3번), OpenAPI 스펙/Scalar 노출 설정(4번). 아직 워크트리 미생성 — 다음 세션에서 새로 시작(설계 필요 여부 먼저 판단: 4번은 결함 조사 성격, 1~3번은 UI 개선이라 세션 #1 tester 도입 시처럼 디자인 리뷰 단계 포함 여부 검토).
 
 ## 2026-09-02 세션 상태 #10 — Issue #30 merge 완료
 
