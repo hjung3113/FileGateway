@@ -1,3 +1,4 @@
+using FileGateway.Core.Errors;
 using FileGateway.Infrastructure.ReferenceData;
 using Microsoft.Extensions.Logging;
 
@@ -8,6 +9,11 @@ public class ReferenceDataLoggingTests
     private sealed class StaticSource(ReferenceDataRaw raw) : IReferenceDataSource
     {
         public Task<ReferenceDataRaw> ReadAsync(CancellationToken ct) => Task.FromResult(raw);
+    }
+
+    private sealed class ThrowingSource(Exception exception) : IReferenceDataSource
+    {
+        public Task<ReferenceDataRaw> ReadAsync(CancellationToken ct) => throw exception;
     }
 
     [Fact]
@@ -104,5 +110,74 @@ public class ReferenceDataLoggingTests
 
         // 전역 오류로 snapshot 전체가 거부됐다면, BrokenLog가 "격리"된 것처럼 보이는 경고를 남기면 안 된다.
         Assert.DoesNotContain(logs.Entries, e => e.Level == LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task Cache_logs_global_validation_failure_with_each_identifier_error()
+    {
+        var raw = new ReferenceDataRaw(
+            ["EQ-001", "EQ-001"],
+            [
+                new RawServer("SRV1", "host", "root"),
+                new RawServer("SRV1", "host", "root")
+            ],
+            [],
+            []);
+
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            new StaticSource(raw),
+            TimeSpan.FromMinutes(15),
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        var exception = await Assert.ThrowsAsync<FileGatewayException>(
+            () => cache.GetSnapshotAsync(CancellationToken.None));
+        Assert.Equal("ReferenceDataUnavailable", exception.Code);
+
+        var entry = Assert.Single(logs.Entries, e => e.Level == LogLevel.Error);
+        Assert.Contains("global validation failure", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("duplicate equipmentId: EQ-001", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("duplicate serverId: SRV1", entry.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cache_logs_reference_data_incomplete_as_sp_shape_failure()
+    {
+        const string message = "reference data result set 'Servers' missing";
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            new ThrowingSource(new FileGatewayException("ReferenceDataIncomplete", message)),
+            TimeSpan.FromMinutes(15),
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        await Assert.ThrowsAsync<FileGatewayException>(
+            () => cache.GetSnapshotAsync(CancellationToken.None));
+
+        var entry = Assert.Single(logs.Entries, e => e.Level == LogLevel.Error);
+        Assert.Contains("SP shape failure", entry.Message, StringComparison.Ordinal);
+        Assert.Contains(message, entry.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Cache_logs_other_exceptions_as_source_read_failure_with_exception()
+    {
+        var failure = new InvalidOperationException("boom");
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            new ThrowingSource(failure),
+            TimeSpan.FromMinutes(15),
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        await Assert.ThrowsAsync<FileGatewayException>(
+            () => cache.GetSnapshotAsync(CancellationToken.None));
+
+        var entry = Assert.Single(logs.Entries, e => e.Level == LogLevel.Error);
+        Assert.Contains("source read failure", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("InvalidOperationException", entry.Message, StringComparison.Ordinal);
+        Assert.Contains("boom", entry.Message, StringComparison.Ordinal);
+        Assert.Same(failure, entry.Exception);
     }
 }

@@ -279,6 +279,7 @@ lazy refresh는 프로세스당 하나만 실행하는 **single-flight** 방식�
 동일 `equipmentId + logType` 또는 `equipmentId + configurationType`이 여러 행에 나타나 authoritative row를 정할 수 없으면 충돌한 모든 행을 invalid 처리한다. 하나를 임의의 승자로 선택하지 않는다.
 
 stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation 실패 원인은 운영 로그/메트릭에서 관측 가능해야 한다.
+refresh 실패 로그는 전역 식별자 validation, 필수 SP result set/shape, 그 밖의 source read 실패를 구분하며 각 범주의 실제 원인을 함께 기록한다.
 
 로컬 영속 fallback/분산 cache는 MVP에서 제외한다.
 

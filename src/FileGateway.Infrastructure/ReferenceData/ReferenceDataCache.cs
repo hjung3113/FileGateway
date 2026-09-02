@@ -95,6 +95,23 @@ public sealed class ReferenceDataCache(
         }
         catch (Exception ex)
         {
+            switch (ex)
+            {
+                case ReferenceDataValidationException validationException:
+                    logger?.LogError(validationException,
+                        "reference data refresh failed: global validation failure with {ValidationErrorCount} error(s): {ValidationErrors}",
+                        validationException.Errors.Count, string.Join("; ", validationException.Errors));
+                    break;
+                case FileGatewayException { Code: "ReferenceDataIncomplete" }:
+                    logger?.LogError(ex,
+                        "reference data refresh failed: SP shape failure: {ErrorMessage}", ex.Message);
+                    break;
+                default:
+                    logger?.LogError(ex,
+                        "reference data refresh failed: source read failure {ExceptionType}: {ErrorMessage}",
+                        ex.GetType().Name, ex.Message);
+                    break;
+            }
             lock (_gate)
             {
                 LastRefreshFailedAt = DateTime.UtcNow;
