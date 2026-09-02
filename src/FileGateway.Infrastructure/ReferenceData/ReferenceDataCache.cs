@@ -95,6 +95,29 @@ public sealed class ReferenceDataCache(
         }
         catch (Exception ex)
         {
+            switch (ex)
+            {
+                case ReferenceDataValidationException validationException:
+                    logger?.LogError(validationException,
+                        "reference data refresh failed: global validation failure with {ValidationErrorCount} error(s)",
+                        validationException.Errors.Count);
+                    // 오류를 하나의 무제한 문자열로 합치면 오류가 많을 때 로그 sink의 크기 제한에 잘려
+                    // 일부 원인이 관측 불가능해질 수 있다 — 오류마다 별도 로그 항목으로 남긴다(PR #38 리뷰 반영).
+                    for (var i = 0; i < validationException.Errors.Count; i++)
+                        logger?.LogError(
+                            "reference data global validation error {ValidationErrorIndex}/{ValidationErrorCount}: {ValidationError}",
+                            i + 1, validationException.Errors.Count, validationException.Errors[i]);
+                    break;
+                case FileGatewayException { Code: "ReferenceDataIncomplete" }:
+                    logger?.LogError(ex,
+                        "reference data refresh failed: SP shape failure: {ErrorMessage}", ex.Message);
+                    break;
+                default:
+                    logger?.LogError(ex,
+                        "reference data refresh failed: source read failure {ExceptionType}: {ErrorMessage}",
+                        ex.GetType().Name, ex.Message);
+                    break;
+            }
             lock (_gate)
             {
                 LastRefreshFailedAt = DateTime.UtcNow;

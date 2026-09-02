@@ -2,7 +2,8 @@ using Microsoft.Extensions.Logging;
 
 namespace FileGateway.IntegrationTests.Api;
 
-public sealed record CollectedLogEntry(string Category, LogLevel Level, string Message);
+public sealed record CollectedLogEntry(
+    string Category, LogLevel Level, string Message, Exception? Exception = null);
 
 public sealed class CollectingLoggerProvider : ILoggerProvider
 {
@@ -24,7 +25,7 @@ public sealed class CollectingLoggerProvider : ILoggerProvider
             Func<TState, Exception?, string> formatter)
         {
             lock (owner._gate)
-                owner.Entries.Add(new CollectedLogEntry(category, logLevel, formatter(state, exception)));
+                owner.Entries.Add(new CollectedLogEntry(category, logLevel, formatter(state, exception), exception));
         }
     }
 }
