@@ -64,7 +64,10 @@ public sealed class FileGatewayClient : IDisposable
         _http.Timeout = Timeout.InfiniteTimeSpan;
     }
 
-    // --- 설비별 제공 파일 종류 ---
+    // --- 설비 catalog ---
+
+    public Task<JsonElement> ListEquipmentsAsync() =>
+        GetJsonAsync("/api/v1/equipments");
 
     public Task<JsonElement> GetFileTypesAsync(string equipmentId) =>
         GetJsonAsync($"/api/v1/equipments/{Uri.EscapeDataString(equipmentId)}/file-types");

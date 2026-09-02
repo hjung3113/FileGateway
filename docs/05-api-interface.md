@@ -38,6 +38,18 @@ MVP Windows/IIS FTP 환경에서는 `fileName` 관련 비교를 case-insensitive
 
 ## API v1
 
+### 전체 설비 목록 조회
+
+```http
+GET /api/v1/equipments
+```
+
+검증 완료된 기준정보 snapshot의 전체 `equipmentId`를 `equipmentId ASC`로 반환한다. 결과가 없으면 `200 OK`와 `items: []`를 반환하며, 파일 서버/FTP는 조회하지 않는다. 반환된 `equipmentId`는 기존 설비별 제공 파일 종류 조회에 그대로 사용한다.
+
+```json
+{ "items": [ { "equipmentId": "EQP001" }, { "equipmentId": "EQP002" } ] }
+```
+
 ### 설비별 제공 파일 종류 조회
 
 ```http

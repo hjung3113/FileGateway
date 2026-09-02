@@ -15,7 +15,7 @@ export FILEGATEWAY_API_KEY=...
 
 | # | 시나리오 | Python | C# |
 |---|---|---|---|
-| 1 | 설비별 제공 파일 종류 조회 | `scenarios/01_file_types.py` | `Scenarios/FileTypesScenario.cs` |
+| 1 | 전체 설비 목록 → 첫 설비 제공 파일 종류 조회 | `scenarios/01_file_types.py` | `Scenarios/FileTypesScenario.cs` |
 | 2 | 로그 목록 + continuationToken 전체 페이지 순회 | `scenarios/02_logs_list_pagination.py` | `Scenarios/LogsListPaginationScenario.cs` |
 | 3 | subtype/attribute로 로그 필터 | `scenarios/03_logs_filter_subtype_attributes.py` | `Scenarios/LogsFilterScenario.cs` |
 | 4 | 로그 조건 기반 직접 다운로드 (+ 409 fallback) | `scenarios/04_logs_direct_download.py` | `Scenarios/LogsDirectDownloadScenario.cs` |
@@ -31,7 +31,7 @@ export FILEGATEWAY_API_KEY=...
 ```bash
 cd samples/python
 pip install -r requirements.txt
-python scenarios/01_file_types.py EQ-001
+python scenarios/01_file_types.py
 ```
 
 공통 로직은 `filegateway_client.py`(`FileGatewayClient`)에 있습니다. 오류는 `FileGatewayError`(`.code`/`.status`/`.trace_id`)로 던져집니다.
