@@ -2,10 +2,10 @@
 
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
-**⚠️ 이 문서 자체가 stale 상태였음(세션 #12에서 발견, 아래 참조)** — `origin/main`의 `HANDOFF.md`는 2026-08-28 시점 버전이고, 세션 #2~#11이 쌓아온 갱신은 전부 이 로컬 브랜치(`docs/session-handoff-and-slice-orchestration`)에만 있었다. 이 브랜치의 PR #33도 2026-09-01부터 열린 채 미merge. **다음 세션은 PR #33 상태부터 확인할 것**(rebase 필요 여부, merge 여부).
+**⚠️ 세션 #12에서 이 문서가 오랫동안 stale이었다는 사실을 발견** — `origin/main`의 `HANDOFF.md`는 2026-08-28 시점 버전이었고, 세션 #2~#11이 쌓아온 갱신은 전부 이 브랜치(`docs/session-handoff-and-slice-orchestration`, PR #33)에만 있었다. 세션 #12에서 PR #33을 `origin/main`에 merge해 이 문제를 해소했다(아래 세션 #12 항목 참조). **재발 방지: 매 세션 시작 시 `git log --oneline HEAD..origin/main`으로 로컬이 최신인지 먼저 확인할 것.**
 
 
-## 2026-09-02 세션 상태 #12 — Issue #19 착수(4번 OpenAPI 노출 수정 + tester UX 개선), PR #41 오픈. 세션 시작 시 로컬 브랜치가 origin/main보다 크게 뒤처져 있던 문제 발견·수정
+## 2026-09-02 세션 상태 #12 — Issue #19 완료(merge), 로컬/PR #33 stale 문제 해소
 
 **작업 시작 시 체크아웃돼 있던 `docs/session-handoff-and-slice-orchestration`가 `origin/main`(`fc7714e`, PR #26~32/#37~40 전부 포함)보다 한참 뒤처진 상태(`daebc96` 기준)였다.** 4번(OpenAPI 파라미터 누락) 수정을 그 위에서 시작했다가 뒤늦게 발견 — `git diff HEAD..origin/main`으로 확인, 즉시 변경분을 패치로 저장하고 `origin/main` 기준 새 브랜치(`feat/issue-19-tester-ux`)로 옮겨 재작업했다. **이 문서(HANDOFF.md) 자체도 같은 이유로 origin/main에 반영이 안 되고 있었다(위 경고 참조) — 다음 세션은 항상 작업 시작 전에 `git log --oneline HEAD..origin/main`으로 로컬이 최신인지부터 확인할 것.**
 
@@ -17,9 +17,13 @@
   3. **API별 파라미터 설명**: 페이지 로드 시 `/openapi/v1.json`을 fetch해 경로별 파라미터 설명을 캐시하고, 각 필드 힌트로 표시(명시적 hint가 있으면 그게 우선). 4번에서 추가한 서버 측 설명이 그대로 소스.
   4. **datetime picker(사용자가 세션 중 추가 요청)**: `from`/`to`를 텍스트 입력에서 `<input type="datetime-local" step="1">`로 전환. `SiteTime.Parse`가 offset 없는 값을 이미 Asia/Seoul로 해석하므로 클라이언트 측 변환 불필요.
 - **브라우저 실측 검증**: `dotnet run`(더미 ReferenceData 연결 문자열로 기동, DB 호출 없이 폼/힌트/에러 경로만 확인) + Playwright(headless, `chromium-cli` 미설치라 scratchpad에 `npm install playwright` 후 직접 스크립트 작성)로 datetime picker 렌더링, OpenAPI 힌트 로딩, 401 에러 렌더링, (route 인터셉트로 성공 응답을 mock해) download-companion 버튼 동작·값 이관·datalist 후보 채워짐을 전부 스크린샷으로 확인.
-- **최종 게이트**: build 0 warning, 단위 289/289, 통합 138/138(신규 13건 포함, origin/main 최신 기준).
-- **커밋/PR**: `c70aa01`, PR #41(`feat/issue-19-tester-ux` → main), https://github.com/hjung3113/FileGateway/pull/41 — 아직 리뷰/머지 전.
-- **다음 세션 할 일**: (1) PR #41 리뷰(사용자 또는 독립 모델) → merge → Issue #19 CLOSE 확인. (2) 위 경고대로 PR #33(`docs/session-handoff-and-slice-orchestration`) 상태 정리 — origin/main 기준으로 rebase 후 merge할지, 아니면 이 세션이 쌓은 HANDOFF 이력을 다른 방식으로 합칠지 사용자와 확인. (3) 남은 open issue: #13(HTTPS 서버 인증서), #12(FTP localhost 조회 502 Bad Gateway 버그).
+- **최종 게이트(1차)**: build 0 warning, 단위 289/289, 통합 138/138(신규 13건 포함, origin/main 최신 기준). 커밋 `c70aa01`, PR #41 오픈.
+- **PR #41 리뷰 반영(codex bot 자동 + 사용자 수동, 둘 다 동일 4건)**: **P2** ① download-companion이 클릭 시점의 live shared values를 그대로 썼음 — "Load next page" 이후 실제 사용된 continuationToken이 shared values에 반영 안 돼 companion이 이전/빈 토큰으로 다운로드를 열던 문제, 그리고 응답 표시 후 재전송 없이 필드만 편집해도 companion이 그 미전송 값을 쓰던 문제(포괄적으로 같은 원인). **P2** ② `/configurations/current` 다건 응답에도 `/current/download` companion이 무조건 노출 — 그 엔드포인트는 `ResolveCurrentSingleAsync`라 다건이면 409. **P2** ③ `attr.*`를 고정 OpenAPI 파라미터로 선언하면 Scalar/클라이언트 생성기가 리터럴 키 `attr.*`로 취급(의도한 `attr.<name>` 동적 필터와 다름). 비차단 코멘트: `OpenApiExposureTests`가 선언된 파라미터 전체를 커버하지 않음.
+  - 수정: `buildRequest`/`buildNextPageRequest`가 실제 요청에 쓰인 값(페이지네이션 override 포함)의 `criteriaSnapshot`을 반환 → `renderJsonSuccess`를 거쳐 response state에 저장 → companion 클릭 시 그 스냅샷을 target operation에 적용(단, `renderOperation()` 내부의 `collectFormValues`가 전환 전에 source 폼의 live DOM 값을 shared object에 먼저 반영하므로, 전환 후에 스냅샷을 덮어쓰고 폼을 재렌더링하는 순서가 필요했음). `/configurations/current` companion은 응답 배열 길이가 정확히 1일 때만 노출. `attr.*`는 고정 파라미터 목록에서 제거하고 `WithOperationNote()`(같은 `AddOpenApiOperationTransformer` 방식)로 operation description에 규칙만 문서화. `OpenApiExposureTests`를 선언 파라미터 전수 검증 + 경로별 파라미터 이름 집합 정확 일치 검증으로 확장(35건).
+  - 재검증: build 0 warning + 단위 289/289 + 통합 160/160. Playwright로 4건 전부 재확인(미전송 편집이 companion에 안 새는지, continuationToken이 정확히 이어지는지, current 1건/2건에서 companion 노출 여부, `/openapi/v1.json`에 `attr.*` 리터럴이 없고 설명에 규칙이 남는지). 커밋 `70bd44e`.
+- **merge**: PR #41 `--merge --delete-branch`. Issue #19 CLOSE 확인.
+- **PR #33(`docs/session-handoff-and-slice-orchestration`) 정리**: PR #41 merge로 이 브랜치가 다시 `origin/main`보다 11 커밋 뒤처짐 → `git merge origin/main`(force-push 없이, merge commit `44ac28e`)으로 정리, 충돌 없음(이 브랜치는 `AGENTS.md`/`HANDOFF.md`/`.claude/skills/slice-orchestration/SKILL.md` 3개 파일만 건드림). 이 항목이 반영된 커밋까지 push 완료 — **PR #33은 이제 `origin/main`과 딱 이 3개 파일만 다른, 바로 merge 가능한 상태.**
+- **다음 세션 할 일**: (1) PR #33을 merge해 이 HANDOFF 이력과 slice-orchestration skill 조정분을 `origin/main`에 반영할 것(사용자 승인 후). (2) 남은 open issue: #13(HTTPS 서버 인증서), #12(FTP localhost 조회 502 Bad Gateway 버그) — 어느 쪽을 먼저 할지 세션 시작 시 사용자에게 확인.
 
 ## 2026-09-02 세션 상태 #11 — Issue #27 merge 완료, 이슈 클러스터(#26~32) 전체 종료
 
