@@ -3,15 +3,17 @@
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
 
-## 2026-09-02 세션 상태 #9 — Issue #28 구현·검증·리뷰 완료, PR #38 오픈(merge 대기) (최신)
+## 2026-09-02 세션 상태 #9 — Issue #28 merge 완료
 
-**세션 #8이 계획해둔 다음 작업(#28 → #30 → #27) 중 #28(기준정보 검증 진단 노출)을 새 워크트리로 착수해 구현→CONDUCTOR 검증→독립 리뷰→PR까지 완료. Merge는 사용자 승인 대기.**
+**세션 #8이 계획해둔 다음 작업(#28 → #30 → #27) 중 #28(기준정보 검증 진단 노출)을 새 워크트리로 착수해 구현→CONDUCTOR 검증→독립 리뷰→PR→사용자 리뷰 반영→merge까지 완료. Issue #28 CLOSED.**
 
 - **구현**: 워크트리 `hjung3113/issue-28-reference-data-diagnostics`(base `origin/main` `a3bf306`), `codex exec` headless(gpt-5.6-sol, high effort)로 구현. `ReferenceDataCache.LoadAsync`의 catch 블록이 `LastRefreshError`에 `ex.Message`만 저장하고 `logger`를 전혀 호출하지 않던 결함(전역 validation 실패·SP result set/shape 실패·DB 등 source read 실패가 전부 조용히 삼켜짐 — 개별 정의 quarantine 경고만 동작하고 있었음)을 수정. 3범주 구분 구조화 로그 추가: (1) `ReferenceDataValidationException` → `.Errors` 전체를 로그, (2) `FileGatewayException{Code="ReferenceDataIncomplete"}` → SP shape 실패로 태깅, (3) 그 외 예외 → source read 실패로 태깅 + 예외 객체 자체를 `LogError`에 전달(스택 보존). `/health/ready` 응답·`LastRefreshError` 시맨틱은 무변경(순수 추가 로깅). `docs/06-reference-data.md` 캐시 절에 한 줄 추가. 회귀 테스트 3건 추가(`ReferenceDataLoggingTests.cs`) + `CollectingLoggerProvider`에 `Exception?` 필드 추가(테스트가 예외 객체 전달 여부 검증 가능하게). 커밋 `c3cc1db`.
 - **CONDUCTOR 독립 검증**: `dotnet build`(0 warning/0 error) + `dotnet test`(unit 289/289 + integration 112/112 = 401/401, worker 자체 보고와 일치) 재실행 확인 후 push, PR #38 오픈.
-- **독립 모델 리뷰(omp glm-5.3 high, diff-scoped — issue #28 의도 일치 여부만)**: P1 없음, P2 없음, P3(비차단) 3건만 — 로그 라인에 validation error가 template arg와 예외 message에 중복 노출(무해), 테스트 2가 wrap-Code를 직접 assert하진 않음(다른 두 테스트가 커버), 다건 오류 시 unbounded join 길이(위험 낮음). Review round 예산 기준상 추가 라운드 불필요 판정, 반영 안 함.
-- **PR #38 오픈, 자동 CI/bot 리뷰 워크플로 없음 확인(`.github/workflows/` 부재)** — 코멘트 대기 불필요. **merge는 사용자 확인 후 진행 예정, 아직 merge 안 함.**
-- **다음 작업**: PR #38 사용자 확인/merge 후 워크트리 정리(`orca worktree rm`) → 세션 #8 계획대로 **#30(캐시 warm-up)** → **#27(equipment catalog API, 완전 독립)**.
+- **독립 모델 리뷰(omp glm-5.3 high, diff-scoped — issue #28 의도 일치 여부만)**: P1 없음, P2 없음, P3(비차단) 3건만 — 로그 라인에 validation error가 template arg와 예외 message에 중복 노출(무해), 테스트 2가 wrap-Code를 직접 assert하진 않음(다른 두 테스트가 커버), 다건 오류 시 unbounded join 길이(위험 낮음).
+- **사용자 GitHub 리뷰 코멘트 반영**: PR #38에 사용자가 직접 남긴 리뷰 — omp가 P3로 판정했던 "다건 오류 시 unbounded join 길이"를 사용자가 P2로 격상(오류가 많으면 로그 sink 크기 제한에 잘려 이슈의 핵심 목표 "로그만으로 원인 확인"을 실제 운영에서 만족 못할 수 있음). CONDUCTOR가 `ReferenceDataCache`의 global validation 로깅을 요약 1건 + 오류별 개별 `LogError` 항목으로 변경(더 이상 `string.Join`으로 무제한 결합하지 않음), 기존 테스트를 요약+개별 항목 검증으로 갱신 + 중복 equipmentId 6건으로 다수 오류 상황을 검증하는 회귀 테스트 추가. 커밋 `7244b3f`, 재검증: build 0 warning + unit 289/289 + integration 113/113(신규 1건 포함).
+- **merge**: PR #38 `--merge`, origin 브랜치 자동 삭제. Issue #28 "Closes #28"으로 자동 CLOSE.
+- **정리**: 워크트리 `issue-28-reference-data-diagnostics` `orca worktree rm --force` 완료.
+- **다음 작업**: 세션 #8 계획대로 **#30(캐시 warm-up)** → **#27(equipment catalog API, 완전 독립)**. 아직 워크트리 미생성 — 다음 세션에서 새로 시작.
 
 ## 2026-09-02 세션 상태 #8 — Issue #26/#32 merge 완료 (직전 히스토리)
 
