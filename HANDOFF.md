@@ -23,7 +23,8 @@
   - 재검증: build 0 warning + 단위 289/289 + 통합 160/160. Playwright로 4건 전부 재확인(미전송 편집이 companion에 안 새는지, continuationToken이 정확히 이어지는지, current 1건/2건에서 companion 노출 여부, `/openapi/v1.json`에 `attr.*` 리터럴이 없고 설명에 규칙이 남는지). 커밋 `70bd44e`.
 - **merge**: PR #41 `--merge --delete-branch`. Issue #19 CLOSE 확인.
 - **PR #33(`docs/session-handoff-and-slice-orchestration`) 정리**: PR #41 merge로 이 브랜치가 다시 `origin/main`보다 11 커밋 뒤처짐 → `git merge origin/main`(force-push 없이, merge commit `44ac28e`)으로 정리, 충돌 없음(이 브랜치는 `AGENTS.md`/`HANDOFF.md`/`.claude/skills/slice-orchestration/SKILL.md` 3개 파일만 건드림). 이 항목이 반영된 커밋까지 push 완료 — **PR #33은 이제 `origin/main`과 딱 이 3개 파일만 다른, 바로 merge 가능한 상태.**
-- **다음 세션 할 일**: (1) PR #33을 merge해 이 HANDOFF 이력과 slice-orchestration skill 조정분을 `origin/main`에 반영할 것(사용자 승인 후). (2) 남은 open issue: #13(HTTPS 서버 인증서), #12(FTP localhost 조회 502 Bad Gateway 버그) — 어느 쪽을 먼저 할지 세션 시작 시 사용자에게 확인.
+- **PR #33도 merge 완료**(이 문단이 포함된 커밋까지 그대로 fast-forward merge됨) — `origin/main`에 HANDOFF 이력 + slice-orchestration skill 조정분 반영 완료. 로컬/원격 드리프트 문제 완전 해소.
+- **다음 세션 할 일**: 남은 open issue #12(FTP localhost 조회 502 Bad Gateway, PASV 데이터채널 의심 — 코드 버그)와 #13(HTTPS 서버 인증서 확보 — 인증서 발급/CA 결정 같은 인프라 단계, 코딩 작업 아님) 중 사용자가 세션 #12에서 둘 다 보류하기로 함. **다음 세션은 어느 쪽을 먼저 할지부터 사용자에게 확인할 것.**
 
 ## 2026-09-02 세션 상태 #11 — Issue #27 merge 완료, 이슈 클러스터(#26~32) 전체 종료
 
