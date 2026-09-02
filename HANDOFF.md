@@ -13,7 +13,11 @@
 - **merge**: PR #39 `--merge --delete-branch`(`27e03cf`), origin 브랜치 자동 삭제. Issue #30 "Closes #30"으로 자동 CLOSE.
 - **정리**: 워크트리 `issue-30-cache-warmup` `orca worktree rm --force` 완료.
 - **프로세스 참고 (세션 #10)**: `codex exec`의 `--full-auto` 플래그는 이 버전에 없음(구버전 문서 오기) — `--approve-for-me`(workspace-write 자동승인)를 사용할 것, `-s workspace-write`와 동시 지정 불가(충돌 에러). 워크트리 터미널에서 `gh issue view`가 일시적 네트워크 오류로 실패할 수 있음(메인 세션에서는 정상 동작) — task brief에 issue 원문 전체를 인라인으로 포함해두면 worker가 재조회 실패해도 진행 가능. `orca terminal wait --for tui-idle`은 exec 모드 CLI(코덱 exec, 비 TUI)에서는 즉시 satisfied로 돌아오는 경우가 있어 신뢰 불가 — 실제 완료는 `ps -p <pid>`로 프로세스 생존 여부를 직접 확인하는 것이 안전(Bash `run_in_background` + `until ! ps -p <pid>` 패턴).
-- **다음 작업**: 세션 #8/#9 계획대로 **#27(equipment catalog API, 완전 독립)**. 아직 워크트리 미생성 — 다음 세션에서 새로 시작.
+- **이어서 같은 세션에서 #27(equipment catalog API) 착수, PR #40 오픈까지 완료 — merge는 다음 세션 대상.**
+  - **구현**: 워크트리 `hjung3113/issue-27-equipment-catalog`(base `origin/main` `27e03cf`, #30 merge 반영 이후), `codex exec` headless(gpt-5.6-sol, high effort, `--approve-for-me`)로 구현. `CatalogEndpoints.cs`에 `GET /api/v1/equipments` 추가 — `IReferenceDataView.GetSnapshotAsync`의 `EquipmentIds`(`IReadOnlySet<string>`)를 `OrderBy(..., StringComparer.Ordinal)`로 정렬해 `{ items: [{ equipmentId }] }` 반환. FTP/파일시스템 접근 없음. 기존 `/file-types` 엔드포인트는 무변경(순수 추가). 전역 `ApiKeyMiddleware`가 이미 걸려 있어 별도 인증 코드 불필요. Tester UI/`docs/05-api-interface.md`/README/Python·C# 샘플에 discover-equipments → file-types 흐름 반영. 회귀 테스트 `CatalogEndpointTests.cs` 신규(9건: 전체 목록, 빈 snapshot, 정렬, 401, file-types 연계 등). 커밋 `74618a6`.
+  - **CONDUCTOR 독립 검증**: `dotnet build`(0 warning/0 error) + `dotnet test`(unit 289/289 + integration 125/125 = 414/414, worker 자체 보고와 일치) 재실행 확인 후 push, PR #40 오픈.
+  - **독립 모델 리뷰 디스패치(omp glm-5.3 high, diff-scoped)**: 리뷰 터미널을 띄우고 프롬프트까지 전송했으나, **사용자가 세션 종료를 요청해 리뷰 완료를 기다리지 않고 중단**. omp 프로세스는 백그라운드 터미널에서 계속 실행 중일 수 있음(터미널이 살아있다면). PR #40은 아직 merge하지 않음.
+  - **다음 세션 할 일**: 워크트리 `hjung3113-issue-27-equipment-catalog`의 리뷰 터미널(있다면 `orca terminal list`로 찾기)을 확인해 진행 중이던 리뷰 결과를 회수하거나, 없으면 새로 omp glm-5.3 high 리뷰를 재디스패치. P1/P2 있으면 fix→재검증, 없으면(P3만) 바로 `gh pr merge 40 --merge --delete-branch` 후 Issue #27 CLOSE 확인 → 워크트리 정리 → HANDOFF 갱신. 이번 이슈 클러스터(#26~#32) 계획의 마지막 항목이므로 #27 merge 후 남은 다음 작업이 있는지 GitHub open issue 목록을 다시 확인할 것(`gh issue list`).
 
 ## 2026-09-02 세션 상태 #9 — Issue #28 merge 완료
 
