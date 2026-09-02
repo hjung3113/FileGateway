@@ -1,12 +1,15 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using FileGateway.Api.ReferenceData;
 using FileGateway.Api.Options;
+using FileGateway.Core.Files;
 using FileGateway.Infrastructure.ReferenceData;
 using Microsoft.Extensions.Configuration;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace FileGateway.IntegrationTests.Api;
@@ -23,18 +26,50 @@ public class ApiBootstrapTests
             {
                 services.Configure<AuthenticationOptions>(o => o.ApiKeys =
                     [new() { Key = "test-key", CallerId = "caller-1" }]);
+                services.AddSingleton<IReferenceDataView>(new FixedSnapshotView(
+                    ReferenceDataSnapshotBuilder.Build(Raw())));
                 configure?.Invoke(services);
             });
         }
     }
 
-    private sealed class CountingSource(ReferenceDataSnapshot snapshot) : IReferenceDataSource
+    private sealed class CountingSource(ReferenceDataRaw raw) : IReferenceDataSource
     {
-        public ReferenceDataSnapshot Snapshot { get; } = snapshot;
         public int Calls;
         public Task<ReferenceDataRaw> ReadAsync(CancellationToken ct)
-        { Calls++; return Task.FromResult(new ReferenceDataRaw(["EQ-001"], [], [], [])); }
+        { Interlocked.Increment(ref Calls); return Task.FromResult(raw); }
     }
+
+    private sealed class BlockingSource(ReferenceDataRaw raw) : IReferenceDataSource
+    {
+        private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Calls;
+
+        public async Task<ReferenceDataRaw> ReadAsync(CancellationToken ct)
+        {
+            Interlocked.Increment(ref Calls);
+            Started.TrySetResult();
+            await _release.Task;
+            return raw;
+        }
+
+        public void Release() => _release.TrySetResult();
+    }
+
+    private sealed class SequenceSource(params Func<Task<ReferenceDataRaw>>[] reads) : IReferenceDataSource
+    {
+        private int _next;
+        public int Calls => _next;
+
+        public Task<ReferenceDataRaw> ReadAsync(CancellationToken ct)
+        {
+            var index = Interlocked.Increment(ref _next) - 1;
+            return reads[index]();
+        }
+    }
+
+    private static ReferenceDataRaw Raw() => new(["EQ-001"], [], [], []);
 
     private static Factory FactoryWithSnapshot(bool withUsableSnapshot)
         => new(services =>
@@ -94,9 +129,9 @@ public class ApiBootstrapTests
     }
 
     [Fact]
-    public async Task Health_ready_induces_single_initial_load_on_real_cache()
+    public async Task Health_ready_uses_startup_warmed_real_cache_without_another_load()
     {
-        var source = new CountingSource(ReferenceDataSnapshotBuilder.Build(new(["EQ-001"], [], [], [])));
+        var source = new CountingSource(Raw());
         using var factory = new Factory(services =>
         {
             services.AddSingleton<IReferenceDataSource>(source);
@@ -105,10 +140,72 @@ public class ApiBootstrapTests
         });
 
         var client = factory.CreateClient();
-        Assert.Equal(200, (int)(await client.GetAsync("/health/ready")).StatusCode);   // 최초 로딩 유발
-        Assert.Equal(1, source.Calls);                                                 // 로딩 실제 실행(단 1회)
+        Assert.Equal(1, source.Calls);                                                 // startup warm-up
+        Assert.Equal(200, (int)(await client.GetAsync("/health/ready")).StatusCode);   // 동일 cache 조회
+        Assert.Equal(1, source.Calls);
         await client.GetAsync("/health/ready");                                        // TTL 내 재호출
         Assert.Equal(1, source.Calls);
+    }
+
+    [Fact]
+    public async Task Startup_warmup_loads_without_request_and_first_catalog_call_is_a_cache_hit()
+    {
+        var source = new CountingSource(Raw());
+        using var factory = new Factory(services =>
+        {
+            services.AddSingleton<IReferenceDataSource>(source);
+            services.AddSingleton<IReferenceDataView>(sp => new ReferenceDataCache(
+                sp.GetRequiredService<IReferenceDataSource>(), TimeSpan.FromMinutes(15)));
+            services.AddSingleton<IFileAccess>(new ThrowingFileAccess());
+        });
+
+        using var client = factory.CreateClient();
+        Assert.Equal(1, source.Calls); // host startup alone performs the initial load
+
+        client.DefaultRequestHeaders.Add("X-Api-Key", "test-key");
+        using var response = await client.GetAsync("/api/v1/equipments/EQ-001/file-types");
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(1, source.Calls); // first user request uses the warmed snapshot
+    }
+
+    [Fact]
+    public async Task Startup_warmup_and_concurrent_ready_load_share_single_initial_read()
+    {
+        var source = new BlockingSource(Raw());
+        var cache = new ReferenceDataCache(source, TimeSpan.FromMinutes(15));
+        var warmup = new ReferenceDataWarmupService(
+            cache, NullLogger<ReferenceDataWarmupService>.Instance);
+
+        var startup = warmup.StartAsync(CancellationToken.None);
+        await source.Started.Task;
+        var readyLoad = cache.GetSnapshotAsync(CancellationToken.None);
+        source.Release();
+
+        await Task.WhenAll(startup, readyLoad);
+        Assert.Equal(1, source.Calls);
+    }
+
+    [Fact]
+    public async Task Warmup_failure_keeps_process_live_and_ready_can_retry_until_snapshot_is_usable()
+    {
+        var source = new SequenceSource(
+            () => Task.FromException<ReferenceDataRaw>(new InvalidOperationException("warmup failed")),
+            () => Task.FromException<ReferenceDataRaw>(new InvalidOperationException("ready failed")),
+            () => Task.FromResult(Raw()));
+        using var factory = new Factory(services =>
+        {
+            services.AddSingleton<IReferenceDataSource>(source);
+            services.AddSingleton<IReferenceDataView>(sp => new ReferenceDataCache(
+                sp.GetRequiredService<IReferenceDataSource>(), TimeSpan.FromMinutes(15)));
+        });
+
+        using var client = factory.CreateClient();
+        Assert.Equal(1, source.Calls); // failed warm-up did not abort host startup
+        Assert.Equal(200, (int)(await client.GetAsync("/health/live")).StatusCode);
+        Assert.Equal(503, (int)(await client.GetAsync("/health/ready")).StatusCode);
+        Assert.Equal(200, (int)(await client.GetAsync("/health/ready")).StatusCode);
+        Assert.Equal(3, source.Calls);
     }
 
     [Fact]

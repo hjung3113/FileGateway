@@ -4,6 +4,7 @@ using FileGateway.Api.Auth;
 using FileGateway.Api.Endpoints;
 using FileGateway.Api.Errors;
 using FileGateway.Api.Options;
+using FileGateway.Api.ReferenceData;
 using FileGateway.Configurations;
 using FileGateway.Configurations.Internal;
 using FileGateway.Core.Files;
@@ -73,6 +74,7 @@ builder.Services.AddSingleton<IReferenceDataView>(sp => new ReferenceDataCache(
     sp.GetRequiredService<IReferenceDataSource>(),
     sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value.ReferenceData.CacheTtl,
     sp.GetRequiredService<ILogger<ReferenceDataCache>>()));
+builder.Services.AddHostedService<ReferenceDataWarmupService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ILogQueryService>(sp =>
 {
