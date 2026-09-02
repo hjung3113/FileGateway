@@ -2,6 +2,24 @@
 
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
+**⚠️ 이 문서 자체가 stale 상태였음(세션 #12에서 발견, 아래 참조)** — `origin/main`의 `HANDOFF.md`는 2026-08-28 시점 버전이고, 세션 #2~#11이 쌓아온 갱신은 전부 이 로컬 브랜치(`docs/session-handoff-and-slice-orchestration`)에만 있었다. 이 브랜치의 PR #33도 2026-09-01부터 열린 채 미merge. **다음 세션은 PR #33 상태부터 확인할 것**(rebase 필요 여부, merge 여부).
+
+
+## 2026-09-02 세션 상태 #12 — Issue #19 착수(4번 OpenAPI 노출 수정 + tester UX 개선), PR #41 오픈. 세션 시작 시 로컬 브랜치가 origin/main보다 크게 뒤처져 있던 문제 발견·수정
+
+**작업 시작 시 체크아웃돼 있던 `docs/session-handoff-and-slice-orchestration`가 `origin/main`(`fc7714e`, PR #26~32/#37~40 전부 포함)보다 한참 뒤처진 상태(`daebc96` 기준)였다.** 4번(OpenAPI 파라미터 누락) 수정을 그 위에서 시작했다가 뒤늦게 발견 — `git diff HEAD..origin/main`으로 확인, 즉시 변경분을 패치로 저장하고 `origin/main` 기준 새 브랜치(`feat/issue-19-tester-ux`)로 옮겨 재작업했다. **이 문서(HANDOFF.md) 자체도 같은 이유로 origin/main에 반영이 안 되고 있었다(위 경고 참조) — 다음 세션은 항상 작업 시작 전에 `git log --oneline HEAD..origin/main`으로 로컬이 최신인지부터 확인할 것.**
+
+- **Issue #19 범위 확인**: 세션 #11 핸드오프가 남긴 4개 요청(조회→다운로드 흐름, 이전 조회값 드롭다운, API별 설명, 필수 파라미터 미표시) 중 4번(필수 파라미터 미표시)을 먼저 조사 → 원인이 이슈 문구보다 넓음을 확인(단순 "required 누락"이 아니라 Logs/Configurations/Files 엔드포인트가 `HttpRequest` 수동 파싱을 쓰기 때문에 Minimal API 리플렉션 기반 OpenAPI 생성이 파라미터 자체를 못 봄 — `/openapi/v1.json`/`/scalar/v1`에 통째로 안 보임). 사용자 확인 후 범위를 "동일 패턴을 가진 모든 엔드포인트"로 확정.
+- **4번 구현**: `OpenApiQueryParameterExtensions.WithQueryParameters()` 신설(deprecated `WithOpenApi()` 대신 `AddOpenApiOperationTransformer` 사용) — Logs/Configurations의 5개 엔드포인트에 파라미터를 명시적으로 선언하고, Files의 타입 바인딩 `fileId`는 리플렉션이 이미 만든 항목에 설명만 upsert(중복 추가 안 함). 회귀 테스트 `OpenApiExposureTests.cs` 신규(13건, `/openapi/v1.json`을 실제로 파싱해 각 파라미터의 required/description 검증).
+- **사용자가 이어서 요청한 tester UI 개선(1~3번 + 신규 요청: datetime picker)**: `impeccable` skill의 `shape` 절차로 기존 코드를 조사(기존 아키텍처가 이미 `sharedValuesByGroup`으로 logs-list/logs-download 등 폼 간 값 공유, `appendFileIdActions`로 fileId 재사용 흐름을 일부 갖추고 있었음을 확인) → 4개 기능 직접 구현:
+  1. **조회→다운로드 흐름**: "List logs"/"Current" 성공 응답 아래 `.download-companion` 콜아웃(같은 조건으로 페어 다운로드 오퍼레이션으로 전환하는 버튼) 추가. 값은 이미 shared inputGroup으로 넘어가 있어 별도 복사 로직 불필요.
+  2. **이전 조회값 드롭다운**: `equipmentId`/`logType`/`configurationType`에 `<datalist>` 부착. 모든 성공 JSON 응답(목록 items, catalog-file-types의 logs/configurations 요약, 제출한 폼 값)에서 값을 수집해 후보로 축적 — 자유 입력은 그대로 허용.
+  3. **API별 파라미터 설명**: 페이지 로드 시 `/openapi/v1.json`을 fetch해 경로별 파라미터 설명을 캐시하고, 각 필드 힌트로 표시(명시적 hint가 있으면 그게 우선). 4번에서 추가한 서버 측 설명이 그대로 소스.
+  4. **datetime picker(사용자가 세션 중 추가 요청)**: `from`/`to`를 텍스트 입력에서 `<input type="datetime-local" step="1">`로 전환. `SiteTime.Parse`가 offset 없는 값을 이미 Asia/Seoul로 해석하므로 클라이언트 측 변환 불필요.
+- **브라우저 실측 검증**: `dotnet run`(더미 ReferenceData 연결 문자열로 기동, DB 호출 없이 폼/힌트/에러 경로만 확인) + Playwright(headless, `chromium-cli` 미설치라 scratchpad에 `npm install playwright` 후 직접 스크립트 작성)로 datetime picker 렌더링, OpenAPI 힌트 로딩, 401 에러 렌더링, (route 인터셉트로 성공 응답을 mock해) download-companion 버튼 동작·값 이관·datalist 후보 채워짐을 전부 스크린샷으로 확인.
+- **최종 게이트**: build 0 warning, 단위 289/289, 통합 138/138(신규 13건 포함, origin/main 최신 기준).
+- **커밋/PR**: `c70aa01`, PR #41(`feat/issue-19-tester-ux` → main), https://github.com/hjung3113/FileGateway/pull/41 — 아직 리뷰/머지 전.
+- **다음 세션 할 일**: (1) PR #41 리뷰(사용자 또는 독립 모델) → merge → Issue #19 CLOSE 확인. (2) 위 경고대로 PR #33(`docs/session-handoff-and-slice-orchestration`) 상태 정리 — origin/main 기준으로 rebase 후 merge할지, 아니면 이 세션이 쌓은 HANDOFF 이력을 다른 방식으로 합칠지 사용자와 확인. (3) 남은 open issue: #13(HTTPS 서버 인증서), #12(FTP localhost 조회 502 Bad Gateway 버그).
 
 ## 2026-09-02 세션 상태 #11 — Issue #27 merge 완료, 이슈 클러스터(#26~32) 전체 종료
 
