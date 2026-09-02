@@ -3,6 +3,18 @@
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
 
+## 2026-09-02 세션 상태 #10 — Issue #30 merge 완료
+
+**세션 #9가 계획해둔 다음 작업(#30 → #27) 중 #30(캐시 warm-up)을 새 워크트리로 착수해 구현→CONDUCTOR 검증→독립 리뷰→PR→merge까지 완료. Issue #30 CLOSED.**
+
+- **구현**: 워크트리 `hjung3113/issue-30-cache-warmup`(base `origin/main` `95f56f9`), `codex exec` headless(gpt-5.6-sol, high effort, `--approve-for-me`)로 구현. `ReferenceDataWarmupService`(신규 `IHostedService`)를 추가해 `IReferenceDataCache.GetSnapshotAsync`(기존 single-flight 경로 그대로)를 startup에서 1회 호출. warm-up 실패(`ReferenceDataUnavailable`) 시 예외를 삼켜 프로세스는 생존시키고 `/health/ready`가 기존 계약대로 503과 재시도를 계속 제공(정책 결정: fail-fast로 프로세스를 죽이지 않는 쪽, 기존 stale/LKG 재시도 패턴과 일관성 유지 — `docs/06-reference-data.md`에 명문화). `ReferenceDataCache.LoadAsync`에 `Stopwatch`로 SP read elapsed와 validation/build elapsed를 분리 계측해 `LogLoadCompleted` 구조화 로그(loadKind, spReadElapsedMs, validationBuildElapsedMs, totalElapsedMs, 4개 row count, success, staleOrLkgUsed)로 남기도록 확장. 회귀 테스트: `ApiBootstrapTests.cs`에 startup warm-up이 API 요청 없이 initial load를 수행하는지, 동시 startup+ready 요청이 단일 initial load만 유발하는지(source.Calls==1), warm-up 실패 시 프로세스 생존+ready 재시도(503→재시도→200) 검증 3건 추가. `ReferenceDataLoggingTests.cs`에 구조화 로그 필드 단언 테스트 추가. 커밋 `4ea59e0`.
+- **CONDUCTOR 독립 검증**: `dotnet build`(0 warning/0 error) + `dotnet test`(unit 289/289 + integration 120/120 = 409/409, worker 자체 보고와 일치) 재실행 확인 후 push, PR #39 오픈.
+- **독립 모델 리뷰(omp glm-5.3 high, diff-scoped — issue #30 의도 일치 여부만)**: P1 없음, P2 없음, P3(비차단) 3건만 — TTL 만료 중 진행 중인 refresh에 올라타는(piggyback) 호출자는 `StaleOrLkgUsed` 진단 플래그가 설정 안 됨(저계산, 완화적), 동기 완료 initial load 시 `LogLoadCompleted`가 `_gate` 잠금을 홀드한 채 호출됨(실제 SP 읽기는 동기 완료되지 않아 사실상 테스트 fake 경로에서만 도달), source read 실패 시 row count 필드가 null(read 실패 시 행수를 알 수 없어 불가피). 리뷰가 26개(신규) + 8개(기존 `ReferenceDataCacheTests` 회귀) 테스트를 직접 재실행해 실질성 확인 — merge 가능 판정.
+- **merge**: PR #39 `--merge --delete-branch`(`27e03cf`), origin 브랜치 자동 삭제. Issue #30 "Closes #30"으로 자동 CLOSE.
+- **정리**: 워크트리 `issue-30-cache-warmup` `orca worktree rm --force` 완료.
+- **프로세스 참고 (세션 #10)**: `codex exec`의 `--full-auto` 플래그는 이 버전에 없음(구버전 문서 오기) — `--approve-for-me`(workspace-write 자동승인)를 사용할 것, `-s workspace-write`와 동시 지정 불가(충돌 에러). 워크트리 터미널에서 `gh issue view`가 일시적 네트워크 오류로 실패할 수 있음(메인 세션에서는 정상 동작) — task brief에 issue 원문 전체를 인라인으로 포함해두면 worker가 재조회 실패해도 진행 가능. `orca terminal wait --for tui-idle`은 exec 모드 CLI(코덱 exec, 비 TUI)에서는 즉시 satisfied로 돌아오는 경우가 있어 신뢰 불가 — 실제 완료는 `ps -p <pid>`로 프로세스 생존 여부를 직접 확인하는 것이 안전(Bash `run_in_background` + `until ! ps -p <pid>` 패턴).
+- **다음 작업**: 세션 #8/#9 계획대로 **#27(equipment catalog API, 완전 독립)**. 아직 워크트리 미생성 — 다음 세션에서 새로 시작.
+
 ## 2026-09-02 세션 상태 #9 — Issue #28 merge 완료
 
 **세션 #8이 계획해둔 다음 작업(#28 → #30 → #27) 중 #28(기준정보 검증 진단 노출)을 새 워크트리로 착수해 구현→CONDUCTOR 검증→독립 리뷰→PR→사용자 리뷰 반영→merge까지 완료. Issue #28 CLOSED.**
