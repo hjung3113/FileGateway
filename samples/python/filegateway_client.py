@@ -64,7 +64,10 @@ class FileGatewayClient:
             raise FileGatewayError.from_response(resp)
         return resp.json()
 
-    # --- 설비별 제공 파일 종류 ---
+    # --- 설비 catalog ---
+
+    def list_equipments(self) -> dict:
+        return self._get_json("/api/v1/equipments", {})
 
     def get_file_types(self, equipment_id: str) -> dict:
         # path segment이므로 '/' 등도 인코딩해야 세그먼트 경계를 벗어나지 않는다.

@@ -28,7 +28,7 @@
    - 해석 실패 후보는 제외하지 않고 `FileDefinitionConflict`.
 6. **token codec**: ASP.NET Core DataProtection 기반. payload JSON을 purpose protector로 보호 후 Base64Url. payload에 `exp`(IssuedAt+Ttl) 포함, decode 시 만료/변조/형식 오류를 구분(`Expired` vs `Invalid`). purpose는 각 token 종류마다 독립 문자열. key ring은 DataProtection가 관리(자동 rotation, 기본 수명 90일 ≥ fileId TTL 24시간) — IIS 배포 시 파일 시스템 persist로 재시작 내구성 확보.
 7. **token purpose 문자열**: Logs fileId `fg.fileid.log`, Logs cursor `fg.page.log`, ConfigurationCurrent fileId `fg.fileid.cfgcurrent`, ConfigurationSnapshot fileId `fg.fileid.cfgsnapshot`, History cursor `fg.page.cfghistory`.
-8. **SP 계약**: 단일 SP `FileGateway_GetReferenceData`가 순서대로 4개 result set 반환: Equipments(ServerId 아님, EquipmentId), Servers(ServerId, Host, RootPath), LogDefinitions(EquipmentId, LogType, ServerId, GenerationType, PathTemplate, FilePattern, Cardinality, MetadataMode, MetadataPattern, MetadataMappings), ConfigurationDefinitions(EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, CurrentFilePattern, HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate). `MetadataMappings`은 JSON 배열 `[{"group":"...","target":"...","format":"..."}]` (format 선택). SP/스키마 스크립트는 `db/`에 테스트·개발용 계약 구현으로 제공하고 운영 DB 내부 구조는 이 계약만 지키면 자유다.
+8. **SP 계약**: 단일 SP `FileGateway_GetReferenceData`가 4개 result set을 반환하며 컬럼 순서는 계약이 아니다. Equipments(`EquipmentId`), Servers(`ServerId`, `Host`, `FileRootPath`), LogDefinitions(`EquipmentId`, `LogType`, `ServerId`, `GenerationType`, `DirectoryTemplate`, `FileNamePattern`, `SlotCardinality`, `MetadataParseMode`, `RelativePathMetadataPattern`, `MetadataGroupMappings`), ConfigurationDefinitions(`EquipmentId`, `ConfigurationType`, `ServerId`, `CurrentDirectoryTemplate`, `CurrentFileNamePattern`, `CurrentFileNameMatchMode`, `HistoryDirectoryTemplate`, `HistoryFileNamePattern`, `HistoryFileNameMatchMode`, `HistoryCompletionMarkerPathTemplate`, `HistoryTimestampParseMode`, `HistoryFileNameTimestampPattern`, `HistoryTimestampMappings`). 두 mappings 컬럼은 JSON 배열 `[{"group":"...","target":"...","format":"..."}]` (format 선택). SP/스키마 스크립트는 `db/`에 테스트·개발용 계약 구현으로 제공하고 운영 DB 내부 구조는 이 계약만 지키면 자유다.
 9. **시각 표현**: 내부 비교는 UTC instant, 경계/슬롯 계산은 Asia/Seoul. API 입출력 시각은 offset 포함 ISO-8601(`DateTimeOffset` round-trip "O"). 입력에 offset 없으면 Asia/Seoul로 해석.
 10. **기준정보 접근 인터페이스**: Infrastructure의 `ReferenceDataCache`가 `IReferenceDataView.GetSnapshotAsync(ct)` 하나로 노출하고, Api/Logs/Configurations는 `ReferenceDataSnapshot`의 조회 메서드만 사용한다(정의 provider 인터페이스 다발을 만들지 않는다).
 11. **Health endpoint는 인증 없음**, `/api/*`만 X-Api-Key 대상.
@@ -45,8 +45,8 @@
 모든 Task의 요구사항에 암묵적으로 포함된다. 출처는 통합 Spec/역할별 문서.
 
 - 파일명 비교는 case-insensitive, 원본 casing은 응답에 보존. `subtype`/`attributes` 비교는 case-sensitive.
-- 시간 범위는 반개구간 `[from, to)`. `from >= to` → `InvalidRequest`. `to` 단독 → `InvalidRequest`. `from` 단독 → `[from, from+2일)`. 둘 다 없음 → 최근 24시간. `Logs.MaxQueryRange` ≥ 2일(시작 시 검증), 초과 → `InvalidRequest`.
-- Continuous는 `from`/`to` 입력 시 `InvalidRequest`, 최근 24시간 기본값 미적용, `timestamp` 없으면 `null`.
+- 시간 범위는 반개구간 `[from, to)`. `from >= to` → `InvalidRequest`. `to` 단독 → `InvalidRequest`. `from` 단독 → `[from, from+2일)`. 둘 다 없음 → 최근 2일. `Logs.MaxQueryRange` ≥ 2일(시작 시 검증), 초과 → `InvalidRequest`.
+- Continuous는 `from`/`to` 입력 시 `InvalidRequest`, 최근 2일 기본값 미적용, `timestamp` 없으면 `null`.
 - Configuration History는 `from`/`to` 모두 필수, `Configurations.HistoryMaxQueryRange` 초과 → `InvalidRequest`, Current를 포함하지 않는다.
 - 정렬: Hourly/Daily `timestamp DESC` + case-insensitive `fileName ASC`. Continuous `fileName ASC`. Current `fileName ASC`. History `snapshotTimestamp DESC` + `fileName ASC`.
 - pagination은 `limit + opaque stateless continuationToken`. `limit`은 결과집합 조건이 아니라 페이지 크기(페이지마다 변경 허용). 토큰 유지 중 결과집합 조건 변경 → `InvalidRequest`. continuation token 오류(만료/변조/형식)는 전부 `400 InvalidRequest`(410 없음).
@@ -169,7 +169,7 @@ tests/
 | `03-server-access-core.md` | `IFileAccess` 구체 시그니처 확정(계획 Task 3), `FtpOptions.Security`(Plain/ExplicitTls/ImplicitTls)·인증서 정책·동시성 lease 계약(스트림이 permit 소유), 연결 후 명령 오류도 동일 매핑 |
 | `04a-log-provider.md` | pathTemplate 토큰 문법(`{yyyy}{MM}{dd}{HH}`), Template 메타데이터 토큰(`{subtype}`,`{attribute.<key>}`,날짜 토큰), Regex mapping target 문법(group→`timestamp(format)`/`subtype`/`attribute.<key>`), Daily/Hourly/Continuous별 필수 토큰 규칙, 중복 판정의 "동일 탐색 결과(디렉터리) 범위" 명시 |
 | `04b-configuration-provider.md` | History 하한 경계([from,to) 정확 적용 — from이 자정이 아니면 그날 자정 Set 제외), currentRule/historyRule pathTemplate 토큰 문법 |
-| `06-reference-data.md` | SP 4-result-set 계약(컬럼 목록·순서·MetadataMappings JSON 형식), `db/` 스크립트의 테스트/개발용 계약 구현 지위 |
+| `06-reference-data.md` | SP 4-result-set 계약(컬럼 목록·이름 검증·mapping JSON 형식), `db/` 스크립트의 테스트/개발용 계약 구현 지위 |
 | `09-security-and-operations.md` | `/health/ready` 최초 로딩 유도 계약(usable cache 없으면 ready가 DB/SP 로딩을 유발, stale면 200), 감사 파이프라인 순서와 `Audit.ErrorCode` 경로, token 보호 key의 DataProtection 파일 persist·rotation 정책 |
 | `10-testing-and-deployment.md` | 테스트 이미지/패키지 버전 고정(latest 금지), MVP 완료 = 자동화 게이트 + 수동 배포 검증(Task 21 절차) 이중 게이트 명시 |
 
@@ -1193,7 +1193,7 @@ git add -A && git commit -m "feat(infra): fluentftp adapter with error mapping a
   - Configurations: `record CurrentRule(string PathTemplate, string FilePattern)`, `record HistoryRule(string PathTemplate, string FilePattern, string MarkerPathTemplate)`, `record EquipmentConfigurationDefinition(string EquipmentId, string ConfigurationType, string ServerId, CurrentRule CurrentRule, HistoryRule HistoryRule)`, `record ResolvedConfigurationDefinition(EquipmentConfigurationDefinition Definition, FileServerConnection Server)`
   - `static class ConfigurationDefinitionValidator { IReadOnlyList<string> Validate(EquipmentConfigurationDefinition def); }`
   - `static class ConfigurationTokenKinds { const string FileIdCurrentPurpose = "fg.fileid.cfgcurrent"; const string FileIdSnapshotPurpose = "fg.fileid.cfgsnapshot"; const string ContinuationPurpose = "fg.page.cfghistory"; }`
-  - Infrastructure: `record RawServer(string ServerId, string Host, string RootPath)`, `record RawLogDefinition(string EquipmentId, string LogType, string ServerId, string GenerationType, string PathTemplate, string FilePattern, string Cardinality, string MetadataMode, string MetadataPattern, string MetadataMappingsJson)`, `record RawConfigurationDefinition(string EquipmentId, string ConfigurationType, string ServerId, string CurrentPathTemplate, string CurrentFilePattern, string HistoryPathTemplate, string HistoryFilePattern, string HistoryMarkerPathTemplate)`, `record ReferenceDataRaw(IReadOnlyList<string> EquipmentIds, IReadOnlyList<RawServer> Servers, IReadOnlyList<RawLogDefinition> LogDefinitions, IReadOnlyList<RawConfigurationDefinition> ConfigurationDefinitions)`
+  - Infrastructure: `record RawServer(string ServerId, string Host, string FileRootPath)`, `record RawLogDefinition(string EquipmentId, string LogType, string ServerId, string GenerationType, string DirectoryTemplate, string FileNamePattern, string SlotCardinality, string MetadataParseMode, string RelativePathMetadataPattern, string MetadataGroupMappingsJson)`, `record RawConfigurationDefinition(string EquipmentId, string ConfigurationType, string ServerId, string CurrentDirectoryTemplate, string CurrentFileNamePattern, string CurrentFileNameMatchMode, string HistoryDirectoryTemplate, string HistoryFileNamePattern, string HistoryFileNameMatchMode, string HistoryCompletionMarkerPathTemplate, string HistoryTimestampParseMode, string HistoryFileNameTimestampPattern, string HistoryTimestampMappings)`, `record ReferenceDataRaw(IReadOnlyList<string> EquipmentIds, IReadOnlyList<RawServer> Servers, IReadOnlyList<RawLogDefinition> LogDefinitions, IReadOnlyList<RawConfigurationDefinition> ConfigurationDefinitions)`
   - `class ReferenceDataSnapshot { IReadOnlySet<string> EquipmentIds; IReadOnlyDictionary<string, FileServerConnection> Servers; ResolvedLogDefinition? FindLog(equipmentId, logType); ResolvedConfigurationDefinition? FindConfiguration(equipmentId, configurationType); IReadOnlyList<LogTypeSummary> GetLogSummaries(equipmentId); IReadOnlyList<string> GetConfigurationTypeSummaries(equipmentId); }`
   - `static class ReferenceDataSnapshotBuilder { static ReferenceDataSnapshot Build(ReferenceDataRaw raw); }` — 검증 실패 시 `ReferenceDataValidationException(IReadOnlyList<string> Errors)`
 
@@ -1427,7 +1427,7 @@ public static class LogDefinitionValidator
 `ConfigurationDefinitionValidator`: current/history pathTemplate 안전성(원칙 동일), glob 유효성, history pathTemplate과 markerPathTemplate에 `{yyyy}{MM}{dd}` 필수 포함, `{HH}` 금지.
 
 `ReferenceDataSnapshotBuilder.Build(raw)` 절차:
-1. row 파싱(GenerationType/Cardinality/MetadataMode parse 실패 → 오류 목록 추가), MetadataMappingsJson 역직렬화.
+1. row 파싱(GenerationType/SlotCardinality/MetadataParseMode parse 실패 → 오류 목록 추가), MetadataGroupMappingsJson 역직렬화.
 2. EquipmentIds 집합 구성(중복 → 오류).
 3. Servers 중복 ServerId → 오류.
 4. 각 log/config 정의: equipmentId/serverId 존재, feature validator 오류 없음, `(equipmentId, logType)`/`(equipmentId, configurationType)` 중복 → 오류.
@@ -1469,20 +1469,26 @@ git add -A && git commit -m "feat(reference-data): validated reference data snap
 -- db/mvp-schema.sql (테스트/개발용 계약 구현)
 CREATE TABLE dbo.FgEquipment (EquipmentId nvarchar(64) NOT NULL PRIMARY KEY);
 CREATE TABLE dbo.FgServer (ServerId nvarchar(64) NOT NULL PRIMARY KEY,
-    Host nvarchar(255) NOT NULL, RootPath nvarchar(512) NOT NULL);
+    Host nvarchar(255) NOT NULL, FileRootPath nvarchar(512) NOT NULL);
 CREATE TABLE dbo.FgLogDefinition (
     EquipmentId nvarchar(64) NOT NULL, LogType nvarchar(128) NOT NULL,
     ServerId nvarchar(64) NOT NULL, GenerationType nvarchar(16) NOT NULL,
-    PathTemplate nvarchar(512) NOT NULL, FilePattern nvarchar(256) NOT NULL,
-    Cardinality nvarchar(16) NOT NULL, MetadataMode nvarchar(16) NOT NULL,
-    MetadataPattern nvarchar(1024) NOT NULL, MetadataMappings nvarchar(max) NOT NULL DEFAULT '[]',
+    DirectoryTemplate nvarchar(512) NOT NULL, FileNamePattern nvarchar(256) NOT NULL,
+    SlotCardinality nvarchar(16) NOT NULL, MetadataParseMode nvarchar(16) NOT NULL,
+    RelativePathMetadataPattern nvarchar(1024) NOT NULL,
+    MetadataGroupMappings nvarchar(max) NOT NULL DEFAULT '[]',
     CONSTRAINT PK_FgLogDefinition PRIMARY KEY (EquipmentId, LogType));
 CREATE TABLE dbo.FgConfigurationDefinition (
     EquipmentId nvarchar(64) NOT NULL, ConfigurationType nvarchar(128) NOT NULL,
     ServerId nvarchar(64) NOT NULL,
-    CurrentPathTemplate nvarchar(512) NOT NULL, CurrentFilePattern nvarchar(256) NOT NULL,
-    HistoryPathTemplate nvarchar(512) NOT NULL, HistoryFilePattern nvarchar(256) NOT NULL,
-    HistoryMarkerPathTemplate nvarchar(512) NOT NULL,
+    CurrentDirectoryTemplate nvarchar(512) NOT NULL, CurrentFileNamePattern nvarchar(256) NOT NULL,
+    CurrentFileNameMatchMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryDirectoryTemplate nvarchar(512) NOT NULL, HistoryFileNamePattern nvarchar(256) NOT NULL,
+    HistoryFileNameMatchMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryCompletionMarkerPathTemplate nvarchar(512) NOT NULL,
+    HistoryTimestampParseMode nvarchar(16) NOT NULL DEFAULT '',
+    HistoryFileNameTimestampPattern nvarchar(1024) NOT NULL DEFAULT '',
+    HistoryTimestampMappings nvarchar(max) NOT NULL DEFAULT '',
     CONSTRAINT PK_FgConfigurationDefinition PRIMARY KEY (EquipmentId, ConfigurationType));
 ```
 
@@ -1492,12 +1498,14 @@ CREATE OR ALTER PROCEDURE dbo.FileGateway_GetReferenceData AS
 BEGIN
     SET NOCOUNT ON;
     SELECT EquipmentId FROM dbo.FgEquipment;
-    SELECT ServerId, Host, RootPath FROM dbo.FgServer;
-    SELECT EquipmentId, LogType, ServerId, GenerationType, PathTemplate, FilePattern,
-           Cardinality, MetadataMode, MetadataPattern, MetadataMappings
+    SELECT ServerId, Host, FileRootPath FROM dbo.FgServer;
+    SELECT EquipmentId, LogType, ServerId, GenerationType, DirectoryTemplate, FileNamePattern,
+           SlotCardinality, MetadataParseMode, RelativePathMetadataPattern, MetadataGroupMappings
     FROM dbo.FgLogDefinition;
-    SELECT EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, CurrentFilePattern,
-           HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate
+    SELECT EquipmentId, ConfigurationType, ServerId, CurrentDirectoryTemplate, CurrentFileNamePattern,
+           CurrentFileNameMatchMode, HistoryDirectoryTemplate, HistoryFileNamePattern,
+           HistoryFileNameMatchMode, HistoryCompletionMarkerPathTemplate, HistoryTimestampParseMode,
+           HistoryFileNameTimestampPattern, HistoryTimestampMappings
     FROM dbo.FgConfigurationDefinition;
 END
 ```
@@ -1563,7 +1571,7 @@ public class SpReaderTests(DatabaseFixture db) : IClassFixture<DatabaseFixture>
         var log = Assert.Single(raw.LogDefinitions);
         Assert.Equal("Hourly", log.GenerationType);
         var cfg = Assert.Single(raw.ConfigurationDefinitions);
-        Assert.Equal("PM/history/{yyyy}/{MM}/{dd}/_DONE", cfg.HistoryMarkerPathTemplate);
+        Assert.Equal("PM/history/{yyyy}/{MM}/{dd}/_DONE", cfg.HistoryCompletionMarkerPathTemplate);
     }
 
     [Fact]
@@ -2284,8 +2292,8 @@ public class EffectiveRangeTests
     private static LogListQuery Q(DateTimeOffset? from = null, DateTimeOffset? to = null)
         => new("EQ-001", "EventLog", from, to, null, [], null, null);
 
-    [Fact] public void No_bounds_defaults_to_last_24h()
-        => Assert.Equal(TimeSpan.FromHours(24),
+    [Fact] public void No_bounds_defaults_to_last_two_days()
+        => Assert.Equal(TimeSpan.FromDays(2),
              EffectiveRangePlanner.Normalize(Q(), GenerationType.Hourly, Max).To
                - EffectiveRangePlanner.Normalize(Q(), GenerationType.Hourly, Max).From);
 
@@ -2482,7 +2490,7 @@ public static class EffectiveRangePlanner
         if (q.To is not null && q.From >= q.To)
             throw new FileGatewayException("InvalidRequest", "from must be before to");
 
-        var from = q.From ?? DateTimeOffset.UtcNow.AddHours(-24);
+        var from = q.From ?? DateTimeOffset.UtcNow.AddDays(-2);
         var to = q.To ?? (q.From is not null ? q.From.Value.AddDays(2) : DateTimeOffset.UtcNow);
         if (to - from > maxRange)
             throw new FileGatewayException("InvalidRequest", $"query range exceeds limit ({maxRange})");

@@ -38,13 +38,25 @@ MVP Windows/IIS FTP 환경에서는 `fileName` 관련 비교를 case-insensitive
 
 ## API v1
 
+### 전체 설비 목록 조회
+
+```http
+GET /api/v1/equipments
+```
+
+검증 완료된 기준정보 snapshot의 전체 `equipmentId`를 `equipmentId ASC`로 반환한다. 결과가 없으면 `200 OK`와 `items: []`를 반환하며, 파일 서버/FTP는 조회하지 않는다. 반환된 `equipmentId`는 기존 설비별 제공 파일 종류 조회에 그대로 사용한다.
+
+```json
+{ "items": [ { "equipmentId": "EQP001" }, { "equipmentId": "EQP002" } ] }
+```
+
 ### 설비별 제공 파일 종류 조회
 
 ```http
 GET /api/v1/equipments/{equipmentId}/file-types
 ```
 
-해당 설비에서 FileGateway를 통해 제공 가능한 파일 종류를 반환한다. 실제 FTP 파일/폴더를 스캔하는 API가 아니라 **MSSQL에서 읽어 검증 완료된 기준정보 snapshot**을 조회한다.
+해당 설비에서 FileGateway를 통해 제공 가능한 파일 종류를 반환한다. 실제 FTP 파일/폴더를 스캔하는 API가 아니라 **MSSQL에서 읽어 전역 계약을 통과하고 정의 단위 검증을 거친 기준정보 snapshot**을 조회한다.
 
 응답 예:
 
@@ -73,6 +85,7 @@ GET /api/v1/equipments/{equipmentId}/file-types
 
 - `equipmentId`가 존재하지 않으면 `404 EquipmentNotFound`
 - 유효한 설비지만 제공 정의가 없으면 `200 OK`와 빈 `logs`/`configurations` 배열
+- 정의 단위 검증에 실패한 Log/Configuration은 catalog에 포함하지 않으며, 해당 타입을 직접 조회하면 각각 `LogDefinitionNotFound`/`ConfigurationDefinitionNotFound`를 반환
 - Log는 `logType`과 해당 조회 의미를 알 수 있는 `generationType`만 노출
 - Configuration은 `configurationType`만 노출
 - `serverId`, host/rootPath, pathTemplate, filePattern, metadataRule, marker 등 내부 기준정보는 노출하지 않음
@@ -103,7 +116,7 @@ GET /api/v1/logs
 
 `from`/`to`는 파일명/경로 메타데이터에서 추출한 로그의 논리 `timestamp` 기준 반개구간 `[from, to)`다. `from`은 포함하고 `to`는 제외한다.
 
-- `from`, `to` 모두 없음 → 최근 24시간
+- `from`, `to` 모두 없음 → 최근 2일
 - `from`만 있음 → `[from, from + 2일)`
 - `to`만 있음 → `InvalidRequest`
 - `from`, `to` 모두 있음 → 지정한 `[from, to)`
@@ -116,7 +129,7 @@ GET /api/v1/logs
 Continuous는 시간 범위를 사용하지 않고 현재 파일을 조회한다.
 
 - `from` 또는 `to`가 포함되면 `InvalidRequest`
-- Hourly/Daily의 최근 24시간 기본값을 적용하지 않음
+- Hourly/Daily의 최근 2일 기본값을 적용하지 않음
 - 명확한 논리 시각이 없으면 `timestamp=null`
 
 Timezone 정보가 없는 논리 시각은 현재 Site 운영 시간대 `Asia/Seoul`로 해석한다. API의 시간 값은 UTC offset이 포함된 ISO-8601 형식을 사용한다. Daily 로그의 `timestamp`는 해당 날짜의 Site local `00:00`이다. Continuous 로그에 명확한 논리 시각이 없으면 현재 시각이나 FTP modified time으로 대체하지 않는다.
@@ -171,7 +184,7 @@ Log continuation token은 서버에 이전 FTP 결과 전체를 저장하지 않
 - Continuous cursor: `fileName`
 - cursor의 `fileName` 비교는 case-insensitive
 
-탐색 규칙의 `filePattern`에 후보로 일치한 파일을 필수 metadata 규칙으로 해석하지 못하면 조용히 제외하지 않고 `FileDefinitionConflict`(500)로 처리한다.
+탐색 규칙의 `filePattern`에 후보로 일치했지만 필수 metadata 규칙으로 해석하지 못한 파일은 해당 조회 후보에서 제외한다. Hourly/Daily의 logical identity/cardinality 충돌 검사는 요청 시간 범위 `[from,to)` 안에 남은 후보에만 적용한다.
 
 조건 기반 존재 여부 전용 HEAD endpoint는 추가하지 않는다. 조건 기반 존재 확인은 목록 조회를 사용하고, 특정 `fileId`의 현재 상태/존재 확인은 공통 `GET /api/v1/files?fileId=...`를 사용한다.
 
@@ -386,7 +399,7 @@ query parameter는 목록과 동일하게 해석한다. `limit`/`continuationTok
 - 1개 일치: 단일 파일 스트리밍 다운로드(`Content-Type: application/octet-stream`, open 시점 크기의 `Content-Length`, `Content-Disposition: attachment`)
 - 2개 이상 정상 파일이 사용자 조건에 일치: zip 스트리밍 다운로드(아래 계약)
 - 기준정보의 `cardinality=Single`인데 하나의 논리 생성 슬롯에서 실제 탐색 결과가 2개 이상: `FileDefinitionConflict` (500)
-- 후보 파일이 필수 metadata 규칙으로 해석되지 않음: `FileDefinitionConflict` (500)
+- `filePattern` 후보가 필수 metadata 규칙으로 해석되지 않음: 해당 파일만 결과 후보에서 제외
 
 `MultipleFilesMatched`는 이 endpoint에서 더 이상 반환되지 않는다. 오류 코드 자체는 Current Configuration 직접 다운로드가 계속 사용하므로 유지한다.
 

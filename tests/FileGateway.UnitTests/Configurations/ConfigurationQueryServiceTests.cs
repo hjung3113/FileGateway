@@ -158,10 +158,10 @@ public class ConfigurationQueryServiceTests
         var raw = new ReferenceDataRaw(["EQ-001"], [new RawServer("SRV1", "ftp1", "ftproot")], [],
         [
             new RawConfigurationDefinition("EQ-001", "PM", "SRV1",
-                "PM/current", "PM*.cfg",
-                "PM/history/{yyyy}/{MM}/{dd}", "*",
+                "PM/current", "PM*.cfg", "",
+                "PM/history/{yyyy}/{MM}/{dd}", "*", "",
                 "PM/history/{yyyy}/{MM}/{dd}/_DONE",
-                HistoryMetadataMode: "Template", HistoryMetadataPattern: "{yyyy}{MM}{dd}{HH}")
+                "Template", "{yyyy}{MM}{dd}{HH}", "")
         ]);
         var ftp = new FakeFileAccess();
         ftp.AddFile("PM/history/2026/08/22/2026082220.zip", "aa"u8.ToArray());

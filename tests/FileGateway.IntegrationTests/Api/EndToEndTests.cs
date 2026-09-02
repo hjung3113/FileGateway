@@ -56,7 +56,7 @@ public class EndToEndTests(DatabaseFixture db, FtpAdapterFixture ftp)
         Assert.Equal(2, catalog.GetProperty("logs").GetArrayLength());
 
         // 2) 로그 목록 → fileId → metadata → download.
-        // 실제 시계(TimeProvider.System)를 쓰므로 기본 24h 창 대신 시드 슬롯을 명시적으로 지정한다.
+        // 실제 시계(TimeProvider.System)를 쓰므로 기본 2일 창 대신 시드 슬롯을 명시적으로 지정한다.
         var list = await client.GetFromJsonAsync<JsonElement>(
             "/api/v1/logs?equipmentId=EQ-001&logType=EventLog&from=2026-08-22T00:00:00%2B09:00&to=2026-08-23T00:00:00%2B09:00");
         var fileId = list.GetProperty("items")[0].GetProperty("fileId").GetString()!;
@@ -122,8 +122,8 @@ public class EndToEndTests(DatabaseFixture db, FtpAdapterFixture ftp)
             'Trace/cur','Trace_*.log','Single','Template',
             'Trace/cur/Trace_{subtype}.log','[]');
         INSERT dbo.FgConfigurationDefinition
-            (EquipmentId, ConfigurationType, ServerId, CurrentPathTemplate, CurrentFilePattern,
-             HistoryPathTemplate, HistoryFilePattern, HistoryMarkerPathTemplate)
+            (EquipmentId, ConfigurationType, ServerId, CurrentDirectoryTemplate, CurrentFileNamePattern,
+             HistoryDirectoryTemplate, HistoryFileNamePattern, HistoryCompletionMarkerPathTemplate)
             VALUES('EQ-001','PM','SRV1',
             'PM/current','PM_*.cfg','PM/history/{yyyy}/{MM}/{dd}','PM_*.cfg',
             'PM/history/{yyyy}/{MM}/{dd}/_DONE');");

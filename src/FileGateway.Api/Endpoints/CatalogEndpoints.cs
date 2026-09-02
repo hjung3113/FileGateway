@@ -8,6 +8,18 @@ public static class CatalogEndpoints
 {
     public static IEndpointRouteBuilder MapCatalogEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapGet("/api/v1/equipments",
+            async (IReferenceDataView referenceData, CancellationToken ct) =>
+        {
+            var snapshot = await referenceData.GetSnapshotAsync(ct);
+            return Results.Ok(new
+            {
+                items = snapshot.EquipmentIds
+                    .OrderBy(equipmentId => equipmentId, StringComparer.Ordinal)
+                    .Select(equipmentId => new { equipmentId }),
+            });
+        });
+
         app.MapGet("/api/v1/equipments/{equipmentId}/file-types",
             async (string equipmentId, IReferenceDataView referenceData, HttpContext ctx, CancellationToken ct) =>
         {

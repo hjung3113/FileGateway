@@ -38,6 +38,14 @@ public class LogEndpointTests : IClassFixture<ApiFactory>
         ],
         []));
 
+    private static ReferenceDataSnapshot SnapshotWithQuarantinedLog() => ReferenceDataSnapshotBuilder.Build(new(
+        ["EQ-001"],
+        [new RawServer("SRV1", "ftp1", "ftproot")],
+        [new RawLogDefinition("EQ-001", "BrokenLog", "SRV1", "Hourly",
+            "Logs/{yyyy}/{MM}/{dd}/{HH}", "Broken_*.zip", "Multiple", "Regex",
+            "Logs/(?<name>.*)", "[]")],
+        []));
+
     private static FakeFileAccess FakeFtp()
     {
         var ftp = new FakeFileAccess();
@@ -191,7 +199,21 @@ public class LogEndpointTests : IClassFixture<ApiFactory>
         Assert.DoesNotContain("ftproot", json, StringComparison.Ordinal);
     }
 
-    // 설계 §5: 명시 범위(3파일 매치 — 기본 24h 창은 2매치뿐)를 사용해야 한다.
+    [Fact]
+    public async Task Quarantined_log_definition_is_404_not_500()
+    {
+        using var factory = new ApiFactory();
+        factory.SetSnapshot(SnapshotWithQuarantinedLog());
+
+        using var response = await factory.CreateClient()
+            .GetAsync("/api/v1/logs?equipmentId=EQ-001&logType=BrokenLog");
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(404, (int)response.StatusCode);
+        Assert.Equal("LogDefinitionNotFound", body.GetProperty("code").GetString());
+    }
+
+    // 설계 §5: 3파일이 모두 포함되는 명시 범위를 사용한다.
     private const string ThreeFileRange =
         "/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2026-08-22T10%3A00%3A00%2B09%3A00&to=2026-08-22T19%3A00%3A00%2B09%3A00";
 

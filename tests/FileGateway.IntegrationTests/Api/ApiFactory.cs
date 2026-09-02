@@ -14,7 +14,7 @@ namespace FileGateway.IntegrationTests.Api;
 /// 실제 호스트는 지연 생성되는 InnerFactory가 담당하며, RestartApplication으로 재시작을 시뮬레이션할 수 있다.</summary>
 public sealed class ApiFactory : IAsyncLifetime, IDisposable
 {
-    // 기본 시각: 시드 파일(2026-08-22 KST)이 기본 24h 조회 범위에 들어오도록 고정.
+    // 기본 시각: 시드 파일(2026-08-22 KST)이 기본 2일 조회 범위에 들어오도록 고정.
     private readonly MutableTimeProvider _clock = new(new DateTimeOffset(2026, 8, 23, 3, 0, 0, TimeSpan.Zero));
     private readonly SwitchableFileAccess _fileAccess = new(new ThrowingFileAccess());
     private readonly FixedSnapshotView _view = new(null);

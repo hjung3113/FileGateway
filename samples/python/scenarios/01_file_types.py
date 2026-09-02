@@ -1,4 +1,4 @@
-"""유즈케이스: 설비가 제공하는 logType/configurationType 조회.
+"""유즈케이스: 전체 설비를 조회한 뒤 선택한 설비의 logType/configurationType 조회.
 
 호출 전 실제 어떤 로그/Configuration을 조회 가능한지 확인할 때 사용한다.
 FTP를 스캔하지 않고 기준정보 snapshot만 반환하므로 빠르다.
@@ -12,8 +12,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # filegateway_c
 from filegateway_client import FileGatewayClient, FileGatewayError
 
 
-def main(equipment_id: str) -> None:
+def main(equipment_id: str | None = None) -> None:
     client = FileGatewayClient()
+    if equipment_id is None:
+        items = client.list_equipments()["items"]
+        if not items:
+            raise SystemExit("no equipment available")
+        equipment_id = items[0]["equipmentId"]
+
     try:
         result = client.get_file_types(equipment_id)
     except FileGatewayError as err:
@@ -29,4 +35,4 @@ def main(equipment_id: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "EQ-001")
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

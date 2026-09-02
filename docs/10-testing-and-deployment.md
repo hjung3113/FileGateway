@@ -17,14 +17,14 @@
 - 여러 논리 시간 슬롯이 동일 디렉터리를 계산하는 구조 허용 및 동일 디렉터리 중복 탐색 제거
 - 한 디렉터리 안의 여러 시간대 파일을 MetadataRule로 구분해 범위 필터 적용
 - Hourly/Daily 로그 시간 범위 규칙
-  - `from`/`to` 없음 → 최근 24시간
+  - `from`/`to` 없음 → 최근 2일
   - `from`만 있음 → `[from, from + 2일)`
   - `to`만 있음 → `InvalidRequest`
   - `from`/`to` 모두 있음 → 지정 범위
   - `Logs.MaxQueryRange` 초과 → `InvalidRequest`
   - `Logs.MaxQueryRange`가 2일 미만이면 설정 검증 실패
 - Continuous에 `from` 또는 `to`가 들어오면 `InvalidRequest`
-- Continuous에는 최근 24시간 기본 범위를 적용하지 않음
+- Continuous에는 최근 2일 기본 범위를 적용하지 않음
 - Daily timestamp의 Site local `00:00` 처리
 - Continuous timestamp가 없는 경우 `null` 처리
 - Hourly/Daily 정렬 `timestamp DESC + fileName ASC`
@@ -35,7 +35,7 @@
 - case-insensitive 기준 동일 파일명 2개 발견 시 `FileDefinitionConflict`
 - attribute filter의 case-sensitive 일치
 - `cardinality`의 슬롯 단위 검증
-- 후보 파일 metadata 파싱 실패 → `FileDefinitionConflict`
+- `filePattern` 후보 metadata 파싱 실패 → 해당 파일만 결과 후보에서 제외
 - 계산된 목록 디렉터리 없음 → 해당 탐색 결과 0개
 - 설비별 Log/Configuration 정의를 제공 파일 종류 응답으로 투영
 - 제공 파일 종류 응답이 `logType + generationType`, `configurationType`만 포함하고 내부 경로/rule 정보를 포함하지 않음
@@ -55,8 +55,9 @@
 - History marker 파일 존재/부재 판정
 - History marker 내용은 읽거나 해석하지 않음
 - 정규화 경로의 `rootPath` 경계 검증 및 traversal 차단
-- 기준정보 전체 validation 성공 후 cache atomic 교체
-- 기준정보 일부 validation 실패 시 전체 refresh 거부
+- 필수 result set/Equipment/Server 전역 validation 성공 후 유효 정의만 담은 cache atomic 교체
+- 개별 Log/Configuration validation 실패·unknown reference·중복 key 시 해당 정의 격리 및 정상 정의 가용성 유지
+- Equipment/Server 전역 validation 실패 시 전체 refresh 거부
 - 기준정보 validation은 구조/문법/invariant만 검사하고 FTP 실재 확인은 수행하지 않음
 - lazy refresh single-flight 동작
 
@@ -69,9 +70,10 @@
 - TTL 만료 동시 요청에서 Stored Procedure refresh가 single-flight로 1회 수행되는지 검증
 - last-good cache가 있는 refresh 중 다른 요청이 기존 cache로 처리되는지 검증
 - 최초 cache 없음 상태의 동시 요청이 동일 refresh 결과를 공유하는지 검증
-- 새 기준정보 전체 validation 성공 시 atomic cache 교체
-- validation 실패 + last-good cache 존재 시 새 데이터 미적용 및 stale fallback
-- 최초 기준정보 validation 실패 + cache 없음 → `ReferenceDataUnavailable`
+- 전역 기준정보 validation 성공 및 개별 invalid 정의 격리 후 atomic cache 교체
+- DB/SP·result set·전역 validation 실패 + last-good cache 존재 시 새 데이터 미적용 및 stale fallback
+- 최초 기준정보 조회 또는 전역 validation 실패 + cache 없음 → `ReferenceDataUnavailable`
+- partial invalid refresh에서 정상 Log/Configuration 정의 유지 및 invalid 정의 제외
 - 기준정보 refresh/readiness가 FTP 서버 전체를 선제 순회하지 않음
 - 설비별 제공 파일 종류 조회가 기준정보 cache만 사용하고 FTP 접근을 발생시키지 않음
 - DB 기준정보에 새 `logType`/`configurationType` 추가 후 정상 cache refresh 시 코드 변경 없이 catalog 결과에 반영
@@ -107,6 +109,7 @@ Current Configuration 및 Hourly/Daily 파일의 생산 방식 자체, 원자적
 - `GET /api/v1/equipments/{equipmentId}/file-types` 제공 파일 종류 조회
 - 제공 파일 종류 조회가 Log의 `logType + generationType`, Configuration의 `configurationType`을 반환하는지 검증
 - 존재하지 않는 equipment는 `EquipmentNotFound`, 유효 equipment의 정의 없음은 빈 배열 반환
+- invalid 정의가 catalog에 노출되지 않고 직접 조회에서 해당 `*DefinitionNotFound`가 반환되는지 검증
 - 제공 파일 종류 응답에 host/path/rule 등 내부 기준정보가 노출되지 않는지 검증
 - 제공 파일 종류 조회가 실제 FTP 파일 존재를 의미하거나 FTP 접근을 수행하지 않는지 검증
 - 로그 목록/페이지네이션

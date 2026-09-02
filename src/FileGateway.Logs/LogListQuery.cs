@@ -31,8 +31,8 @@ public static class EffectiveRangePlanner
         if (q.To is not null && q.From >= q.To)
             throw new FileGatewayException("InvalidRequest", "from must be before to");
 
-        var now = clock.GetUtcNow(); // 시계는 1회만 읽는다(두 번 읽으면 기본 24h가 정확히 떨어지지 않는다)
-        var from = q.From ?? now.AddHours(-24);
+        var now = clock.GetUtcNow(); // 시계는 1회만 읽는다(두 번 읽으면 기본 2일이 정확히 떨어지지 않는다)
+        var from = q.From ?? now.AddDays(-2);
         var to = q.To ?? (q.From is not null ? q.From.Value.AddDays(2) : now);
         if (to - from > maxRange)
             throw new FileGatewayException("InvalidRequest", $"query range exceeds limit ({maxRange})");
