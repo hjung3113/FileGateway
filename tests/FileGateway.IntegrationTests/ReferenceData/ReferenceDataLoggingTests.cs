@@ -16,6 +16,141 @@ public class ReferenceDataLoggingTests
         public Task<ReferenceDataRaw> ReadAsync(CancellationToken ct) => throw exception;
     }
 
+    private sealed class SequenceSource(params Func<Task<ReferenceDataRaw>>[] reads) : IReferenceDataSource
+    {
+        private int _next;
+
+        public Task<ReferenceDataRaw> ReadAsync(CancellationToken ct)
+        {
+            var index = Interlocked.Increment(ref _next) - 1;
+            return reads[index]();
+        }
+    }
+
+    [Fact]
+    public async Task Cache_logs_structured_initial_load_timings_row_counts_and_outcome()
+    {
+        var raw = new ReferenceDataRaw(
+            ["EQ-001"], [new RawServer("SRV1", "host", "root")], [], []);
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            new StaticSource(raw),
+            TimeSpan.FromMinutes(15),
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        await cache.GetSnapshotAsync(CancellationToken.None);
+
+        var entry = Assert.Single(logs.Entries,
+            e => e.Message.Contains("reference data load completed", StringComparison.Ordinal));
+        var properties = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(entry.Properties);
+        Assert.Equal("initial", properties["LoadKind"]);
+        Assert.IsType<long>(properties["SpReadElapsedMs"]);
+        Assert.IsType<long>(properties["ValidationBuildElapsedMs"]);
+        Assert.IsType<long>(properties["TotalElapsedMs"]);
+        Assert.Equal(1, properties["EquipmentRowCount"]);
+        Assert.Equal(1, properties["ServerRowCount"]);
+        Assert.Equal(0, properties["LogDefinitionRowCount"]);
+        Assert.Equal(0, properties["ConfigurationDefinitionRowCount"]);
+        Assert.Equal(true, properties["Success"]);
+        Assert.Equal(false, properties["StaleOrLkgUsed"]);
+    }
+
+    [Fact]
+    public async Task Cache_logs_failed_refresh_as_refresh_with_last_known_good_usage()
+    {
+        var raw = new ReferenceDataRaw(
+            ["EQ-001"], [new RawServer("SRV1", "host", "root")], [], []);
+        var source = new SequenceSource(
+            () => Task.FromResult(raw),
+            () => Task.FromException<ReferenceDataRaw>(new InvalidOperationException("db down")));
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            source,
+            TimeSpan.Zero,
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        var initial = await cache.GetSnapshotAsync(CancellationToken.None);
+        var stale = await cache.GetSnapshotAsync(CancellationToken.None);
+
+        Assert.Same(initial, stale);
+        var entry = Assert.Single(logs.Entries,
+            e => e.Properties?.GetValueOrDefault("LoadKind") as string == "refresh");
+        var properties = entry.Properties!;
+        Assert.Equal(false, properties["Success"]);
+        Assert.Equal(true, properties["StaleOrLkgUsed"]);
+        Assert.True(properties.ContainsKey("SpReadElapsedMs"));
+        Assert.True(properties.ContainsKey("ValidationBuildElapsedMs"));
+        Assert.True(properties.ContainsKey("TotalElapsedMs"));
+        Assert.True(properties.ContainsKey("EquipmentRowCount"));
+        Assert.True(properties.ContainsKey("ServerRowCount"));
+        Assert.True(properties.ContainsKey("LogDefinitionRowCount"));
+        Assert.True(properties.ContainsKey("ConfigurationDefinitionRowCount"));
+    }
+
+    [Fact]
+    public async Task Cache_logs_synchronous_successful_refresh_without_stale_usage()
+    {
+        var initialRaw = new ReferenceDataRaw(
+            ["EQ-001"], [new RawServer("SRV1", "host", "root")], [], []);
+        var refreshedRaw = new ReferenceDataRaw(
+            ["EQ-002"], [new RawServer("SRV2", "host", "root")], [], []);
+        var source = new SequenceSource(
+            () => Task.FromResult(initialRaw),
+            () => Task.FromResult(refreshedRaw));
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            source,
+            TimeSpan.Zero,
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        await cache.GetSnapshotAsync(CancellationToken.None);
+        var refreshed = await cache.GetSnapshotAsync(CancellationToken.None);
+
+        Assert.Contains("EQ-002", refreshed.EquipmentIds);
+        var entry = Assert.Single(logs.Entries,
+            e => e.Properties?.GetValueOrDefault("LoadKind") as string == "refresh");
+        Assert.Equal(true, entry.Properties!["Success"]);
+        Assert.Equal(false, entry.Properties["StaleOrLkgUsed"]);
+    }
+
+    [Fact]
+    public async Task Cache_logs_asynchronous_successful_refresh_with_stale_usage()
+    {
+        var initialRaw = new ReferenceDataRaw(
+            ["EQ-001"], [new RawServer("SRV1", "host", "root")], [], []);
+        var refreshedRaw = new ReferenceDataRaw(
+            ["EQ-002"], [new RawServer("SRV2", "host", "root")], [], []);
+        var releaseRefresh = new TaskCompletionSource<ReferenceDataRaw>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new SequenceSource(
+            () => Task.FromResult(initialRaw),
+            () => releaseRefresh.Task);
+        var logs = new CollectingLoggerProvider();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(logs));
+        var cache = new ReferenceDataCache(
+            source,
+            TimeSpan.Zero,
+            loggerFactory.CreateLogger<ReferenceDataCache>());
+
+        var initial = await cache.GetSnapshotAsync(CancellationToken.None);
+        var stale = await cache.GetSnapshotAsync(CancellationToken.None);
+        releaseRefresh.SetResult(refreshedRaw);
+
+        Assert.Same(initial, stale);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        while (!logs.Snapshot().Any(e =>
+                   e.Properties?.GetValueOrDefault("LoadKind") as string == "refresh") &&
+               DateTime.UtcNow < deadline)
+            await Task.Delay(20);
+        var entry = Assert.Single(logs.Snapshot(),
+            e => e.Properties?.GetValueOrDefault("LoadKind") as string == "refresh");
+        Assert.Equal(true, entry.Properties!["Success"]);
+        Assert.Equal(true, entry.Properties["StaleOrLkgUsed"]);
+    }
+
     [Fact]
     public async Task Cache_logs_each_quarantined_definition_with_equipment_and_reason()
     {
@@ -207,5 +342,14 @@ public class ReferenceDataLoggingTests
         Assert.Contains("InvalidOperationException", entry.Message, StringComparison.Ordinal);
         Assert.Contains("boom", entry.Message, StringComparison.Ordinal);
         Assert.Same(failure, entry.Exception);
+
+        var load = Assert.Single(logs.Entries,
+            e => e.Properties?.GetValueOrDefault("LoadKind") as string == "initial");
+        Assert.Equal(false, load.Properties!["Success"]);
+        Assert.Equal(false, load.Properties["StaleOrLkgUsed"]);
+        Assert.Null(load.Properties["EquipmentRowCount"]);
+        Assert.Null(load.Properties["ServerRowCount"]);
+        Assert.Null(load.Properties["LogDefinitionRowCount"]);
+        Assert.Null(load.Properties["ConfigurationDefinitionRowCount"]);
     }
 }

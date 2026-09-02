@@ -255,6 +255,7 @@ raw API Key를 Stored Procedure에 전달하지 않는다.
 ## 캐시
 
 - 프로세스 memory cache를 사용한다.
+- API startup은 실제 요청을 받기 전에 기존 `GetSnapshotAsync` single-flight 경로를 한 번 await해 검증 완료 snapshot을 warm-up한다. 실패해도 프로세스는 시작하며 usable snapshot이 생길 때까지 `/health/ready`가 503으로 같은 경로를 재시도하고, 이 과정에서는 FTP/로컬 파일시스템을 조회하지 않는다.
 - TTL은 설정 가능하며 초기 권장값은 10~30분 범위다.
 - TTL은 캐시 데이터의 강제 폐기 시점이 아니라 **기준정보 갱신을 다시 시도해야 하는 시점**으로 사용한다.
 - TTL 경과 후 실제 요청이 들어오면 lazy refresh로 Stored Procedure 갱신을 시도한다.
@@ -280,6 +281,7 @@ lazy refresh는 프로세스당 하나만 실행하는 **single-flight** 방식�
 
 stale cache 사용 여부, 마지막 정상 갱신 시각, refresh/validation 실패 원인은 운영 로그/메트릭에서 관측 가능해야 한다.
 refresh 실패 로그는 전역 식별자 validation, 필수 SP result set/shape, 그 밖의 source read 실패를 구분하며 각 범주의 실제 원인을 함께 기록한다.
+각 initial/refresh load는 SP 실행·read, validation/build, 전체 elapsed와 Equipment/Server/LogDefinition/ConfigurationDefinition row count, 성공 여부, stale/LKG 사용 여부를 구조화 로그로 남긴다.
 
 로컬 영속 fallback/분산 cache는 MVP에서 제외한다.
 
