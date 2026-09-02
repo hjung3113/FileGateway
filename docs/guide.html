@@ -1,0 +1,841 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FileGateway 가이드</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;650;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+  :root {
+    --ink: #16202b;
+    --paper: #eef1f3;
+    --surface: #ffffff;
+    --surface-2: #e3e9ec;
+    --line: #d2d9dd;
+    --steel: #53616d;
+    --signal: #b8501c;
+    --signal-strong: #93400f;
+    --signal-soft: #f5e3d4;
+    --ok: #2b7a57;
+    --ok-soft: #dcefe5;
+    --warn: #92620d;
+    --warn-soft: #f6ead0;
+    --code-bg: #121820;
+    --code-fg: #dbe3e9;
+    --code-line: #263140;
+    --radius: 8px;
+    --font-display: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-body: 'Source Serif 4', Georgia, 'Nanum Myeongjo', serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ink: #e7edf1;
+      --paper: #10151a;
+      --surface: #161d24;
+      --surface-2: #0d1216;
+      --line: #262f37;
+      --steel: #93a2ac;
+      --signal: #e0834a;
+      --signal-strong: #f3a373;
+      --signal-soft: #3a2a1c;
+      --ok: #5cbd93;
+      --ok-soft: #16342a;
+      --warn: #d8a94b;
+      --warn-soft: #362b12;
+      --code-bg: #0a0d11;
+      --code-fg: #d7e0e7;
+      --code-line: #1c242c;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ink: #e7edf1;
+    --paper: #10151a;
+    --surface: #161d24;
+    --surface-2: #0d1216;
+    --line: #262f37;
+    --steel: #93a2ac;
+    --signal: #e0834a;
+    --signal-strong: #f3a373;
+    --signal-soft: #3a2a1c;
+    --ok: #5cbd93;
+    --ok-soft: #16342a;
+    --warn: #d8a94b;
+    --warn-soft: #362b12;
+    --code-bg: #0a0d11;
+    --code-fg: #d7e0e7;
+    --code-line: #1c242c;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { background: var(--paper); }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.65;
+  }
+
+  a { color: var(--signal); }
+  a:hover { color: var(--signal-strong); }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 650;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+
+  code, pre, .mono, .endpoint, table.data td.num, .badge {
+    font-family: var(--font-mono);
+  }
+
+  /* ---------- shell ---------- */
+
+  .masthead {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 16px clamp(20px, 4vw, 48px);
+    background: var(--surface);
+    border-bottom: 1px solid var(--line);
+  }
+
+  .masthead-brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    font-family: var(--font-display);
+  }
+
+  .masthead-brand strong {
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .masthead-brand span {
+    font-size: 0.82rem;
+    color: var(--steel);
+  }
+
+  .masthead-pill {
+    flex: 0 0 auto;
+    padding: 4px 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface-2);
+    color: var(--steel);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.03em;
+  }
+
+  .shell {
+    display: grid;
+    grid-template-columns: 250px minmax(0, 1fr);
+    max-width: 1280px;
+    margin: 0 auto;
+    align-items: start;
+  }
+
+  nav.toc {
+    position: sticky;
+    top: 61px;
+    align-self: start;
+    height: calc(100vh - 61px);
+    overflow-y: auto;
+    padding: 28px 16px 40px 20px;
+    border-right: 1px solid var(--line);
+    font-family: var(--font-display);
+  }
+
+  nav.toc .group + .group { margin-top: 22px; }
+
+  nav.toc .group-label {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--steel);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+  }
+
+  nav.toc a {
+    display: block;
+    padding: 5px 10px;
+    margin: 1px 0;
+    border-radius: 6px;
+    color: var(--ink);
+    font-size: 0.86rem;
+    text-decoration: none;
+    border-left: 2px solid transparent;
+  }
+
+  nav.toc a.sub {
+    padding-left: 20px;
+    font-size: 0.8rem;
+    color: var(--steel);
+  }
+
+  nav.toc a:hover { background: var(--surface-2); }
+
+  nav.toc a.active {
+    color: var(--signal-strong);
+    background: var(--signal-soft);
+    border-left-color: var(--signal);
+    font-weight: 600;
+  }
+
+  main {
+    min-width: 0;
+    padding: 8px clamp(24px, 4vw, 64px) 120px;
+  }
+
+  section.doc-section {
+    max-width: 860px;
+    margin: 0 auto;
+    padding-top: 56px;
+    scroll-margin-top: 76px;
+  }
+
+  section.doc-section > .kicker {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--signal);
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+
+  section.doc-section h1 {
+    font-size: clamp(1.9rem, 3vw, 2.5rem);
+    margin: 0 0 12px;
+  }
+
+  section.doc-section > .lede {
+    max-width: 68ch;
+    color: var(--steel);
+    font-size: 1.08rem;
+    margin: 0 0 36px;
+  }
+
+  h2.h-sub {
+    font-size: 1.4rem;
+    margin: 48px 0 14px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+
+  h3.h-sub3 {
+    font-family: var(--font-display);
+    font-size: 1.05rem;
+    font-weight: 650;
+    margin: 26px 0 10px;
+  }
+
+  p, li { max-width: 70ch; }
+  p { margin: 0 0 14px; }
+  ul, ol { padding-left: 1.3em; margin: 0 0 16px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--signal); }
+
+  .callout {
+    max-width: 70ch;
+    margin: 18px 0;
+    padding: 13px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--surface);
+    font-size: 0.92rem;
+  }
+
+  .callout.warn { border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); background: var(--warn-soft); }
+  .callout.warn strong { color: var(--warn); }
+  .callout.ok { border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); background: var(--ok-soft); }
+  .callout.ok strong { color: var(--ok); }
+  .callout strong { display: block; margin-bottom: 3px; font-family: var(--font-display); font-size: 0.82rem; letter-spacing: 0.02em; }
+
+  /* ---------- code ---------- */
+
+  pre.code-block, pre.mermaid {
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+
+  pre.code-block {
+    padding: 16px 18px;
+    border-radius: var(--radius);
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font-family: var(--font-mono);
+    font-size: 0.84rem;
+    line-height: 1.6;
+    border: 1px solid var(--code-line);
+  }
+
+  pre.code-block .c { color: #7f909c; }
+  pre.code-block .s { color: #e0a869; }
+  pre.code-block .k { color: #7fb0e0; }
+
+  pre.mermaid {
+    padding: 12px;
+    border-radius: var(--radius);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    text-align: center;
+  }
+
+  code.inline {
+    padding: 1px 6px;
+    border-radius: 5px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    font-size: 0.86em;
+    color: var(--ink);
+  }
+
+  .endpoint {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 3px 4px;
+  }
+
+  .method {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: var(--ok-soft);
+    color: var(--ok);
+  }
+
+  /* ---------- tables ---------- */
+
+  .table-wrap { overflow-x: auto; margin: 16px 0 28px; }
+
+  table.data {
+    width: 100%;
+    max-width: 900px;
+    border-collapse: collapse;
+    font-size: 0.87rem;
+    font-family: var(--font-display);
+  }
+
+  table.data caption {
+    text-align: left;
+    font-size: 0.78rem;
+    color: var(--steel);
+    margin-bottom: 6px;
+    font-family: var(--font-mono);
+  }
+
+  table.data th {
+    text-align: left;
+    padding: 9px 12px;
+    border-bottom: 2px solid var(--line);
+    color: var(--steel);
+    font-size: 0.74rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  table.data td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+
+  table.data tr:last-child td { border-bottom: none; }
+  table.data td.mono, table.data code { font-family: var(--font-mono); font-size: 0.85em; }
+  table.data td.num { font-variant-numeric: tabular-nums; }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 5px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    border: 1px solid var(--line);
+    color: var(--steel);
+    background: var(--surface-2);
+  }
+
+  .badge.status-4 { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); background: var(--warn-soft); }
+  .badge.status-5 { color: var(--signal-strong); border-color: color-mix(in srgb, var(--signal) 40%, var(--line)); background: var(--signal-soft); }
+  .badge.status-2 { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); background: var(--ok-soft); }
+
+  .flow-steps {
+    counter-reset: step;
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+    max-width: 70ch;
+  }
+
+  .flow-steps li {
+    counter-increment: step;
+    position: relative;
+    padding: 2px 0 18px 40px;
+    border-left: 2px solid var(--line);
+    margin: 0;
+  }
+
+  .flow-steps li:last-child { border-left-color: transparent; padding-bottom: 0; }
+
+  .flow-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: -15px;
+    top: -1px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--signal);
+    color: var(--signal-strong);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .flow-steps b { font-family: var(--font-display); font-weight: 650; }
+
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+    margin: 18px 0 28px;
+    max-width: 900px;
+  }
+
+  .card {
+    padding: 15px 17px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+  }
+
+  .card h4 {
+    margin: 0 0 6px;
+    font-size: 0.94rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card p { margin: 0; font-size: 0.87rem; color: var(--steel); }
+
+  footer.doc-footer {
+    max-width: 860px;
+    margin: 80px auto 0;
+    padding: 20px 0 60px;
+    border-top: 1px solid var(--line);
+    color: var(--steel);
+    font-size: 0.82rem;
+    font-family: var(--font-mono);
+  }
+
+  @media (max-width: 880px) {
+    .shell { grid-template-columns: 1fr; }
+    nav.toc {
+      position: static;
+      height: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--line);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-brand">
+    <strong>FileGateway</strong>
+    <span>설비 로그 · Configuration File 조회 게이트웨이</span>
+  </div>
+  <span class="masthead-pill">가이드 문서 · MVP</span>
+</header>
+
+<div class="shell">
+  <nav class="toc" id="toc">
+    <div class="group">
+      <span class="group-label">프로젝트 개요</span>
+      <a href="#overview" data-target="overview">이게 뭔가요</a>
+      <a href="#overview-arch" class="sub" data-target="overview-arch">전체 구조</a>
+      <a href="#overview-principles" class="sub" data-target="overview-principles">설계 원칙</a>
+      <a href="#overview-status" class="sub" data-target="overview-status">현재 상태</a>
+    </div>
+    <div class="group">
+      <span class="group-label">API 사용자 가이드</span>
+      <a href="#api-guide" data-target="api-guide">시작하기</a>
+      <a href="#api-flow" class="sub" data-target="api-flow">호출 순서</a>
+      <a href="#api-endpoints" class="sub" data-target="api-endpoints">엔드포인트</a>
+      <a href="#api-fileid" class="sub" data-target="api-fileid">fileId</a>
+      <a href="#api-examples" class="sub" data-target="api-examples">호출 예시</a>
+      <a href="#api-errors" class="sub" data-target="api-errors">오류 코드</a>
+    </div>
+    <div class="group">
+      <span class="group-label">서버 관리자 가이드</span>
+      <a href="#admin-guide" data-target="admin-guide">배포 전에</a>
+      <a href="#admin-config" class="sub" data-target="admin-config">설정 값</a>
+      <a href="#admin-secrets" class="sub" data-target="admin-secrets">비밀/API Key</a>
+      <a href="#admin-refdata" class="sub" data-target="admin-refdata">기준정보 운영</a>
+      <a href="#admin-health" class="sub" data-target="admin-health">Health · 감사로그</a>
+      <a href="#admin-checklist" class="sub" data-target="admin-checklist">배포 체크리스트</a>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- ===================== OVERVIEW ===================== -->
+    <section class="doc-section" id="overview">
+      <div class="kicker">01 · PROJECT OVERVIEW</div>
+      <h1>FileGateway가 뭔가요</h1>
+      <p class="lede">분산 파일 서버에 이미 저장돼 있는 설비 로그와 Configuration File을, 실제 서버 주소나 물리 경로를 몰라도 <code class="inline">equipmentId</code>와 논리 조회 조건만으로 꺼내 쓸 수 있게 해주는 읽기 전용 게이트웨이입니다.</p>
+
+      <p>WPF 데스크톱 앱, Web Backend, 다른 서버 시스템이 각자 FTP 서버 주소나 폴더 구조를 알 필요 없이, HTTPS + API Key로 FileGateway 하나만 호출하면 됩니다. 어떤 설비가 어떤 서버에, 어떤 규칙으로 파일을 두는지는 MSSQL 기준정보가 알고 있고, FileGateway가 그 규칙을 해석해 FTP/FTPS(또는 같은 머신이면 로컬 파일시스템)에서 파일을 읽어 스트리밍으로 내려줍니다.</p>
+
+      <div class="callout">
+        <strong>범위 밖</strong>
+        설비에 직접 접속하거나, 로그를 수집/가공하거나, Configuration History를 새로 만들고 복사·보관하는 일은 다른 시스템의 책임입니다. FileGateway는 이미 저장된 파일을 <em>읽어서 제공</em>할 뿐입니다.
+      </div>
+
+      <h2 class="h-sub" id="overview-arch">전체 구조</h2>
+      <p>API 사용자는 아래 그림에서 <strong>Consumer</strong> 쪽만 알면 됩니다. <strong>FileGateway</strong> 내부 계층과 <strong>Backend</strong>(MSSQL·파일 서버)는 운영자 영역입니다.</p>
+
+      <pre class="mermaid">
+flowchart TB
+    subgraph C["API 사용자"]
+        WPF["WPF Desktop"]
+        BFF["Web Backend / BFF"]
+        SVC["다른 서버 · 서비스"]
+    end
+    subgraph GW["FileGateway"]
+        API["Api — 인증 · 검증 · 감사로그 · Health"]
+        LOG["Logs — 탐색 · 필터 · pagination"]
+        CFG["Configurations — Current · History"]
+        CORE["Core — IFileAccess 계약 · Token codec"]
+        INF["Infrastructure — 기준정보 cache · FTP/FTPS · localhost"]
+    end
+    subgraph B["운영자 관리 영역"]
+        SQL[("MSSQL SP")]
+        FS[("파일 저장소")]
+    end
+    WPF -- "HTTPS + X-Api-Key" --> API
+    BFF -- "HTTPS + X-Api-Key" --> API
+    SVC -- "HTTPS + X-Api-Key" --> API
+    API --> LOG --> CORE
+    API --> CFG --> CORE
+    CORE --> INF
+    INF -- "SP 호출" --> SQL
+    INF -- "FTP/FTPS · 로컬" --> FS
+      </pre>
+
+      <h2 class="h-sub" id="overview-principles">설계 원칙</h2>
+      <div class="card-grid">
+        <div class="card"><h4>물리 정보 비노출</h4><p>서버 주소·경로·credential은 API 응답 어디에도 나타나지 않습니다.</p></div>
+        <div class="card"><h4>동일 Resolver</h4><p>목록 조회와 조건부 직접 다운로드가 같은 탐색 규칙을 씁니다 — 결과가 어긋나지 않습니다.</p></div>
+        <div class="card"><h4>스트리밍 우선</h4><p>파일을 메모리에 통째로 올리지 않고, 시작 시점 크기를 <code class="inline">Content-Length</code>로 흘려보냅니다.</p></div>
+        <div class="card"><h4>DB로 확장</h4><p>새 설비·로그종류는 대부분 코드 배포 없이 기준정보 등록만으로 노출됩니다.</p></div>
+      </div>
+
+      <h2 class="h-sub" id="overview-status">현재 상태</h2>
+      <p>MVP 구현이 완료되어 단위·통합 테스트를 전부 통과한 상태입니다. 실제 운영 배포는 <a href="#admin-checklist">배포 체크리스트</a>의 수동 검증 항목을 통과해야 완료로 간주합니다 — 자동화 테스트가 이 검증을 대체하지 않습니다.</p>
+    </section>
+
+    <!-- ===================== API USER GUIDE ===================== -->
+    <section class="doc-section" id="api-guide">
+      <div class="kicker">02 · API 사용자 가이드</div>
+      <h1>API로 파일 받아오기</h1>
+      <p class="lede">HTTPS와 <code class="inline">X-Api-Key</code> 헤더만 있으면 됩니다. 브라우저가 API Key를 직접 들고 있는 구조는 상정하지 않으므로, 서버-서버 또는 데스크톱 클라이언트 환경(.NET, Python 등 일반 HTTP 클라이언트)에서 호출하세요.</p>
+
+      <pre class="code-block">X-Api-Key: &lt;caller-key&gt;</pre>
+      <p>Key는 <strong>header로만</strong> 전달합니다. query string에 실으면 인증되지 않습니다. 누락·불일치는 모두 <span class="badge status-4">401</span> <code class="inline">InvalidApiKey</code>입니다.</p>
+
+      <h2 class="h-sub" id="api-flow">권장 호출 순서</h2>
+      <ol class="flow-steps">
+        <li><b>API Key 발급받기</b> — 운영자에게 요청, <code class="inline">X-Api-Key</code> 헤더로만 사용</li>
+        <li><b>설비 목록 확인</b> — <code class="inline">GET /api/v1/equipments</code>로 전체 <code class="inline">equipmentId</code> 조회</li>
+        <li><b>제공 종류 확인</b> — <code class="inline">GET /api/v1/equipments/{id}/file-types</code>로 그 설비가 주는 <code class="inline">logType</code>/<code class="inline">configurationType</code> 확인</li>
+        <li><b>목록 또는 조건부 조회</b> — 로그는 <code class="inline">/logs</code>, Configuration은 <code class="inline">/configurations/current</code> 또는 <code class="inline">/history</code></li>
+        <li><b>파일 1건으로 확정되면 바로 다운로드</b> — <code class="inline">/logs/download</code> 또는 <code class="inline">/configurations/current/download</code>. 2건 이상이면 <span class="badge status-4">409</span>가 나므로 목록에서 골라야 합니다</li>
+        <li><b>목록에서 고를 땐 fileId로</b> — <code class="inline">/files/download?fileId=...</code> (공통 다운로드 엔드포인트)</li>
+      </ol>
+
+      <div class="callout ok">
+        <strong>왕복을 줄이는 팁</strong>
+        파일이 정확히 1건으로 좁혀질 조건(예: 시간 범위를 1시간 단위로)이면 목록 조회 없이 조건부 다운로드로 바로 가는 편이 요청 수를 줄입니다.
+      </div>
+
+      <h2 class="h-sub" id="api-endpoints">엔드포인트 한눈에 보기</h2>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>메서드/경로</th><th>설명</th><th>응답 형태</th></tr></thead>
+          <tbody>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/equipments</td><td>전체 설비 <code>equipmentId</code> 목록</td><td class="mono">{ items[] }</td></tr>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/equipments/{id}/file-types</td><td>설비가 제공하는 logType/configurationType</td><td class="mono">{ logs[], configurations[] }</td></tr>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/logs</td><td>로그 목록 조회 (Hourly/Daily/Continuous)</td><td class="mono">{ items[], continuationToken }</td></tr>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/logs/download</td><td>조건부 직접 다운로드(1건 스트림, 2건↑ zip)</td><td class="mono">스트림</td></tr>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/configurations/current</td><td>Current Configuration 전체 조회</td><td class="mono">단순 배열</td></tr>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/configurations/current/download</td><td>조건부 직접 다운로드(정확히 1건일 때만)</td><td class="mono">스트림</td></tr>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/configurations/history</td><td>Configuration Snapshot History 조회</td><td class="mono">{ items[], continuationToken }</td></tr>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/files</td><td><code>fileId</code>로 metadata 재조회</td><td class="mono">{ fileName, size }</td></tr>
+            <tr><td class="mono"><span class="method">GET</span> /api/v1/files/download</td><td><code>fileId</code>로 공통 스트리밍 다운로드</td><td class="mono">스트림</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="max-width:70ch; color:var(--steel); font-size:0.87rem;">전체 파라미터·정렬·pagination 규칙은 저장소의 <code class="inline">docs/05-api-interface.md</code>가 기준입니다. 이 페이지는 실무에서 바로 쓰는 요약입니다.</p>
+
+      <h3 class="h-sub3">시간 범위 규칙</h3>
+      <ul>
+        <li><strong>Hourly/Daily</strong> — <code class="inline">from</code>/<code class="inline">to</code> 둘 다 생략하면 최근 2일. <code class="inline">from</code>만 있으면 <code class="inline">[from, from+2일)</code>.</li>
+        <li><strong>Continuous</strong> — <code class="inline">from</code>/<code class="inline">to</code>를 주면 <span class="badge status-4">400</span>. 현재 파일만 조회됩니다.</li>
+        <li>다음 페이지는 같은 조건 + <code class="inline">continuationToken</code>만 추가. <strong>토큰을 유지한 채 조건을 바꾸면 400</strong>입니다 — 조건을 바꾸려면 토큰 없이 처음부터 다시 조회하세요.</li>
+      </ul>
+
+      <h2 class="h-sub" id="api-fileid">fileId, 재사용 가능한 opaque 토큰</h2>
+      <p><code class="inline">fileId</code>는 목록/조건부 다운로드 응답에서 발급되는 <strong>24시간짜리 opaque 토큰</strong>입니다. 물리 경로가 아니라 논리 파일을 가리키므로, 그 사이 서버 쪽 물리 배치가 바뀌어도 같은 논리 파일이면 그대로 유효합니다. 접근할 때마다 현재 기준정보로 물리 위치를 다시 계산합니다.</p>
+
+      <h2 class="h-sub" id="api-examples">호출 예시</h2>
+      <h3 class="h-sub3">로그 목록 조회 → fileId로 다운로드</h3>
+      <pre class="code-block"><span class="c"># 1. 목록 조회 (+09:00 은 %2B09:00 으로 URL-encoding)</span>
+curl -s <span class="s">"https://gateway.example/api/v1/logs?equipmentId=EQ-001&amp;logType=EventLog&amp;from=2026-08-20T00:00:00%2B09:00&amp;to=2026-08-21T00:00:00%2B09:00"</span> \
+  -H <span class="s">"X-Api-Key: $API_KEY"</span>
+
+<span class="c"># 2. 응답의 items[0].fileId 로 스트리밍 다운로드</span>
+curl -s -OJ <span class="s">"https://gateway.example/api/v1/files/download?fileId=$FILE_ID"</span> \
+  -H <span class="s">"X-Api-Key: $API_KEY"</span></pre>
+
+      <h3 class="h-sub3">Python (requests) 핵심 패턴</h3>
+      <pre class="code-block"><span class="k">def</span> download_by_file_id(file_id: <span class="k">str</span>, file_name: <span class="k">str</span>, dest_dir=<span class="s">"."</span>) -&gt; <span class="k">str</span>:
+    dest = os.path.join(dest_dir, os.path.basename(file_name))
+    <span class="k">with</span> requests.get(f<span class="s">"{GATEWAY}/api/v1/files/download"</span>, headers=HEADERS,
+                       params={<span class="s">"fileId"</span>: file_id}, stream=<span class="k">True</span>, timeout=(10, 60)) <span class="k">as</span> resp:
+        resp.raise_for_status()
+        expected = <span class="k">int</span>(resp.headers.get(<span class="s">"Content-Length"</span>, -1))
+        written = 0
+        <span class="k">with</span> <span class="k">open</span>(dest, <span class="s">"wb"</span>) <span class="k">as</span> f:
+            <span class="k">for</span> chunk <span class="k">in</span> resp.iter_content(chunk_size=1024 * 64):
+                f.write(chunk); written += <span class="k">len</span>(chunk)
+        <span class="k">if</span> expected &gt;= 0 <span class="k">and</span> written != expected:
+            <span class="c"># 원격 I/O 오류는 JSON 오류로 전환되지 않고 스트림이 끊긴다 — 바이트 수를 직접 비교</span>
+            <span class="k">raise</span> IOError(f<span class="s">"truncated: expected {expected}, got {written}"</span>)
+    <span class="k">return</span> dest</pre>
+      <p style="max-width:70ch; color:var(--steel); font-size:0.87rem;">전체 8개 유즈케이스별 Python/C# 예제는 저장소 <code class="inline">samples/</code>에 있습니다.</p>
+
+      <h2 class="h-sub" id="api-errors">오류 코드</h2>
+      <p>모든 오류는 <code class="inline">{ type, title, status, code, traceId }</code> 형태입니다. <code class="inline">code</code>로 분기하고, 원인 추적은 <code class="inline">traceId</code>로 서버 로그와 연계하세요. 물리 경로·credential은 어떤 오류 응답에도 포함되지 않습니다.</p>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>status</th><th>code</th><th>의미</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge status-4">400</span></td><td class="mono">InvalidRequest</td><td>파라미터/시간범위/토큰 조건 오류</td></tr>
+            <tr><td><span class="badge status-4">400</span></td><td class="mono">InvalidFileId</td><td><code>fileId</code> 형식·서명 오류</td></tr>
+            <tr><td><span class="badge status-4">401</span></td><td class="mono">InvalidApiKey</td><td><code>X-Api-Key</code> 누락·불일치</td></tr>
+            <tr><td><span class="badge status-4">404</span></td><td class="mono">EquipmentNotFound</td><td>존재하지 않는 <code>equipmentId</code></td></tr>
+            <tr><td><span class="badge status-4">404</span></td><td class="mono">LogDefinitionNotFound / ConfigurationDefinitionNotFound</td><td>기준정보 삭제로 재해석 불가</td></tr>
+            <tr><td><span class="badge status-4">404</span></td><td class="mono">FileNotFound</td><td>논리 파일이 실제로 없음</td></tr>
+            <tr><td><span class="badge status-4">409</span></td><td class="mono">MultipleFilesMatched</td><td>직접 다운로드 조건에 2건 이상 일치</td></tr>
+            <tr><td><span class="badge status-4">410</span></td><td class="mono">FileIdExpired</td><td><code>fileId</code> TTL(24시간) 경과</td></tr>
+            <tr><td><span class="badge status-5">500</span></td><td class="mono">FileDefinitionConflict</td><td>cardinality 위반·metadata 해석 실패</td></tr>
+            <tr><td><span class="badge status-5">500</span></td><td class="mono">InternalError</td><td>서버 내부 오류</td></tr>
+            <tr><td><span class="badge status-5">502</span></td><td class="mono">FileServerUnavailable / FileServerProtocolError</td><td>파일 서버 연결·프로토콜 오류</td></tr>
+            <tr><td><span class="badge status-5">503</span></td><td class="mono">ReferenceDataUnavailable</td><td>사용 가능한 기준정보 없음</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================== SERVER ADMIN GUIDE ===================== -->
+    <section class="doc-section" id="admin-guide">
+      <div class="kicker">03 · 서버 관리자 가이드</div>
+      <h1>배포하고 운영하기</h1>
+      <p class="lede">FileGateway는 코드와 별개로 <strong>MSSQL 기준정보</strong>가 "어떤 설비가 어떤 서버의 어떤 규칙으로 파일을 제공하는지"를 정의합니다. 새 설비·로그종류 추가는 대부분 DB 등록만으로 끝나고 코드 배포가 필요 없습니다.</p>
+
+      <h3 class="h-sub3">사전 준비물</h3>
+      <div class="card-grid">
+        <div class="card"><h4>.NET 10 SDK</h4><p><code class="inline">global.json</code> 고정 버전. <code class="inline">dotnet --version</code>으로 확인.</p></div>
+        <div class="card"><h4>MSSQL + SP</h4><p><code class="inline">FileGateway_GetReferenceData</code> (<code class="inline">db/mvp-stored-procedure.sql</code>)</p></div>
+        <div class="card"><h4>FTP/FTPS 접근</h4><p>단일 머신 구성은 서버를 <code class="inline">localhost</code>로 등록하면 FTP 없이 로컬 파일시스템 직접 접근.</p></div>
+        <div class="card"><h4>IIS Hosting Bundle</h4><p>ASP.NET Core Module V2, In-process 호스팅.</p></div>
+      </div>
+
+      <pre class="code-block">dotnet build
+dotnet test                              <span class="c"># 단위 + 통합(Testcontainers)</span>
+dotnet run --project src/FileGateway.Api <span class="c"># 기본 http://localhost:5178</span>
+
+curl http://localhost:5178/health/live    <span class="c"># 프로세스 생존만</span>
+curl http://localhost:5178/health/ready   <span class="c"># 기준정보 최초 로딩 유발 + 상태 반영</span></pre>
+
+      <div class="callout warn">
+        <strong>/health/ready의 503</strong>
+        usable 캐시가 전혀 없으면(최초 기동 시 DB 연결 실패 등) <code class="inline">503 {"status":"Unhealthy"}</code>를 반환합니다. 이건 API 오류 응답이 아니라 health 전용 shape입니다 — <code class="inline">code</code>/<code class="inline">traceId</code>가 없습니다.
+      </div>
+
+      <h2 class="h-sub" id="admin-config">설정 값</h2>
+      <div class="table-wrap">
+        <table class="data">
+          <caption>appsettings.json — FileGateway 섹션</caption>
+          <thead><tr><th>키</th><th>기본값</th><th>의미</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">Logs:MaxQueryRange</td><td class="mono num">31.00:00:00</td><td>로그 시간 범위 조회 최대 폭(≥2일)</td></tr>
+            <tr><td class="mono">Configurations:HistoryMaxQueryRange</td><td class="mono num">366.00:00:00</td><td>History 조회 최대 폭</td></tr>
+            <tr><td class="mono">Paging:LimitDefault / LimitMax</td><td class="mono num">100 / 1000</td><td>목록 pagination 기본/최댓값</td></tr>
+            <tr><td class="mono">Tokens:FileIdTtl</td><td class="mono num">1.00:00:00</td><td><code>fileId</code> 유효기간(24시간)</td></tr>
+            <tr><td class="mono">Tokens:ContinuationTtl</td><td class="mono num">00:30:00</td><td><code>continuationToken</code> 유효기간</td></tr>
+            <tr><td class="mono">ReferenceData:CacheTtl</td><td class="mono num">00:15:00</td><td>기준정보 캐시 TTL(만료 시 stale 즉시 반환 + 백그라운드 refresh)</td></tr>
+            <tr><td class="mono">Ftp:Security</td><td class="mono">Plain</td><td><code>Plain | ExplicitTls | ImplicitTls</code></td></tr>
+            <tr><td class="mono">Ftp:AcceptUntrustedCertificates</td><td class="mono">false</td><td>내부 self-signed 인증서 허용(운영 판단 필요)</td></tr>
+            <tr><td class="mono">Ftp:MaxConcurrentGlobal / PerServer</td><td class="mono num">50 / 5</td><td>FTP 동시 접속 상한</td></tr>
+            <tr><td class="mono">DevTools:Enabled</td><td class="mono">false</td><td>Development 아니어도 <code>/tester</code>, <code>/scalar/v1</code> 노출</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 class="h-sub" id="admin-secrets">비밀 주입 · API Key 회전</h2>
+      <p>비밀은 파일에 두지 않고 <strong>환경변수</strong>(또는 IIS/Secret 관리 도구)로만 주입합니다.</p>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>환경변수</th><th>용도</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">Authentication__ApiKeys__0__Key / __CallerId</td><td>API Key(복수 호출자는 인덱스 <code>1</code>, <code>2</code>...)</td></tr>
+            <tr><td class="mono">ConnectionStrings__ReferenceData</td><td>MSSQL 기준정보 연결 문자열</td></tr>
+            <tr><td class="mono">FileGateway__Ftp__UserName / __Password</td><td>FTP 계정</td></tr>
+            <tr><td class="mono">DataProtection__KeyDirectory</td><td>토큰 보호 키 저장 디렉터리 — Development 외 환경은 <strong>미설정 시 기동 자체가 실패</strong></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3 class="h-sub3">Key overlap 회전</h3>
+      <pre class="code-block"><span class="c"># 구 key(index 0) 유지한 채 신규 key(index 1) 추가 → 재배포</span>
+Authentication__ApiKeys__0__Key=&lt;old-key&gt;
+Authentication__ApiKeys__0__CallerId=wpf-client
+Authentication__ApiKeys__1__Key=&lt;new-key&gt;
+Authentication__ApiKeys__1__CallerId=wpf-client
+<span class="c"># 클라이언트 전환 확인 후 index 0 제거 → 재배포</span></pre>
+
+      <div class="callout warn">
+        <strong>IIS Application Pool — Load User Profile</strong>
+        토큰 보호 키는 Windows에서 DPAPI로 current-user 범위(App Pool identity) 보호됩니다. 이게 동작하려면 App Pool의 <strong>"Load User Profile"을 반드시 true</strong>로 설정해야 합니다(<code class="inline">applicationHost.config</code> 수준 — <code class="inline">web.config</code>로 제어 안 됨). <code class="inline">DataProtection:KeyDirectory</code>가 App Pool 재시작 후에도 유지되는 경로가 아니면 모든 <code class="inline">fileId</code>가 무효화됩니다.
+      </div>
+
+      <h2 class="h-sub" id="admin-refdata">기준정보 운영</h2>
+      <p>기준정보 담당자가 MSSQL에 설비/로그종류/구성종류를 등록하면, 다음 요청 또는 캐시 TTL(기본 15분) 만료 시 FileGateway가 자동으로 새로 읽어옵니다.</p>
+
+      <pre class="mermaid">
+sequenceDiagram
+    participant Op as 기준정보 담당자
+    participant SP as MSSQL SP
+    participant GW as FileGateway
+    participant Cache as ReferenceData Cache
+    Op->>SP: 신규 설비 / logType / configurationType 등록
+    Note over GW,Cache: 다음 요청 또는 CacheTtl(15분) 만료 시
+    GW->>SP: FileGateway_GetReferenceData 호출
+    SP-->>GW: 서버/설비/로그정의/구성정의
+    GW->>GW: 구조 validation
+    alt 검증 성공
+        GW->>Cache: 전체 atomic 교체
+    else 검증 실패(정의 1건이라도 위반)
+        GW->>Cache: 기존 last-known-good 유지
+    end
+      </pre>
+
+      <ul>
+        <li>검증 실패는 <strong>전체 refresh 거부</strong>가 아니라, <strong>개별 정의만 격리</strong>됩니다 — 잘못된 정의 1건이 나머지 정상 설비까지 막지 않습니다.</li>
+        <li>refresh는 FTP 서버 실재 여부를 확인하지 않습니다. 파일이 실제로 있는지는 목록/다운로드 시점에만 확인합니다.</li>
+        <li>최초 기동 시 usable 캐시가 없으면 <code class="inline">/health/ready</code>가 <code class="inline">503 ReferenceDataUnavailable</code> — DB 연결/SP 존재부터 확인하세요.</li>
+        <li>기존 계약(Hourly/Daily/Continuous/Current/History)으로 표현 가능한 신규 종류는 코드 수정 없이 DB 등록만으로 노출됩니다.</li>
+      </ul>
+
+      <h2 class="h-sub" id="admin-health">Health Check · 감사 로그</h2>
+      <div class="table-wrap">
+        <table class="data">
+          <thead><tr><th>엔드포인트</th><th>의미</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">GET /health/live</td><td>프로세스 생존 여부만. 기준정보 DB 장애만으로 실패하지 않음. 인증 불필요.</td></tr>
+            <tr><td class="mono">GET /health/ready</td><td>검증 완료 기준정보 확보 여부 포함. 마지막 정상 캐시가 있으면 DB 장애 중에도 stale로 200(Degraded) 유지.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>감사 로그는 <strong>timestamp · callerId · client IP · endpoint · equipmentId · logType/configurationType · fileId · fileName/fileSize · 성공/실패 · elapsedMs</strong>를 남깁니다. <strong>API Key 원문·FTP credential·물리 경로·token 내부 payload는 절대 기록하지 않습니다.</strong></p>
+
+      <h2 class="h-sub" id="admin-checklist">배포 전 필수 확인 (요약)</h2>
+      <p>실 배포는 <code class="inline">dotnet build && dotnet test</code> 자동화 게이트를 넘어, 실제 Windows Server + IIS + MSSQL + 파일 서버 환경에서의 <strong>수동 검증</strong>을 거쳐야 완료로 간주합니다. 전체 체크리스트는 저장소 <code class="inline">docs/DEPLOYMENT-CHECKLIST.md</code> — 아래는 그중 놓치기 쉬운 항목입니다.</p>
+      <ul>
+        <li>여러 <code class="inline">X-Api-Key</code> 인증/호출자 구분 + query string key 거부(<span class="badge status-4">401</span> 실제 확인)</li>
+        <li>API Key 신/구 overlap 회전(두 key 동시 활성 → 구 key 폐기)</li>
+        <li>기준정보 개별 invalid 정의 격리(잘못된 정의 1건 주입 → 정상 정의는 그대로 유지되는지)</li>
+        <li>DataProtection 키의 IIS 재시작 내구성(재시작 후 기존 <code class="inline">fileId</code>가 여전히 유효한지)</li>
+        <li>rootPath 경계/traversal 차단(경계 위반 정의 주입 → 해당 정의만 격리)</li>
+        <li>로그/감사로그에 API Key·FTP credential·물리 경로가 실제로 안 남는지 샘플 검토</li>
+      </ul>
+    </section>
+
+    <footer class="doc-footer">
+      FileGateway 가이드 · docs/INDEX.md 및 README.md 기준으로 작성 · 설계 확정 문서는 docs/00~10-*.md 참조
+    </footer>
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mermaid/10.9.1/mermaid.min.js"></script>
+<script>
+  (() => {
+    "use strict";
+
+    if (window.mermaid) {
+      const isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      mermaid.initialize({ startOnLoad: true, theme: isDark ? "dark" : "neutral", securityLevel: "strict" });
+    }
+
+    const links = Array.from(document.querySelectorAll("nav.toc a[data-target]"));
+    const sections = links
+      .map((link) => document.getElementById(link.dataset.target))
+      .filter(Boolean);
+
+    const setActive = (id) => {
+      links.forEach((link) => link.classList.toggle("active", link.dataset.target === id));
+    };
+
+    if ("IntersectionObserver" in window) {
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries.filter((e) => e.isIntersecting);
+          if (visible.length > 0) {
+            const top = visible.sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+            setActive(top.target.id);
+          }
+        },
+        { rootMargin: "-72px 0px -70% 0px", threshold: [0, 1] }
+      );
+      sections.forEach((section) => observer.observe(section));
+    }
+
+    if (links[0]) setActive(links[0].dataset.target);
+  })();
+</script>
+</body>
+</html>
