@@ -1611,10 +1611,15 @@
       // 기능일 뿐 자유 입력을 막지 않는다.
       let fileTypesSyncToken = 0;
       async function syncFileTypesFor(equipmentId) {
+        // 값을 비우는 것도 "새 동기화 시작"으로 취급 — 진행 중이던 이전 equipmentId의 요청을 무효화하고
+        // 지금 당장(응답을 기다리지 않고) 후보를 비운다. 그래야 (1) 조회 실패 시 이전 설비의 후보가
+        // 남지 않고, (2) equipmentId를 지운 뒤 이전 요청이 뒤늦게 도착해도 후보를 다시 채우지 못한다.
+        const token = ++fileTypesSyncToken;
+        resetValues("logType");
+        resetValues("configurationType");
         if (!equipmentId) {
           return;
         }
-        const token = ++fileTypesSyncToken;
         try {
           const response = await fetch(
             buildUrl(`/api/v1/equipments/${encodeURIComponent(equipmentId)}/file-types`, new URLSearchParams()),
@@ -1624,11 +1629,12 @@
             return; // 오류이거나, 그 사이 다른 equipmentId로 더 최근 조회가 시작됐으면 이 결과는 버린다.
           }
           const data = await response.json();
-          resetValues("logType");
-          resetValues("configurationType");
+          if (token !== fileTypesSyncToken) {
+            return; // body 파싱 도중에도 더 최근 동기화가 시작됐을 수 있으므로 다시 확인한다.
+          }
           rememberFromResponseData(data);
         } catch {
-          // 편의 기능이므로 실패해도 자유 입력으로 계속 진행 가능해야 한다.
+          // 편의 기능이므로 실패해도 자유 입력으로 계속 진행 가능해야 한다(후보는 이미 비워둔 상태).
         }
       }
 
