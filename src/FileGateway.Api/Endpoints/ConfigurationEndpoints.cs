@@ -23,7 +23,7 @@ public static class ConfigurationEndpoints
             ctx.Items["Audit.ConfigurationType"] = configurationType;
             // 단순 배열(빈 결과 200 []) — 로그 목록과 달리 envelope 없음
             return Results.Ok(await configurations.GetCurrentAsync(equipmentId, configurationType, ct));
-        });
+        }).WithQueryParameters(TargetQueryParameters);
 
         app.MapGet("/api/v1/configurations/current/download", async (
             HttpRequest request, IConfigurationQueryService configurations,
@@ -43,7 +43,7 @@ public static class ConfigurationEndpoints
             if (match.FileId is not null)
                 ctx.Items["Audit.FileId"] = match.FileId;
             return new DownloadResult(file, fileAccess);
-        });
+        }).WithQueryParameters(TargetQueryParameters);
 
         app.MapGet("/api/v1/configurations/history", async (
             HttpRequest request, IOptions<FileGatewayOptions> options, IConfigurationQueryService configurations,
@@ -54,9 +54,25 @@ public static class ConfigurationEndpoints
             ctx.Items["Audit.ConfigurationType"] = query.ConfigurationType;
             var page = await configurations.GetHistoryAsync(query, ct);
             return Results.Ok(new { items = page.Items, continuationToken = page.ContinuationToken });
-        });
+        }).WithQueryParameters(HistoryQueryParameters);
         return app;
     }
+
+    private static readonly (string, bool, string)[] TargetQueryParameters =
+    [
+        ("equipmentId", true, "Equipment identifier"),
+        ("configurationType", true, "Configuration type provided by the equipment"),
+    ];
+
+    private static readonly (string, bool, string)[] HistoryQueryParameters =
+    [
+        ("equipmentId", true, "Equipment identifier"),
+        ("configurationType", true, "Configuration type provided by the equipment"),
+        ("from", true, "Range start (inclusive), ISO 8601"),
+        ("to", true, "Range end (exclusive), ISO 8601"),
+        ("limit", false, "Maximum items per page"),
+        ("continuationToken", false, "Opaque cursor from a previous response, for the next page"),
+    ];
 
     internal static (string EquipmentId, string ConfigurationType) ParseTarget(HttpRequest request)
     {
