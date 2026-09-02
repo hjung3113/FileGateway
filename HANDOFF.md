@@ -24,6 +24,9 @@
 - **merge**: PR #41 `--merge --delete-branch`. Issue #19 CLOSE 확인.
 - **PR #33(`docs/session-handoff-and-slice-orchestration`) 정리**: PR #41 merge로 이 브랜치가 다시 `origin/main`보다 11 커밋 뒤처짐 → `git merge origin/main`(force-push 없이, merge commit `44ac28e`)으로 정리, 충돌 없음(이 브랜치는 `AGENTS.md`/`HANDOFF.md`/`.claude/skills/slice-orchestration/SKILL.md` 3개 파일만 건드림). 이 항목이 반영된 커밋까지 push 완료 — **PR #33은 이제 `origin/main`과 딱 이 3개 파일만 다른, 바로 merge 가능한 상태.**
 - **PR #33도 merge 완료**(이 문단이 포함된 커밋까지 그대로 fast-forward merge됨) — `origin/main`에 HANDOFF 이력 + slice-orchestration skill 조정분 반영 완료. 로컬/원격 드리프트 문제 완전 해소.
+- **후속: PR #42 — 드롭다운을 "이전 응답 기반"에서 "설비 카탈로그 기반"으로 강화**. 사용자 피드백: "설비명 빼고는 다 드릴다운 되지 않냐, 서버에 정보 있는데" — PR #41의 드롭다운은 이슈 문구 그대로 과거 응답에서 본 값만 축적하는 약한 구현이었는데, 실제로는 `GET /api/v1/equipments/{equipmentId}/file-types`가 특정 설비의 authoritative logType/configurationType을 이미 제공함. equipmentId 필드를 확정(change 이벤트, 또는 companion snapshot으로 이미 채워진 채 렌더링)하면 그 즉시 이 엔드포인트를 호출해 logType/configurationType 후보를 그 설비 것으로 교체(누적 아님). equipmentId 자체는 사용자 지시대로 자유입력+이력 유지(카탈로그 강제 안 함).
+  - **PR #42 리뷰 반영(2라운드, 전부 codex bot, 3건 모두 같은 함수 `syncFileTypesFor`의 순서 문제)**: **P2** ① 조회 실패(401/404/네트워크 오류) 시 이전 설비의 후보가 그대로 남음. **P2** ② `await response.json()` 이후 sync token 재검증이 없어 늦게 도착한 body가 이미 최신 설비로 채워진 결과를 덮어쓸 수 있음. **P2** ③ equipmentId를 빈 값으로 지워도 진행 중이던 이전 요청이 무효화 안 됨. → token 증가 + 후보 초기화(`resetValues`)를 함수 맨 앞(empty-check보다도 먼저)으로 옮기고, `response.json()` 이후에도 token 재검증 추가. Playwright로 3개 레이스 시나리오(404 실패, 진행 중 clear, 느린 응답이 빠른 응답보다 늦게 도착) 전부 재확인. 커밋 `3719ae9`(최초 구현) → `16d6157`(리뷰 반영).
+  - **merge**: PR #42 `--merge --delete-branch`. C# 변경 없음(테스트 게이트 불변, 289/160 유지).
 - **다음 세션 할 일**: 남은 open issue #12(FTP localhost 조회 502 Bad Gateway, PASV 데이터채널 의심 — 코드 버그)와 #13(HTTPS 서버 인증서 확보 — 인증서 발급/CA 결정 같은 인프라 단계, 코딩 작업 아님) 중 사용자가 세션 #12에서 둘 다 보류하기로 함. **다음 세션은 어느 쪽을 먼저 할지부터 사용자에게 확인할 것.**
 
 ## 2026-09-02 세션 상태 #11 — Issue #27 merge 완료, 이슈 클러스터(#26~32) 전체 종료
