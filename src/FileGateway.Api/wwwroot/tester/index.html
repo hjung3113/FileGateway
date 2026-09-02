@@ -1188,7 +1188,11 @@
           <h3 id="nav-catalog-title">Catalog</h3>
           <p class="nav-group-copy">Reference data</p>
           <div class="operation-list">
-            <button class="operation-link active" data-operation="catalog-file-types" aria-current="page" type="button">
+            <button class="operation-link active" data-operation="catalog-equipments" aria-current="page" type="button">
+              <span class="method-badge method-get">GET</span>
+              <span class="operation-copy"><strong>List equipment</strong><code>/api/v1/equipments</code></span>
+            </button>
+            <button class="operation-link" data-operation="catalog-file-types" type="button">
               <span class="method-badge method-get">GET</span>
               <span class="operation-copy"><strong>Equipment File Types</strong><code>/api/v1/equipments/{id}/file-types</code></span>
             </button>
@@ -1378,6 +1382,15 @@
       const requestEndpoint = document.getElementById("request-endpoint");
 
       const operationDefinitions = [
+        {
+          id: "catalog-equipments",
+          group: "Catalog",
+          label: "List equipment",
+          method: "GET",
+          endpoint: "/api/v1/equipments",
+          mode: "json",
+          note: "List every equipment ID from the validated reference-data snapshot."
+        },
         {
           id: "catalog-file-types",
           group: "Catalog",
@@ -2078,6 +2091,13 @@
       function buildRequest(operation, continuationToken) {
         const values = collectFormValues(operation);
 
+        if (operation.id === "catalog-equipments") {
+          return {
+            url: buildUrl("/api/v1/equipments", new URLSearchParams()),
+            mode: operation.mode
+          };
+        }
+
         if (operation.form === "equipment") {
           const equipmentId = requiredValue(operation, "equipmentId", "Equipment ID");
           if (!equipmentId) return null;
@@ -2267,7 +2287,9 @@
           ? String(item.fileName)
           : item && typeof item === "object" && item.logType
             ? String(item.logType)
-            : `item ${index + 1}`;
+            : item && typeof item === "object" && item.equipmentId
+              ? String(item.equipmentId)
+              : `item ${index + 1}`;
         header.append(createElement("strong", null, title));
         result.append(header);
 
@@ -2790,7 +2812,7 @@
         link.addEventListener("click", () => renderOperation(link.dataset.operation));
       });
 
-      renderOperation("catalog-file-types");
+      renderOperation("catalog-equipments");
     })();
   </script>
 </body>

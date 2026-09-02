@@ -1,11 +1,20 @@
 namespace FileGateway.Samples.Scenarios;
 
-/// 유즈케이스: 설비가 제공하는 logType/configurationType 조회.
+/// 유즈케이스: 전체 설비를 조회한 뒤 선택한 설비의 logType/configurationType 조회.
 /// FTP를 스캔하지 않고 기준정보 snapshot만 반환하므로 빠르다.
 public static class FileTypesScenario
 {
-    public static async Task RunAsync(FileGatewayClient client, string equipmentId = "EQ-001")
+    public static async Task RunAsync(FileGatewayClient client)
     {
+        var catalog = await client.ListEquipmentsAsync();
+        var items = catalog.GetProperty("items");
+        if (items.GetArrayLength() == 0)
+        {
+            Console.WriteLine("no equipment available");
+            return;
+        }
+
+        var equipmentId = items[0].GetProperty("equipmentId").GetString()!;
         System.Text.Json.JsonElement result;
         try
         {

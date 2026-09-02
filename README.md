@@ -98,7 +98,8 @@ curl http://localhost:5178/health/ready   # 기준정보 최초 로딩 유발 + 
 1. 브라우저로 `http://localhost:5178/tester` 접속
 2. 상단 "접속 설정"에 API Key 입력(`X-Api-Key` header로만 전송됨). 기본은 `sessionStorage`(탭 닫으면 소실) — "이 브라우저에 기억" 체크 시 `localStorage`로 저장
 3. 카드별로 조회/다운로드 버튼 사용:
-   - **설비 제공 파일 종류** — `equipmentId`만 넣고 조회
+   - **설비 목록** — 전체 `equipmentId` 조회
+   - **설비 제공 파일 종류** — 목록에서 선택한 `equipmentId`를 넣고 조회
    - **로그** — `equipmentId`/`logType`/`from`/`to`/`subtype`/속성 필터로 목록 조회 또는 조건으로 바로 다운로드
    - **파일 공통** — 목록 응답에서 복사한 `fileId`로 metadata 조회/다운로드
    - **Current/History Configuration** — `equipmentId`/`configurationType` 기준 조회
@@ -206,14 +207,15 @@ sequenceDiagram
 
 ```mermaid
 flowchart LR
-    A1["1. API Key 발급받기<br/>(X-Api-Key header)"] --> A2["2. GET /equipments/{id}/file-types<br/>제공 종류 확인"]
-    A2 --> A3{"로그? Configuration?"}
-    A3 -- 로그 --> A4["GET /logs<br/>목록 조회"]
-    A3 -- Configuration --> A5["GET /configurations/current<br/>또는 /history"]
-    A4 --> A6{"조건에 맞는 파일<br/>1건으로 확정되는가?"}
-    A5 --> A6
-    A6 -- 예 --> A7["/logs/download 또는<br/>/configurations/current/download<br/>(조건 기반 직접 다운로드)"]
-    A6 -- 아니오, 목록에서 선택 --> A8["목록의 fileId로<br/>/files/download?fileId=..."]
+    A1["1. API Key 발급받기<br/>(X-Api-Key header)"] --> A2["2. GET /equipments<br/>전체 설비 조회"]
+    A2 --> A3["3. GET /equipments/{id}/file-types<br/>제공 종류 확인"]
+    A3 --> A4{"로그? Configuration?"}
+    A4 -- 로그 --> A5["GET /logs<br/>목록 조회"]
+    A4 -- Configuration --> A6["GET /configurations/current<br/>또는 /history"]
+    A5 --> A7{"조건에 맞는 파일<br/>1건으로 확정되는가?"}
+    A6 --> A7
+    A7 -- 예 --> A8["/logs/download 또는<br/>/configurations/current/download<br/>(조건 기반 직접 다운로드)"]
+    A7 -- 아니오, 목록에서 선택 --> A9["목록의 fileId로<br/>/files/download?fileId=..."]
 ```
 
 - 파일 1건이 확실하면 조건 기반 직접 다운로드가 왕복을 줄여줍니다. 2건 이상 걸리면 `409 MultipleFilesMatched`이므로 목록 조회로 전환하세요.
@@ -267,6 +269,7 @@ flowchart TD
 
 ## 주요 기능
 
+- 기준정보 snapshot 기반 전체 `equipmentId` 조회
 - 설비별 제공 가능한 `logType` / `configurationType` 조회
 - Hourly / Daily / Continuous 로그 목록 조회
 - `subtype` / 동적 attributes 기반 로그 필터
@@ -296,7 +299,18 @@ X-Api-Key: <caller-key>
 
 > `from`/`to` 값의 UTC offset `+09:00`은 query string에서 `%2B09:00`으로 URL-encoding해야 합니다(그대로 `+`를 보내면 공백으로 디코딩되어 파싱 실패). curl 예시는 이미 encoding된 형태입니다.
 
-### 1. 설비별 제공 파일 종류 조회
+### 1. 전체 설비 목록 조회
+
+```bash
+curl -s https://gateway.example/api/v1/equipments \
+  -H "X-Api-Key: $API_KEY"
+```
+
+```json
+{ "items": [ { "equipmentId": "EQ-001" }, { "equipmentId": "EQ-002" } ] }
+```
+
+### 2. 설비별 제공 파일 종류 조회
 
 ```bash
 curl -s https://gateway.example/api/v1/equipments/EQ-001/file-types \
@@ -318,7 +332,7 @@ curl -s https://gateway.example/api/v1/equipments/EQ-001/file-types \
 
 FTP를 스캔하지 않고 DB 기준정보 snapshot만 반환합니다. `equipmentId` 없음 → `404 EquipmentNotFound`.
 
-### 2. 로그 목록 조회 (Hourly/Daily)
+### 3. 로그 목록 조회 (Hourly/Daily)
 
 ```bash
 curl -s "https://gateway.example/api/v1/logs?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T00:00:00%2B09:00&to=2026-08-21T00:00:00%2B09:00&limit=50" \
@@ -349,7 +363,7 @@ curl -s "https://gateway.example/api/v1/logs?equipmentId=EQ-001&logType=EventLog
 - Continuous `logType`은 `from`/`to`를 주면 `400 InvalidRequest`.
 - 조회 범위가 `Logs.MaxQueryRange`(기본 31일)를 초과해도 `400 InvalidRequest`.
 
-### 3. 로그 조건 기반 직접 다운로드
+### 4. 로그 조건 기반 직접 다운로드
 
 ```bash
 curl -s -OJ "https://gateway.example/api/v1/logs/download?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T09:00:00%2B09:00&to=2026-08-20T10:00:00%2B09:00" \
@@ -358,7 +372,7 @@ curl -s -OJ "https://gateway.example/api/v1/logs/download?equipmentId=EQ-001&log
 
 0건 → `404 FileNotFound`, 2건 이상 일치 → `409 MultipleFilesMatched`(이 경우 목록 조회로 `fileId`를 얻어 `/files/download?fileId=...` 사용).
 
-### 4. Current Configuration 조회/다운로드
+### 5. Current Configuration 조회/다운로드
 
 ```bash
 curl -s "https://gateway.example/api/v1/configurations/current?equipmentId=EQ-001&configurationType=PM" \
@@ -372,7 +386,7 @@ curl -s -OJ "https://gateway.example/api/v1/configurations/current/download?equi
 
 Current 목록 응답은 로그와 달리 `{items, continuationToken}` envelope가 **아닌 단순 배열**입니다(`limit`/`continuationToken` 미적용).
 
-### 5. Configuration History 조회
+### 6. Configuration History 조회
 
 ```bash
 curl -s "https://gateway.example/api/v1/configurations/history?equipmentId=EQ-001&configurationType=PM&from=2026-08-01T00:00:00%2B09:00&to=2026-08-24T00:00:00%2B09:00" \
@@ -381,7 +395,7 @@ curl -s "https://gateway.example/api/v1/configurations/history?equipmentId=EQ-00
 
 `from`/`to` 둘 다 필수(생략 시 `400 InvalidRequest`). marker 없는 미완료 Snapshot Set은 노출되지 않습니다.
 
-### 6. 공통 파일 조회/다운로드 (`fileId`)
+### 7. 공통 파일 조회/다운로드 (`fileId`)
 
 ```bash
 curl -s "https://gateway.example/api/v1/files?fileId=$FILE_ID" \
