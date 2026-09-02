@@ -999,6 +999,24 @@
       background: var(--success-soft);
     }
 
+    .download-companion {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-3) var(--space-4);
+      border-radius: var(--small-radius);
+      color: var(--primary);
+      background: var(--primary-soft);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .download-companion .secondary-button {
+      flex: 0 0 auto;
+    }
+
     .download-details {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -1407,6 +1425,7 @@
           label: "List logs",
           method: "GET",
           endpoint: "/api/v1/logs",
+          openApiPath: "/api/v1/logs",
           mode: "json",
           form: "logs",
           inputGroup: "logs",
@@ -1418,6 +1437,7 @@
           label: "Conditional download",
           method: "GET",
           endpoint: "/api/v1/logs/download",
+          openApiPath: "/api/v1/logs/download",
           mode: "download",
           form: "logs",
           inputGroup: "logs",
@@ -1429,6 +1449,7 @@
           label: "Metadata by fileId",
           method: "GET",
           endpoint: "/api/v1/files?fileId=...",
+          openApiPath: "/api/v1/files",
           mode: "json",
           form: "file",
           inputGroup: "file",
@@ -1440,6 +1461,7 @@
           label: "Download by fileId",
           method: "GET",
           endpoint: "/api/v1/files/download?fileId=...",
+          openApiPath: "/api/v1/files/download",
           mode: "download",
           form: "file",
           inputGroup: "file",
@@ -1451,6 +1473,7 @@
           label: "Current",
           method: "GET",
           endpoint: "/api/v1/configurations/current",
+          openApiPath: "/api/v1/configurations/current",
           mode: "json",
           form: "current",
           inputGroup: "current",
@@ -1462,6 +1485,7 @@
           label: "Current download",
           method: "GET",
           endpoint: "/api/v1/configurations/current/download",
+          openApiPath: "/api/v1/configurations/current/download",
           mode: "download",
           form: "current",
           inputGroup: "current",
@@ -1473,11 +1497,23 @@
           label: "History",
           method: "GET",
           endpoint: "/api/v1/configurations/history",
+          openApiPath: "/api/v1/configurations/history",
           mode: "json",
           form: "history",
           note: "History requires an explicit from/to range and supports pagination."
         }
       ];
+
+      // "List logs"/"Current" 조회 결과 아래에 같은 조건으로 바로 갈 수 있는 다운로드 오퍼레이션.
+      const downloadCompanions = {
+        "logs-list": { targetId: "logs-download", label: "Open conditional download for this query" },
+        "config-current": { targetId: "config-current-download", label: "Open current download for this query" }
+      };
+
+      // 이전 조회 응답에서 관찰한 값으로 드롭다운(datalist)을 채우는 필드들.
+      const recentValueFields = ["equipmentId", "logType", "configurationType"];
+      const recentValues = new Map(recentValueFields.map((field) => [field, new Set()]));
+      let openApiParamHints = {};
 
       const sharedValuesByGroup = new Map();
       const operations = new Map(operationDefinitions.map((definition) => {
@@ -1493,6 +1529,106 @@
       let activeOperationId = "";
 
       gatewayOrigin.textContent = window.location.origin;
+
+      function datalistId(fieldName) {
+        return `dl-${fieldName}`;
+      }
+
+      // 각 recentValueFields 항목마다 <datalist>를 한 번씩만 만들어 body에 붙인다.
+      for (const field of recentValueFields) {
+        const list = document.createElement("datalist");
+        list.id = datalistId(field);
+        document.body.append(list);
+      }
+
+      function refreshDatalist(fieldName) {
+        const list = document.getElementById(datalistId(fieldName));
+        if (!list) {
+          return;
+        }
+        list.replaceChildren();
+        for (const value of recentValues.get(fieldName) || []) {
+          const option = document.createElement("option");
+          option.value = value;
+          list.append(option);
+        }
+      }
+
+      function rememberValue(fieldName, value) {
+        const set = recentValues.get(fieldName);
+        if (!set || typeof value !== "string" || !value) {
+          return;
+        }
+        if (set.has(value)) {
+          return;
+        }
+        set.add(value);
+        refreshDatalist(fieldName);
+      }
+
+      function rememberValuesFrom(record) {
+        if (!record || typeof record !== "object") {
+          return;
+        }
+        for (const field of recentValueFields) {
+          if (typeof record[field] === "string") {
+            rememberValue(field, record[field]);
+          }
+        }
+      }
+
+      // 목록/현재/기준정보 응답 어디서든 equipmentId/logType/configurationType을 찾아 드롭다운 후보로 남긴다.
+      function rememberFromResponseData(data) {
+        if (!data || typeof data !== "object") {
+          return;
+        }
+        rememberValuesFrom(data);
+        const items = Array.isArray(data) ? data : Array.isArray(data.items) ? data.items : null;
+        if (items) {
+          items.forEach(rememberValuesFrom);
+        }
+        if (Array.isArray(data.logs)) {
+          data.logs.forEach((summary) => rememberValue("logType", summary && summary.logType));
+        }
+        if (Array.isArray(data.configurations)) {
+          data.configurations.forEach((summary) => rememberValue("configurationType", summary && summary.configurationType));
+        }
+      }
+
+      async function loadOpenApiHints() {
+        try {
+          const response = await fetch("/openapi/v1.json");
+          if (!response.ok) {
+            return;
+          }
+          const document_ = await response.json();
+          const hints = {};
+          for (const [path, methods] of Object.entries(document_.paths || {})) {
+            const get = methods && methods.get;
+            if (!get || !Array.isArray(get.parameters)) {
+              continue;
+            }
+            const forPath = {};
+            for (const parameter of get.parameters) {
+              if (parameter.name && parameter.description) {
+                forPath[parameter.name] = parameter.description;
+              }
+            }
+            hints[path] = forPath;
+          }
+          openApiParamHints = hints;
+          if (activeOperation) {
+            renderOperationForm(activeOperation); // 이미 그려진 폼이 있으면 설명을 반영해 다시 그린다.
+          }
+        } catch {
+          // Dev tool 편의 기능일 뿐이므로, 실패해도 필드 설명 없이 계속 동작한다.
+        }
+      }
+
+      function fieldDescription(operation, name) {
+        const forPath = operation.openApiPath && openApiParamHints[operation.openApiPath];
+        return (forPath && forPath[name]) || "";
+      }
 
       function readStoredKey(storage) {
         try {
@@ -1678,6 +1814,9 @@
         input.autocomplete = "off";
         input.spellcheck = false;
         input.placeholder = specification.placeholder || "";
+        if (specification.step !== undefined) {
+          input.step = specification.step;
+        }
         if (specification.inputmode) {
           input.inputMode = specification.inputmode;
         }
@@ -1686,6 +1825,9 @@
         }
         if (specification.opaque) {
           input.classList.add("opaque-input");
+        }
+        if (recentValues.has(specification.name)) {
+          input.setAttribute("list", datalistId(specification.name)); // 이전 조회에서 본 값을 드롭다운으로 제안(자유 입력은 그대로 허용)
         }
         input.value = operation.values[specification.name] || "";
         input.addEventListener("input", () => {
@@ -1701,8 +1843,9 @@
           field.append(input);
         }
 
-        if (specification.hint) {
-          field.append(createElement("span", "field-hint", specification.hint));
+        const hintText = specification.hint || fieldDescription(operation, specification.name);
+        if (hintText) {
+          field.append(createElement("span", "field-hint", hintText));
         }
         return field;
       }
@@ -1827,14 +1970,16 @@
             createField(operation, {
               name: "from",
               label: "from",
-              placeholder: "2026-08-28T00:00:00+09:00",
-              hint: "For Hourly/Daily, leave both from and to blank for the recent 2 days; Continuous rejects time filters."
+              type: "datetime-local",
+              step: "1",
+              hint: "For Hourly/Daily, leave both from and to blank for the recent 2 days; Continuous rejects time filters. Picked time is site-local (Asia/Seoul)."
             }),
             createField(operation, {
               name: "to",
               label: "to",
-              placeholder: "2026-08-29T00:00:00+09:00",
-              hint: "For Hourly/Daily, leave both from and to blank for the recent 2 days; Continuous rejects time filters."
+              type: "datetime-local",
+              step: "1",
+              hint: "For Hourly/Daily, leave both from and to blank for the recent 2 days; Continuous rejects time filters. Picked time is site-local (Asia/Seoul)."
             }),
             createField(operation, { name: "subtype", label: "subtype" }),
             createField(operation, { name: "limit", label: "limit", inputmode: "numeric", placeholder: "50" })
@@ -1867,8 +2012,14 @@
           fields.append(
             createField(operation, { name: "equipmentId", label: "Equipment ID", required: true, placeholder: "EQ-001" }),
             createField(operation, { name: "configurationType", label: "configurationType", required: true, placeholder: "PM" }),
-            createField(operation, { name: "from", label: "from", required: true, placeholder: "2026-08-01T00:00:00+09:00" }),
-            createField(operation, { name: "to", label: "to", required: true, placeholder: "2026-09-01T00:00:00+09:00" }),
+            createField(operation, {
+              name: "from", label: "from", required: true, type: "datetime-local", step: "1",
+              hint: "Picked time is site-local (Asia/Seoul)."
+            }),
+            createField(operation, {
+              name: "to", label: "to", required: true, type: "datetime-local", step: "1",
+              hint: "Picked time is site-local (Asia/Seoul)."
+            }),
             createField(operation, { name: "limit", label: "limit", inputmode: "numeric", placeholder: "50" })
           );
           appendTokenField(operation, fields);
@@ -2258,6 +2409,21 @@
         }
       }
 
+      // 목록/조회 응답 바로 아래에 같은 조건으로 이어지는 다운로드 오퍼레이션을 연다(값은 shared inputGroup으로 이미 넘어가 있음).
+      function appendDownloadCompanion(parent, operation) {
+        const companion = downloadCompanions[operation.id];
+        if (!companion) {
+          return;
+        }
+        const panel = createElement("div", "download-companion");
+        panel.append(createElement("span", null, "Same criteria, ready to download."));
+        const button = createElement("button", "secondary-button", companion.label);
+        button.type = "button";
+        button.addEventListener("click", () => renderOperation(companion.targetId));
+        panel.append(button);
+        parent.append(panel);
+      }
+
       function appendFileIdActions(parent, fileId) {
         const row = createElement("div", "file-id-row");
         row.append(
@@ -2408,6 +2574,7 @@
         responseBody.replaceChildren();
         setResponseMetrics(state.status, "success", state.duration, state.size);
         appendRequestUrl(responseBody, state.url);
+        appendDownloadCompanion(responseBody, operation);
 
         if (state.data && typeof state.data === "object" && !Array.isArray(state.data) && typeof state.data.fileId === "string" && state.data.fileId.length > 0) {
           appendFileIdActions(responseBody, state.data.fileId);
@@ -2425,6 +2592,8 @@
       }
 
       function renderJsonSuccess(operation, response, data, rawText, duration, url) {
+        rememberValuesFrom(operation.values); // 응답에 안 담기는 필드도 사용자가 성공적으로 입력한 값이면 후보로 남긴다.
+        rememberFromResponseData(data);
         storeResponseState(operation, {
           kind: "json-success",
           status: statusText(response),
@@ -2813,6 +2982,7 @@
       });
 
       renderOperation("catalog-equipments");
+      loadOpenApiHints();
     })();
   </script>
 </body>

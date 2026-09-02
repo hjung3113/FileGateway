@@ -23,7 +23,7 @@ public static class LogEndpoints
             ctx.Items["Audit.LogType"] = query.LogType;
             var page = await logs.ListAsync(query, ct);
             return Results.Ok(new { items = page.Items, continuationToken = page.ContinuationToken });
-        });
+        }).WithQueryParameters(ListQueryParameters);
 
         app.MapGet("/api/v1/logs/download", async (
             HttpRequest request, IOptions<FileGatewayOptions> options, ILogQueryService logs,
@@ -46,9 +46,21 @@ public static class LogEndpoints
             }
             var located = matches.Select(m => m.File).ToList();
             return (IResult)new ZipDownloadResult(ZipName(query), located, fileAccess);   // 2건 이상: zip 스트리밍
-        });
+        }).WithQueryParameters(ListQueryParameters);
         return app;
     }
+
+    private static readonly (string, bool, string)[] ListQueryParameters =
+    [
+        ("equipmentId", true, "Equipment identifier"),
+        ("logType", true, "Log type provided by the equipment"),
+        ("from", false, "Range start (inclusive), ISO 8601. Omit both from and to for the default range"),
+        ("to", false, "Range end (exclusive), ISO 8601. Omit both from and to for the default range"),
+        ("subtype", false, "Definition-specific subtype (optional, varies per log definition)"),
+        ("attr.*", false, "Attribute filter. Repeat as attr.<name>=<value> for multiple attributes"),
+        ("limit", false, "Maximum items per page"),
+        ("continuationToken", false, "Opaque cursor from a previous response, for the next page"),
+    ];
 
     internal static LogListQuery ParseListQuery(HttpRequest request, FileGatewayOptions opt)
     {

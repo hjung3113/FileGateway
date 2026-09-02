@@ -20,7 +20,7 @@ public static class FileEndpoints
         {
             var located = await LocateAsync(fileId, codec, logs, configurations, ctx, ct);
             return Results.Ok(new { fileId, fileName = located.FileName, size = located.Size });
-        });
+        }).WithQueryParameters(FileIdParameter);
 
         app.MapGet("/api/v1/files/download", async (
             string? fileId, ITokenCodec codec, ILogQueryService logs,
@@ -29,9 +29,14 @@ public static class FileEndpoints
         {
             var located = await LocateAsync(fileId, codec, logs, configurations, ctx, ct);
             return new DownloadResult(located, fileAccess);
-        });
+        }).WithQueryParameters(FileIdParameter);
         return app;
     }
+
+    private static readonly (string, bool, string)[] FileIdParameter =
+    [
+        ("fileId", true, "Opaque file identifier issued by a list response"),
+    ];
 
     // 재해석에 성공한 payload의 claims에서 감사 항목을 채우고, purpose에 맞는 feature service로 위임한다.
     private static async Task<LocatedFile> LocateAsync(
