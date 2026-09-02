@@ -3,6 +3,16 @@
 새 에이전트 세션이 FileGateway 작업을 이어받기 위한 상태 문서. 설계 문서가 아니므로 `docs/INDEX.md` 등록 대상이 아니다. 구현 진행 시 이 문서의 체크포인트만 갱신하고, MVP 완료 시 삭제한다.
 
 
+## 2026-09-02 세션 상태 #11 — Issue #27 merge 완료, 이슈 클러스터(#26~32) 전체 종료
+
+**세션 #10이 PR 오픈까지 끝내고 넘긴 #27(equipment catalog API)을 재리뷰 없이(핸드오프의 merge 가능 판정 근거) 바로 merge. Issue #27 CLOSED.**
+
+- **merge**: PR #40 `--merge --delete-branch`(원격 브랜치 삭제, 로컬 브랜치는 워크트리 사용 중이라 자동삭제 실패 → 워크트리 정리 시 함께 처리). Issue #27 "Closes #27"으로 자동 CLOSE.
+- **정리**: 워크트리 `hjung3113-issue-27-equipment-catalog`를 `orca worktree rm --worktree path:<...> --force`로 정리(로컬 브랜치도 함께 삭제됨).
+- **P3 문서 보강(리뷰 항목 (2), docs/05-api-interface.md의 "ordinal" 명시)은 사용자 판단으로 생략** — 비차단이라 별도 후속 없이 종료.
+- **이슈 클러스터(#26~#32) 전체 완료 확인**: `gh issue list --state open` 결과 #26~#32는 전부 CLOSED, 세션 #6에서 계획했던 병렬/순차 트랙(#29/#31 → #26/#32 → #28 → #30 → #27)이 모두 종료됨.
+- **남은 open issue(이번 클러스터와 무관, 별도 판단 필요)**: #19(개발 API 테스터 UX 개선), #13(HTTPS용 서버 인증서 확보), #12(FTP localhost 조회 API 502 Bad Gateway, PASV 데이터채널 의심 — 버그). **다음 세션 할 일**: 사용자와 이 셋 중 우선순위 확인 후 착수. #12는 버그 리포트라 재현/원인 조사부터 필요할 가능성 높음.
+
 ## 2026-09-02 세션 상태 #10 — Issue #30 merge 완료
 
 **세션 #9가 계획해둔 다음 작업(#30 → #27) 중 #30(캐시 warm-up)을 새 워크트리로 착수해 구현→CONDUCTOR 검증→독립 리뷰→PR→merge까지 완료. Issue #30 CLOSED.**
