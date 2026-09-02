@@ -2274,9 +2274,12 @@
             attributes: Array.isArray(values.attributes) ? values.attributes : []
           };
           operation.criteria = criteria;
+          // 실제로 이 요청에 쓰인 continuationToken(페이지네이션 override 포함)을 스냅샷에 남긴다 — companion이 이 스냅샷을 그대로 복원한다.
+          const effectiveToken = continuationToken === undefined ? criteria.continuationToken : continuationToken;
           return {
             url: buildUrl(operation.mode === "download" ? "/api/v1/logs/download" : "/api/v1/logs", buildLogQuery(criteria, continuationToken)),
-            mode: operation.mode
+            mode: operation.mode,
+            criteriaSnapshot: { ...criteria, continuationToken: effectiveToken }
           };
         }
 
@@ -2301,7 +2304,8 @@
           query.set("configurationType", configurationType);
           return {
             url: buildUrl(operation.mode === "download" ? "/api/v1/configurations/current/download" : "/api/v1/configurations/current", query),
-            mode: operation.mode
+            mode: operation.mode,
+            criteriaSnapshot: { equipmentId, configurationType }
           };
         }
 
@@ -2339,13 +2343,15 @@
         if (operation.form === "logs") {
           return {
             url: buildUrl("/api/v1/logs", buildLogQuery(operation.criteria, token)),
-            mode: "json"
+            mode: "json",
+            criteriaSnapshot: { ...operation.criteria, continuationToken: token }
           };
         }
         if (operation.form === "history") {
           return {
             url: buildUrl("/api/v1/configurations/history", buildHistoryQuery(operation.criteria, token)),
-            mode: "json"
+            mode: "json",
+            criteriaSnapshot: { ...operation.criteria, continuationToken: token }
           };
         }
         return null;
@@ -2409,17 +2415,40 @@
         }
       }
 
-      // 목록/조회 응답 바로 아래에 같은 조건으로 이어지는 다운로드 오퍼레이션을 연다(값은 shared inputGroup으로 이미 넘어가 있음).
-      function appendDownloadCompanion(parent, operation) {
+      // 목록/조회 응답 바로 아래에 같은 조건으로 이어지는 다운로드 오퍼레이션을 연다.
+      // 클릭 시 이 응답을 만든 시점의 criteriaSnapshot을 target에 복원한다 — 그 사이 shared 값이
+      // 바뀌었거나(같은 폼을 편집만 하고 재전송은 안 한 경우), pagination으로 continuationToken이
+      // 바뀐 경우에도 "지금 화면에 보이는 응답"과 정확히 같은 조건으로 다운로드가 열리게 하기 위함.
+      function appendDownloadCompanion(parent, operation, state) {
         const companion = downloadCompanions[operation.id];
         if (!companion) {
           return;
+        }
+        if (operation.id === "config-current") {
+          // /configurations/current/download는 정확히 1건 매치만 성공한다(그 외 409) — 다건 응답에서
+          // 이 shortcut을 보여주면 실패가 확정된 액션을 "다운로드 가능"처럼 노출하게 된다.
+          // 다건일 때는 각 항목의 fileId 액션(있다면)으로 유도한다.
+          const items = Array.isArray(state.data) ? state.data : [];
+          if (items.length !== 1) {
+            return;
+          }
         }
         const panel = createElement("div", "download-companion");
         panel.append(createElement("span", null, "Same criteria, ready to download."));
         const button = createElement("button", "secondary-button", companion.label);
         button.type = "button";
-        button.addEventListener("click", () => renderOperation(companion.targetId));
+        button.addEventListener("click", () => {
+          // renderOperation()이 내부에서 현재(=source) 폼의 DOM 값을 shared values에 먼저 반영한다.
+          // logs-list/logs-download처럼 같은 inputGroup을 공유하는 경우 그 반영이 스냅샷보다 나중에
+          // 일어나면 방금 편집만 하고 미전송한 값이 스냅샷을 덮어쓰게 되므로, 먼저 전환을 끝낸 뒤
+          // 스냅샷을 덮어써서 폼을 다시 그린다.
+          renderOperation(companion.targetId);
+          const target = operations.get(companion.targetId);
+          if (target && state.criteriaSnapshot) {
+            Object.assign(target.values, state.criteriaSnapshot);
+            renderOperationForm(target);
+          }
+        });
         panel.append(button);
         parent.append(panel);
       }
@@ -2574,7 +2603,7 @@
         responseBody.replaceChildren();
         setResponseMetrics(state.status, "success", state.duration, state.size);
         appendRequestUrl(responseBody, state.url);
-        appendDownloadCompanion(responseBody, operation);
+        appendDownloadCompanion(responseBody, operation, state);
 
         if (state.data && typeof state.data === "object" && !Array.isArray(state.data) && typeof state.data.fileId === "string" && state.data.fileId.length > 0) {
           appendFileIdActions(responseBody, state.data.fileId);
@@ -2591,7 +2620,7 @@
         appendJsonSection(responseBody, state.data, state.rawText);
       }
 
-      function renderJsonSuccess(operation, response, data, rawText, duration, url) {
+      function renderJsonSuccess(operation, response, data, rawText, duration, url, criteriaSnapshot) {
         rememberValuesFrom(operation.values); // 응답에 안 담기는 필드도 사용자가 성공적으로 입력한 값이면 후보로 남긴다.
         rememberFromResponseData(data);
         storeResponseState(operation, {
@@ -2601,7 +2630,8 @@
           size: responseBodySize(response, rawText),
           url,
           data,
-          rawText
+          rawText,
+          criteriaSnapshot // 이 응답을 만들어낸 실제 요청 조건의 스냅샷(공유 값이 이후 바뀌어도 이 응답에는 고정됨).
         });
       }
 
@@ -2913,7 +2943,7 @@
             renderJsonParseError(operation, response, body, duration, request.url);
             return;
           }
-          renderJsonSuccess(operation, response, data, body, duration, request.url);
+          renderJsonSuccess(operation, response, data, body, duration, request.url, request.criteriaSnapshot);
         } catch {
           showNetworkError(operation, request.url, performance.now() - startedAt);
         } finally {

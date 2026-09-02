@@ -23,7 +23,7 @@ public static class LogEndpoints
             ctx.Items["Audit.LogType"] = query.LogType;
             var page = await logs.ListAsync(query, ct);
             return Results.Ok(new { items = page.Items, continuationToken = page.ContinuationToken });
-        }).WithQueryParameters(ListQueryParameters);
+        }).WithQueryParameters(ListQueryParameters).WithOperationNote(AttributeFilterNote);
 
         app.MapGet("/api/v1/logs/download", async (
             HttpRequest request, IOptions<FileGatewayOptions> options, ILogQueryService logs,
@@ -46,7 +46,7 @@ public static class LogEndpoints
             }
             var located = matches.Select(m => m.File).ToList();
             return (IResult)new ZipDownloadResult(ZipName(query), located, fileAccess);   // 2건 이상: zip 스트리밍
-        }).WithQueryParameters(ListQueryParameters);
+        }).WithQueryParameters(ListQueryParameters).WithOperationNote(AttributeFilterNote);
         return app;
     }
 
@@ -57,10 +57,13 @@ public static class LogEndpoints
         ("from", false, "Range start (inclusive), ISO 8601. Omit both from and to for the default range"),
         ("to", false, "Range end (exclusive), ISO 8601. Omit both from and to for the default range"),
         ("subtype", false, "Definition-specific subtype (optional, varies per log definition)"),
-        ("attr.*", false, "Attribute filter. Repeat as attr.<name>=<value> for multiple attributes"),
         ("limit", false, "Maximum items per page"),
         ("continuationToken", false, "Opaque cursor from a previous response, for the next page"),
     ];
+
+    // attr.<name>=<value>는 동적 키라 고정 파라미터로 선언할 수 없다(선언하면 클라이언트가 "attr.*"를 리터럴 키로 취급함).
+    private const string AttributeFilterNote =
+        "Additionally accepts attr.<name>=<value> for each attribute filter (repeatable, dynamic key — not listed as a fixed parameter).";
 
     internal static LogListQuery ParseListQuery(HttpRequest request, FileGatewayOptions opt)
     {

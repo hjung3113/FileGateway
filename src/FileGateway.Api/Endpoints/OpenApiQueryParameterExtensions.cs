@@ -39,4 +39,20 @@ internal static class OpenApiQueryParameterExtensions
         });
         return builder;
     }
+
+    /// <summary>
+    /// attr.&lt;name&gt;=&lt;value&gt; 같은 동적 키 와일드카드는 고정 파라미터 이름으로 선언할 수 없다
+    /// (Scalar/클라이언트 생성기가 "attr.*"를 리터럴 쿼리 키로 취급한다) — operation 설명에 규칙만 남긴다.
+    /// </summary>
+    public static RouteHandlerBuilder WithOperationNote(this RouteHandlerBuilder builder, string note)
+    {
+        builder.AddOpenApiOperationTransformer((operation, _, _) =>
+        {
+            operation.Description = string.IsNullOrEmpty(operation.Description)
+                ? note
+                : $"{operation.Description} {note}";
+            return Task.CompletedTask;
+        });
+        return builder;
+    }
 }
