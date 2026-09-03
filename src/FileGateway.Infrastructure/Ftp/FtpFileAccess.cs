@@ -39,13 +39,13 @@ public sealed class FtpFileAccess(FtpClientPool pool) : IFileAccess
                      .Select(i => i.Name).ToList());
         }, ct));
 
-    public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+    public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
         => WrapAsync(() => pool.RunAsync(server, async (client, token) =>
         {
             var info = await GetObjectInfoOrNullAsync(client, server, path, token);
             if (info?.Type != FtpObjectType.File)
                 throw new FileAccessException(FileAccessError.FileNotFound, "file not found");
-            return info.Size;
+            return new FileStat(info.Size, info.Name); // Name = 서버가 응답한 실제 casing
         }, ct));
 
     public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)

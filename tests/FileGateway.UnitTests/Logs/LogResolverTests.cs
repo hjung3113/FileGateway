@@ -30,7 +30,7 @@ public class LogResolverTests
         ftp.AddFile("Logs/all/2026082218_Event_A.zip", "x"u8.ToArray());
         var def = Def(GenerationType.Hourly, "Logs/all", "Logs/all/{yyyy}{MM}{dd}{HH}_Event_{subtype}.zip",
             filePattern: "*_Event_*.zip");
-        var files = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+        var files = (await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None)).Files;
         var f = Assert.Single(files);
         Assert.Equal("2026082218_Event_A.zip", f.Entry.Name);
         Assert.NotNull(f.Metadata.Timestamp);
@@ -39,8 +39,8 @@ public class LogResolverTests
     [Fact]
     public async Task Missing_directory_yields_empty_not_error()
     {
-        var files = await new LogResolver(new FakeFileAccess())
-            .ResolveAsync(Def(), Range(2026, 8, 22, 18), CancellationToken.None);
+        var files = (await new LogResolver(new FakeFileAccess())
+            .ResolveAsync(Def(), Range(2026, 8, 22, 18), CancellationToken.None)).Files;
         Assert.Empty(files);
     }
 
@@ -61,8 +61,8 @@ public class LogResolverTests
             new RemoteFileEntry("Event_backup.txt", 2),
             new RemoteFileEntry("Event_old.gz", 3),
         ]));
-        var files = await new LogResolver(ftp).ResolveAsync(
-            Def(filePattern: "Event_*"), Range(2026, 8, 22, 18), CancellationToken.None);
+        var files = (await new LogResolver(ftp).ResolveAsync(
+            Def(filePattern: "Event_*"), Range(2026, 8, 22, 18), CancellationToken.None)).Files;
 
         var file = Assert.Single(files);
         Assert.Equal("Event_A.zip", file.Entry.Name);
@@ -94,7 +94,7 @@ public class LogResolverTests
         var range = new EffectiveRange(
             new DateTimeOffset(2026, 8, 22, 17, 0, 0, TimeSpan.FromHours(9)),
             new DateTimeOffset(2026, 8, 22, 19, 0, 0, TimeSpan.FromHours(9)));
-        var files = await new LogResolver(ftp).ResolveAsync(Def(), range, CancellationToken.None);
+        var files = (await new LogResolver(ftp).ResolveAsync(Def(), range, CancellationToken.None)).Files;
         Assert.Equal(2, files.Count);
         Assert.Equal(["Logs/2026/08/22/18/Event_A.zip", "Logs/2026/08/22/17/Event_A.zip"],
             files.Select(f => f.RelativePath)); // timestamp DESC
@@ -138,7 +138,7 @@ public class LogResolverTests
         var def = Def(GenerationType.Hourly, "Logs/all", "Logs/all/{yyyy}{MM}{dd}{HH}_Event_{subtype}.zip",
             filePattern: "*_Event_*.zip");
 
-        var files = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+        var files = (await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None)).Files;
 
         var file = Assert.Single(files);
         Assert.Equal("2026082218_Event_C.zip", file.Entry.Name);
@@ -165,7 +165,7 @@ public class LogResolverTests
         var def = Def(GenerationType.Hourly, "Logs/all", "Logs/all/{yyyy}{MM}{dd}{HH}_Event_{subtype}.zip",
             Cardinality.Single, "*_Event_*.zip");
 
-        var files = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+        var files = (await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None)).Files;
 
         var file = Assert.Single(files);
         Assert.Equal("2026082218_Event_C.zip", file.Entry.Name);
@@ -183,13 +183,13 @@ public class LogResolverTests
         var range = new EffectiveRange(
             new DateTimeOffset(2026, 8, 22, 18, 0, 0, TimeSpan.FromHours(9)),
             new DateTimeOffset(2026, 8, 22, 19, 0, 0, TimeSpan.FromHours(9)));
-        var files = await new LogResolver(ftp).ResolveAsync(def, range, CancellationToken.None);
+        var files = (await new LogResolver(ftp).ResolveAsync(def, range, CancellationToken.None)).Files;
         Assert.Single(files); // 18시 파일만 (flat 디렉터리 전체 조회 후 timestamp 필터)
         // 네 슬롯(17~20시)이 한 디렉터리로 중복 제거되어도 범위 [From,To) 필터+정렬이 유지된다
         var range2 = new EffectiveRange(
             new DateTimeOffset(2026, 8, 22, 17, 0, 0, TimeSpan.FromHours(9)),
             new DateTimeOffset(2026, 8, 22, 20, 0, 0, TimeSpan.FromHours(9)));
-        var files2 = await new LogResolver(ftp).ResolveAsync(def, range2, CancellationToken.None);
+        var files2 = (await new LogResolver(ftp).ResolveAsync(def, range2, CancellationToken.None)).Files;
         Assert.Equal(["2026082218_Event_A.zip", "2026082217_Event_B.zip"],
             files2.Select(f => f.Entry.Name)); // 반개구간 [From,To): 20:00 파일 제외, timestamp DESC
     }
@@ -202,9 +202,137 @@ public class LogResolverTests
         ftp.AddFile("Trace/cur/Trace_A.log", "2"u8.ToArray());
         var def = Def(GenerationType.Continuous, "Trace/cur", "Trace/cur/Trace_{subtype}.log",
             filePattern: "Trace_*.log");
-        var files = await new LogResolver(ftp).ResolveAsync(def,
-            new EffectiveRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue), CancellationToken.None);
+        var files = (await new LogResolver(ftp).ResolveAsync(def,
+            new EffectiveRange(DateTimeOffset.MinValue, DateTimeOffset.MaxValue), CancellationToken.None)).Files;
         Assert.Equal(["Trace_A.log", "Trace_B.log"], files.Select(f => f.Entry.Name));
+    }
+
+    [Fact]
+    public async Task Deterministic_template_hit_skips_listing_and_returns_file()
+    {
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/2026/08/22/18/EQ001_2026082218.zip", "x"u8.ToArray());
+        var def = new ResolvedLogDefinition(new EquipmentLogDefinition("EQ-001", "EventLog", "SRV1",
+            GenerationType.Hourly,
+            new LogDiscoveryRule("Logs/{yyyy}/{MM}/{dd}/{HH}", "*.zip", Cardinality.Single,
+                "EQ001_{yyyy}{MM}{dd}{HH}.zip"),
+            // 토큰은 metadata pattern 전체에서 한 번만 등장 가능 — 시간은 파일명에서만 추출하고 디렉터리는 리터럴로 둔다.
+            new LogMetadataRule(MetadataMode.Template, "Logs/2026/08/22/18/EQ001_{yyyy}{MM}{dd}{HH}.zip", [])), Srv);
+
+        var result = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+
+        var file = Assert.Single(result.Files);
+        Assert.Equal("EQ001_2026082218.zip", file.Entry.Name);
+        Assert.Empty(result.Misses);
+        Assert.Equal(0, ftp.ListFilesCallCount); // LIST 생략, StatFileAsync만 사용
+    }
+
+    [Fact]
+    public async Task Deterministic_template_miss_reports_FileNotFound_without_throwing()
+    {
+        var ftp = new FakeFileAccess(); // 파일 없음
+        var def = new ResolvedLogDefinition(new EquipmentLogDefinition("EQ-001", "EventLog", "SRV1",
+            GenerationType.Hourly,
+            new LogDiscoveryRule("Logs/{yyyy}/{MM}/{dd}/{HH}", "*.zip", Cardinality.Single,
+                "EQ001_{yyyy}{MM}{dd}{HH}.zip"),
+            new LogMetadataRule(MetadataMode.Template, "Logs/2026/08/22/18/EQ001_{yyyy}{MM}{dd}{HH}.zip", [])), Srv);
+
+        var result = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+
+        Assert.Empty(result.Files);
+        var miss = Assert.Single(result.Misses);
+        Assert.Equal("FileNotFound", miss.Reason);
+        Assert.Equal("Logs/2026/08/22/18/EQ001_2026082218.zip", miss.RelativePath);
+    }
+
+    [Fact]
+    public async Task Deterministic_template_metadata_mismatch_reports_without_throwing()
+    {
+        // 파일은 존재하지만 metadata rule이 해석한 시각이 요청 슬롯과 다르다 — 설정 오류를 500으로 올리지 않고
+        // 기존 LIST 경로의 "파싱 실패 후보 제외"와 동일하게 처리한다.
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/2026/08/22/18/EQ001_2026082218.zip", "x"u8.ToArray());
+        var def = new ResolvedLogDefinition(new EquipmentLogDefinition("EQ-001", "EventLog", "SRV1",
+            GenerationType.Hourly,
+            new LogDiscoveryRule("Logs/{yyyy}/{MM}/{dd}/{HH}", "*.zip", Cardinality.Single,
+                "EQ001_{yyyy}{MM}{dd}{HH}.zip"),
+            // metadata rule이 다른(존재하지 않는) 파일명 리터럴을 기대하도록 해 매칭 실패를 유도
+            new LogMetadataRule(MetadataMode.Template, "Logs/2026/08/22/18/OTHER_{yyyy}{MM}{dd}{HH}.zip", [])), Srv);
+
+        var result = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+
+        Assert.Empty(result.Files);
+        var miss = Assert.Single(result.Misses);
+        Assert.Equal("MetadataMismatch", miss.Reason);
+    }
+
+    [Fact]
+    public async Task Deterministic_excludes_files_outside_unaligned_range()
+    {
+        // 슬롯은 시 경계로 내림된다: from=14:30이면 14:00 슬롯도 열거되지만 그 파일의 timestamp는
+        // [14:30, 15:30) 밖 — LIST 경로와 동일한 [From, To) 필터로 제외되며, 정상 필터링이므로
+        // 미스로도 기록되지 않는다.
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/2026/08/22/14/EQ001_2026082214.zip", "x"u8.ToArray());
+        var def = new ResolvedLogDefinition(new EquipmentLogDefinition("EQ-001", "EventLog", "SRV1",
+            GenerationType.Hourly,
+            new LogDiscoveryRule("Logs/{yyyy}/{MM}/{dd}/{HH}", "*.zip", Cardinality.Single,
+                "EQ001_{yyyy}{MM}{dd}{HH}.zip"),
+            new LogMetadataRule(MetadataMode.Template, "Logs/2026/08/22/14/EQ001_{yyyy}{MM}{dd}{HH}.zip", [])), Srv);
+        var range = new EffectiveRange(
+            new DateTimeOffset(2026, 8, 22, 14, 30, 0, TimeSpan.FromHours(9)),
+            new DateTimeOffset(2026, 8, 22, 15, 30, 0, TimeSpan.FromHours(9)));
+
+        var result = await new LogResolver(ftp).ResolveAsync(def, range, CancellationToken.None);
+
+        Assert.Empty(result.Files);
+        // 15:00 슬롯만 파일 부재 미스 — 14:00 파일은 조용히 제외된다.
+        var miss = Assert.Single(result.Misses);
+        Assert.Equal("FileNotFound", miss.Reason);
+        Assert.Equal("Logs/2026/08/22/15/EQ001_2026082215.zip", miss.RelativePath);
+    }
+
+    [Fact]
+    public async Task Deterministic_file_pattern_mismatch_skips_stat_and_reports_miss()
+    {
+        // fileNameTemplate이 만든 이름이 filePattern과 불일치하면 LIST 경로와 동일하게 후보에서
+        // 제외된다 — 원격 확인(StatFileAsync 왕복)조차 하지 않는다.
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/2026/08/22/18/EQ001_2026082218.zip", "x"u8.ToArray());
+        var def = new ResolvedLogDefinition(new EquipmentLogDefinition("EQ-001", "EventLog", "SRV1",
+            GenerationType.Hourly,
+            new LogDiscoveryRule("Logs/{yyyy}/{MM}/{dd}/{HH}", "*.gz", Cardinality.Single,
+                "EQ001_{yyyy}{MM}{dd}{HH}.zip"),
+            new LogMetadataRule(MetadataMode.Template, "Logs/2026/08/22/18/EQ001_{yyyy}{MM}{dd}{HH}.zip", [])), Srv);
+
+        var result = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+
+        Assert.Empty(result.Files);
+        var miss = Assert.Single(result.Misses);
+        Assert.Equal("FilePatternMismatch", miss.Reason);
+        Assert.Equal("Logs/2026/08/22/18/EQ001_2026082218.zip", miss.RelativePath);
+        Assert.Equal(0, ftp.StatFileCallCount);
+    }
+
+    [Fact]
+    public async Task Deterministic_preserves_actual_remote_file_name_casing()
+    {
+        // Windows/IIS FTP는 case-insensitive라 템플릿이 계산한 casing이 달라도 Stat은 성공한다 —
+        // 그래도 응답 fileName은 실제 원격 파일의 casing을 보존해야 한다(04a/06 문서 계약).
+        var ftp = new FakeFileAccess();
+        ftp.AddFile("Logs/2026/08/22/18/EQ001_2026082218.zip", "x"u8.ToArray()); // 실제 원격 casing
+        var def = new ResolvedLogDefinition(new EquipmentLogDefinition("EQ-001", "EventLog", "SRV1",
+            GenerationType.Hourly,
+            new LogDiscoveryRule("Logs/{yyyy}/{MM}/{dd}/{HH}", "*.zip", Cardinality.Single,
+                "eq001_{yyyy}{MM}{dd}{HH}.ZIP"), // 계산된 casing이 다름
+            new LogMetadataRule(MetadataMode.Template, "Logs/2026/08/22/18/eq001_{yyyy}{MM}{dd}{HH}.ZIP", [])), Srv);
+
+        var result = await new LogResolver(ftp).ResolveAsync(def, Range(2026, 8, 22, 18), CancellationToken.None);
+
+        var file = Assert.Single(result.Files);
+        Assert.Equal("EQ001_2026082218.zip", file.Entry.Name);
+        Assert.Equal(1, file.Entry.Size);
+        Assert.Empty(result.Misses);
     }
 
     private sealed class ThrowingFileAccess : IFileAccess
@@ -214,7 +342,7 @@ public class LogResolverTests
         public Task<RemoteDirectoryNames> ListDirectoriesAsync(
             FileServerConnection s, string d, CancellationToken ct)
             => Task.FromResult(RemoteDirectoryNames.Missing);
-        public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
+        public Task<FileStat> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> FileExistsAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
     }
@@ -226,7 +354,7 @@ public class LogResolverTests
         public Task<RemoteDirectoryNames> ListDirectoriesAsync(
             FileServerConnection s, string d, CancellationToken ct)
             => Task.FromResult(RemoteDirectoryNames.Missing);
-        public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
+        public Task<FileStat> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> FileExistsAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
     }

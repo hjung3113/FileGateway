@@ -49,6 +49,7 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 - pathTemplate
 - filePattern
 - cardinality: `Single | Multiple`
+- fileNameTemplate(선택)
 
 역할은 다음처럼 분리한다.
 
@@ -59,6 +60,18 @@ MVP에서는 공통 credential을 별도 Secret으로 사용한다.
 `pathTemplate`은 `/`로 구분하는 상대 경로이며 리터럴과 `{yyyy}` `{MM}` `{dd}` `{HH}` 토큰을 사용한다. 토큰은 논리 슬롯의 Site local(`Asia/Seoul`) 구성요소로 치환한다. 토큰 없는 고정 경로도 허용한다(Continuous/flat 디렉터리). `..`, rooted 경로, `:`는 금지한다.
 
 `filePattern`은 파일명 전용 glob 문법만 사용한다. `*`는 `/`가 없는 임의 run, `?`는 임의의 1문자이며 문자 클래스는 지원하지 않고 패턴에 `/`를 포함할 수 없다. 예: `*.zip`, `Event_*.log`, `PM?.cfg`. 복잡한 metadata 추출은 `MetadataRule.Regex`가 담당하므로 discovery matcher와 parsing regex의 역할을 섞지 않는다.
+
+#### fileNameTemplate (결정적 파일명 추정, 선택)
+
+일부 설비군은 파일명이 시간을 인코딩하는 고정 포맷을 따른다는 것이 운영상 확인된 경우가 있다. 이런 정의에는 `fileNameTemplate`을 선택적으로 설정해 디렉터리 `ListFilesAsync` 없이 파일 존재를 직접 확인하도록 최적화할 수 있다.
+
+- 토큰은 `pathTemplate`과 동일한 `{yyyy}` `{MM}` `{dd}` `{HH}` 4개만 허용하며 `/`를 포함할 수 없다(파일명 전용).
+- `Cardinality=Single`이고 `GenerationType`이 `Hourly` 또는 `Daily`인 정의에만 설정할 수 있다. `Multiple`(슬롯당 여러 파일)이나 `Continuous`(입력 시간 없음)에는 정방향 추정이 성립하지 않는다.
+- Hourly는 `{yyyy}{MM}{dd}{HH}`를 모두 포함해야 하고, Daily는 `{yyyy}{MM}{dd}`만 포함하며 `{HH}`를 금지한다(MetadataRule의 생성정책별 granularity 규칙과 동일).
+- `MetadataRule`이 `Regex` 모드로 `subtype`/`attribute.*`를 추출하는 정의와는 병행할 수 없다 — 파일명이 시간 외 정보로 갈리면 정방향 추정이 불가능하기 때문이다.
+- 설정돼 있으면 `LogResolver`가 슬롯마다 `pathTemplate`+`fileNameTemplate`을 조합해 만든 경로를 `StatFileAsync`(단일 존재+크기 확인)로 직접 확인한다. **LIST 없이 왕복 1회**로 끝나며, 존재하면 기존 `MetadataRuleParser`로 timestamp를 재검증한다(설정 오류 조기 발견용 sanity check).
+- 존재하지 않거나(FileNotFound) metadata 재검증이 불일치(MetadataMismatch)하면 **LIST 폴백 없이** 해당 슬롯을 후보 0건으로 처리한다 — 기존 LIST 경로에서 파싱 실패 후보를 조용히 제외하는 것과 동일한 의미론이며, 클라이언트 응답은 일반적인 `FileNotFound`/빈 결과와 다르지 않다. 대신 운영자 진단을 위해 계산된 경로가 `docs/09-security-and-operations.md`에 정의된 내부 진단 DB 테이블에 기록된다.
+- 목록(`/api/v1/logs`)과 다운로드(`/api/v1/logs/download`)는 모두 `LogResolver.ResolveAsync`를 공유하므로, 이 필드를 설정하면 두 엔드포인트 모두 자동으로 같은 방식으로 동작한다("목록/직접 다운로드는 동일 Resolver 규칙" 가드레일 유지).
 
 Glob 의미는 FTP 서버의 wildcard 구현에 의존하지 않는다. FileGateway가 디렉터리 목록을 받은 뒤 동일한 matcher 의미로 후보 파일명을 판정한다. MVP Windows/IIS FTP 환경의 파일명 의미에 맞춰 glob의 파일명 비교는 **case-insensitive**로 수행하고, 실제 파일명의 원래 casing은 응답에 그대로 보존한다.
 

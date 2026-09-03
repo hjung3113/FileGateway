@@ -32,8 +32,8 @@ public class FileAccessErrorMappingTests
             FileServerConnection server, string dir, CancellationToken ct)
             => Task.FromResult(RemoteDirectoryNames.Missing);
 
-        public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
-            => Task.FromResult(8L);
+        public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+            => Task.FromResult(new FileStat(8, "2026082218_Event.zip"));
 
         public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
             => Task.FromResult(true);
@@ -91,8 +91,8 @@ public class FileAccessErrorMappingTests
             FileServerConnection server, string dir, CancellationToken ct)
             => Task.FromResult(RemoteDirectoryNames.Missing);
 
-        public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
-            => Task.FromResult(8L);
+        public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+            => Task.FromResult(new FileStat(8, "2026082218_Event.zip"));
 
         public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
             => Task.FromResult(true);

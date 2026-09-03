@@ -13,7 +13,7 @@ public sealed class RoutingFileAccess(IFileAccess local, IFileAccess ftp) : IFil
         FileServerConnection server, string dir, CancellationToken ct)
         => Select(server).ListDirectoriesAsync(server, dir, ct);
 
-    public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+    public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
         => Select(server).StatFileAsync(server, path, ct);
 
     public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)

@@ -139,7 +139,7 @@ public sealed class ApiFactory : IAsyncLifetime, IDisposable
             FileServerConnection server, string relativeDirectory, CancellationToken ct)
             => Inner.ListDirectoriesAsync(server, relativeDirectory, ct);
 
-        public Task<long> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct)
+        public Task<FileStat> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct)
             => Inner.StatFileAsync(server, relativePath, ct);
 
         public Task<bool> FileExistsAsync(FileServerConnection server, string relativePath, CancellationToken ct)

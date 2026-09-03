@@ -30,6 +30,10 @@ public class LogQueryServiceTests
     private static RawLogDefinition TraceLog => new("EQ-001", "Trace", "SRV1", "Continuous",
         "Trace/current", "Trace_*.zip", "Multiple", "Template",
         "Trace/current/Trace_{subtype}.zip", "[]");
+    private static RawLogDefinition TemplatedLog => new("EQ-001", "TemplatedLog", "SRV1", "Hourly",
+        "Logs/all", "*.zip", "Single", "Template",
+        "Logs/all/{yyyy}{MM}{dd}{HH}_Event.zip", "[]",
+        "EQ001_{yyyy}{MM}{dd}{HH}.zip");
 
     private static ReferenceDataSnapshot Snapshot(params RawLogDefinition[] extraLogs)
         => ReferenceDataSnapshotBuilder.Build(new(
@@ -37,9 +41,10 @@ public class LogQueryServiceTests
             [EventLog, .. extraLogs], []));
 
     private static LogQueryService Service(FakeFileAccess ftp, ReferenceDataSnapshot? snap = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null, FakeFileAccessFailureLogger? failureLogger = null)
         => new(new FixedView(snap ?? Snapshot()), ftp, Codec, clock ?? TimeProvider.System,
-               TimeSpan.FromDays(31), 50, 200, TimeSpan.FromHours(24), TimeSpan.FromMinutes(30));
+               TimeSpan.FromDays(31), 50, 200, TimeSpan.FromHours(24), TimeSpan.FromMinutes(30),
+               failureLogger ?? new FakeFileAccessFailureLogger());
 
     [Fact]
     public async Task List_issues_fileIds_and_paginates()
@@ -231,7 +236,8 @@ public class LogQueryServiceTests
         var now = new DateTimeOffset(2026, 8, 22, 20, 0, 0, TimeSpan.Zero);
         LogQueryService At(DateTimeOffset clock)
             => new(new FixedView(Snapshot()), ftp, Codec, new FixedTimeProvider(clock),
-                TimeSpan.FromDays(31), 50, 200, TimeSpan.FromHours(24), TimeSpan.FromDays(30));
+                TimeSpan.FromDays(31), 50, 200, TimeSpan.FromHours(24), TimeSpan.FromDays(30),
+                new FakeFileAccessFailureLogger());
         var q = new LogListQuery("EQ-001", "EventLog", null, null, null, NoAttrs, 1, null);
         var p1 = await At(now).ListAsync(q, CancellationToken.None);
         Assert.Equal("2026082218_Event.zip", Assert.Single(p1.Items).FileName);
@@ -311,7 +317,8 @@ public class LogQueryServiceTests
     {
         // 커서 검증이 resolver/FTP 탐색보다 먼저다 — fileAccess가 호출되면 코드 "RemoteAccessFailed"로 실패한다
         var svc = new LogQueryService(new FixedView(Snapshot()), new ExplodingFileAccess(), Codec,
-            TimeProvider.System, TimeSpan.FromDays(31), 50, 200, TimeSpan.FromHours(24), TimeSpan.FromMinutes(30));
+            TimeProvider.System, TimeSpan.FromDays(31), 50, 200, TimeSpan.FromHours(24), TimeSpan.FromMinutes(30),
+            new FakeFileAccessFailureLogger());
         var q = new LogListQuery("EQ-001", "EventLog", From, To, null, NoAttrs, null, "garbage-token");
         var ex = await Assert.ThrowsAsync<FileGatewayException>(() => svc.ListAsync(q, CancellationToken.None));
         Assert.Equal("InvalidRequest", ex.Code);
@@ -321,10 +328,27 @@ public class LogQueryServiceTests
     public async Task Limit_above_maximum_is_invalid()
     {
         var svc = new LogQueryService(new FixedView(Snapshot()), new ExplodingFileAccess(), Codec,
-            TimeProvider.System, TimeSpan.FromDays(31), 50, 200, TimeSpan.FromHours(24), TimeSpan.FromMinutes(30));
+            TimeProvider.System, TimeSpan.FromDays(31), 50, 200, TimeSpan.FromHours(24), TimeSpan.FromMinutes(30),
+            new FakeFileAccessFailureLogger());
         var q = new LogListQuery("EQ-001", "EventLog", From, To, null, NoAttrs, 201, null);
         var ex = await Assert.ThrowsAsync<FileGatewayException>(() => svc.ListAsync(q, CancellationToken.None));
         Assert.Equal("InvalidRequest", ex.Code);
+    }
+
+    [Fact]
+    public async Task Deterministic_miss_logging_is_capped_per_request()
+    {
+        // 31시간 범위 = 31슬롯 전부 미스. 미스마다 순차 await하면 DB 왕복이 응답 latency에 직결되고
+        // 무제한 insert도 위험하다 — 요청당 상한까지만 기록되고 원 요청 응답은 정상 유지된다.
+        var failureLogger = new FakeFileAccessFailureLogger();
+        var svc = Service(new FakeFileAccess(), Snapshot(TemplatedLog), failureLogger: failureLogger);
+        var q = new LogListQuery("EQ-001", "TemplatedLog", From, From.AddHours(31), null, NoAttrs, null, null);
+
+        var page = await svc.ListAsync(q, CancellationToken.None);
+
+        Assert.Empty(page.Items); // 요청 자체는 정상 (빈 결과)
+        Assert.Equal(20, failureLogger.Entries.Count); // 31 미스 중 상한 20건만 기록
+        Assert.All(failureLogger.Entries, e => Assert.Equal("FileNotFound", e.FailureReason));
     }
 
     private sealed class ExplodingFileAccess : IFileAccess
@@ -334,7 +358,7 @@ public class LogQueryServiceTests
         public Task<RemoteDirectoryNames> ListDirectoriesAsync(
             FileServerConnection server, string dir, CancellationToken ct)
             => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
-        public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+        public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
             => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
         public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
             => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");

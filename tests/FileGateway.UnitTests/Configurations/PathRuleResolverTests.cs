@@ -83,7 +83,7 @@ public class PathRuleResolverTests
             => Task.FromResult(RemoteDirectoryListing.Missing);
         public Task<RemoteDirectoryNames> ListDirectoriesAsync(FileServerConnection s, string d, CancellationToken ct)
             => throw new FileAccessException(FileAccessError.ProtocolError, "must not be called");
-        public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
+        public Task<FileStat> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> FileExistsAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
     }
@@ -116,7 +116,7 @@ public class PathRuleResolverTests
             => Task.FromResult(RemoteDirectoryListing.Missing);
         public Task<RemoteDirectoryNames> ListDirectoriesAsync(FileServerConnection s, string d, CancellationToken ct)
             => Task.FromResult(new RemoteDirectoryNames(true, names));
-        public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
+        public Task<FileStat> StatFileAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<bool> FileExistsAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection s, string p, CancellationToken ct) => throw new NotSupportedException();
     }

@@ -55,7 +55,7 @@ flowchart TB
 ### 사전 요구사항
 
 - .NET 10 SDK (`global.json` 고정 버전 — `dotnet --version`으로 확인)
-- MSSQL 인스턴스 + `dbo.FileGateway_GetReferenceData` Stored Procedure(`db/mvp-stored-procedure.sql`, 테스트/개발용 스키마는 `db/mvp-schema.sql`)
+- MSSQL 인스턴스 + `dbo.FileGateway_GetReferenceData` Stored Procedure(`db/mvp-stored-procedure.sql`)와 실패 진단 로그 SP(`db/mvp-stored-procedure-diagnostics.sql`, `CREATE PROCEDURE`는 배치 첫 문장이어야 해서 별도 파일). 테스트/개발용 스키마는 `db/mvp-schema.sql`
 - FTP/FTPS로 접근 가능한 분산 파일 서버 및 해당 계정 — 개발/단일 머신 구성에서는 `Host`가 `localhost`인 서버를 기준정보에 등록하면 FTP 없이 로컬 파일시스템을 직접 읽습니다([`docs/03-server-access-core.md`](docs/03-server-access-core.md))
 - (통합 테스트 실행 시) Docker — Testcontainers가 MSSQL 컨테이너를 띄움
 
@@ -194,6 +194,13 @@ sequenceDiagram
 - 검증 실패는 **전체 refresh 거부**입니다. 잘못된 정의 1건이 나머지 정상 설비까지 막지 않도록, 등록 전 `rootPath` 경계·cardinality를 점검하세요(상세: [`06-reference-data.md`](docs/06-reference-data.md)).
 - 최초 기동 시 usable 캐시가 없으면 `/health/ready`가 `503 ReferenceDataUnavailable`을 반환합니다 — DB 연결/SP 존재를 먼저 확인하세요.
 - 신규 `logType`/`configurationType`이 기존 Hourly/Daily/Continuous/Current/History 계약으로 표현 가능하면 코드 수정 없이 DB 등록만으로 노출됩니다. 표현 불가능한 새 계약이 필요하면 [`04a-log-provider.md`](docs/04a-log-provider.md)/[`04b-configuration-provider.md`](docs/04b-configuration-provider.md)부터 검토하세요.
+
+### 고빈도 조회 최적화 — 결정적 파일명 추정 (선택)
+
+파일명이 시간을 인코딩하는 고정 포맷을 따른다고 확인된 설비군은 `LogDefinitions.FileNameTemplate` 컬럼을 설정해 디렉터리 목록 조회 없이 파일 존재를 직접 확인하도록 최적화할 수 있습니다(`Cardinality=Single` + `Hourly`/`Daily` 정의에만 적용 가능, 상세 조건과 검증 규칙은 [`04a-log-provider.md`](docs/04a-log-provider.md#filenametemplate-결정적-파일명-추정-선택)).
+
+- 추정이 틀린 경우(파일이 없거나 metadata 재검증 불일치) 클라이언트 응답은 기존과 동일(빈 결과/`FileNotFound`)하며, 운영자 진단을 위해 계산된 경로가 `dbo.FgFileAccessFailureLog` 테이블에 별도 기록됩니다(SP `FileGateway_LogFileAccessFailure`, `db/mvp-stored-procedure-diagnostics.sql`). 이 테이블은 API로 노출되지 않는 운영자 전용 진단 데이터입니다.
+- 신규 컬럼/테이블 배포는 기존 기준정보 컬럼 확장과 동일한 3단계 순서(schema+SP 먼저 → app 전체 배포 → 값 활성화)를 따릅니다([`06-reference-data.md`](docs/06-reference-data.md) 참고).
 
 ## API 사용자 가이드 (소비자)
 

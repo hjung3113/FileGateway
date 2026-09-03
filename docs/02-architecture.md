@@ -85,7 +85,7 @@ Core는 `Log`, `Configuration`, FTP, MSSQL, IIS를 알지 않는다. Token codec
 
 ### FileGateway.Infrastructure
 
-- MSSQL Stored Procedure 호출
+- MSSQL Stored Procedure 호출(기준정보 조회 + 운영자 전용 실패 진단 로그 기록)
 - 기준정보 memory cache
 - 파일 접근: FTP/FTPS Adapter, `Host == "localhost"` 서버의 로컬 파일시스템 직접 접근(자세한 계약은 `03-server-access-core.md`)
 - credential/secret 로딩

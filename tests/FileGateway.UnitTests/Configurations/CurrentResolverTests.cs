@@ -92,7 +92,7 @@ public class CurrentResolverTests
             FileServerConnection s, string d, CancellationToken ct)
             => Task.FromResult(RemoteDirectoryNames.Missing);
 
-        public Task<long> StatFileAsync(FileServerConnection s, string p, CancellationToken ct)
+        public Task<FileStat> StatFileAsync(FileServerConnection s, string p, CancellationToken ct)
             => throw new NotSupportedException();
 
         public Task<bool> FileExistsAsync(FileServerConnection s, string p, CancellationToken ct)

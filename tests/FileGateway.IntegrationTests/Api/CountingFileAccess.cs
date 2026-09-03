@@ -21,7 +21,7 @@ public sealed class CountingFileAccess(IFileAccess inner) : IFileAccess
         return inner.ListDirectoriesAsync(server, dir, ct);
     }
 
-    public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+    public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
         => inner.StatFileAsync(server, path, ct);
 
     public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)

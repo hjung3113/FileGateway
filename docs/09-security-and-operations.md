@@ -37,6 +37,8 @@ X-Api-Key: <key>
 
 클라이언트가 raw path를 전달하는 endpoint는 만들지 않는다.
 
+**의도된 예외 — 운영자 전용 진단 테이블**: `dbo.FgFileAccessFailureLog`(결정적 파일명 추정이 실패했을 때 계산된 상대경로를 기록하는 내부 진단 테이블, `04a-log-provider.md`의 `fileNameTemplate` 참고)는 위 "물리 경로 비노출" 원칙의 예외다. 이 원칙의 취지는 **클라이언트/외부 API가 물리 구조를 알지 못하게 하는 것**이지 운영자의 진단 접근을 막는 것이 아니다. 이 테이블은 어떤 API 응답에도 노출하지 않으며, DB에 직접 접근하는 운영자만 조회한다.
+
 `ServerDefinition.rootPath`를 파일 접근의 보안 경계로 사용한다.
 
 - 모든 path template/rule 해석 결과를 정규화한 뒤 root 아래인지 검증한다.
@@ -200,5 +202,7 @@ Configuration History는 예외적으로 History 생산자가 생성한 **완료
 - timeout
 - `ClientCancelled`
 - streaming I/O 실패
+
+결정적 파일명 추정(`fileNameTemplate`) 실패는 클라이언트 응답에는 일반 `FileNotFound`/빈 결과로 나타나지만, 진단을 위해 `dbo.FgFileAccessFailureLog`(운영자 전용, 위 "물리 정보 보호" 절 참고)에 설비ID/서버ID/요청 슬롯/계산된 경로/실패 사유(`FileNotFound` | `MetadataMismatch`)를 별도로 기록한다. 이 기록 자체의 실패(DB 장애 등)는 원래 요청 응답에 영향을 주지 않는다.
 
 클라이언트 취소와 정상적인 목록 디렉터리 부재는 서버 장애율/파일 서버 실패율에 포함하지 않는다.

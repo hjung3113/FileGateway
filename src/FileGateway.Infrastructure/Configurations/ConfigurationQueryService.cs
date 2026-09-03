@@ -107,7 +107,7 @@ public sealed class ConfigurationQueryService(
             var match = (await currentResolver.ResolveAsync(def, ct))
                 .SingleOrDefault(f => FileNameComparison.Same(f.Entry.Name, fileName))
                 ?? throw new FileGatewayException("FileNotFound", "current configuration file no longer exists");
-        var currentSize = await fileAccess.StatFileAsync(def.Server, match.RelativePath, ct);
+        var currentSize = (await fileAccess.StatFileAsync(def.Server, match.RelativePath, ct)).Size;
         return new(def.Server, match.RelativePath, match.Entry.Name, currentSize);
         }
 
@@ -124,7 +124,7 @@ public sealed class ConfigurationQueryService(
         // resolve 단계의 conflict 규칙 덕에 항상 0개 또는 1개만 만난다.
         var snapshot = files.SingleOrDefault(f => f.SnapshotTimestamp == ts && FileNameComparison.Same(f.Entry.Name, fileName))
             ?? throw new FileGatewayException("FileNotFound", "snapshot file no longer exists");
-        var size = await fileAccess.StatFileAsync(def.Server, snapshot.RelativePath, ct);
+        var size = (await fileAccess.StatFileAsync(def.Server, snapshot.RelativePath, ct)).Size;
         return new(def.Server, snapshot.RelativePath, snapshot.Entry.Name, size);
     }
 

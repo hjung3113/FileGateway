@@ -144,8 +144,8 @@ public sealed class RoutingFileAccessTests
 
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
             => Record(server, dir, () => RemoteDirectoryListing.Missing);
-        public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
-            => Record(server, path, () => 0L);
+        public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+            => Record(server, path, () => new FileStat(0L, path));
         public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
             => Record(server, path, () => false);
         public Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string path, CancellationToken ct)

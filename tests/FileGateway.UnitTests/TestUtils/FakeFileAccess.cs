@@ -26,8 +26,13 @@ public sealed class FakeFileAccess : IFileAccess
     /// <summary>resolve/목록 시점 크기와 open 시점 실제 크기가 다른 race 시나리오: 목록/Stat에만 보고할 크기를 덮어쓴다.</summary>
     public void OverrideListingSize(string relativePath, long size) => _listingSize[relativePath] = size;
 
+    public int ListFilesCallCount { get; private set; }
+
+    public int StatFileCallCount { get; private set; }
+
     public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
     {
+        ListFilesCallCount++;
         var prefix = RemotePath.Normalize(dir) + "/";
         if (!_files.Keys.Any(k => k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)))
             return Task.FromResult(RemoteDirectoryListing.Missing);
@@ -56,10 +61,16 @@ public sealed class FakeFileAccess : IFileAccess
         return Task.FromResult(new RemoteDirectoryNames(true, names));
     }
 
-    public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
-        => Task.FromResult<long>(_files.TryGetValue(path, out var v)
-            ? _listingSize.TryGetValue(path, out var s) ? s : v.Length
-            : throw new FileAccessException(FileAccessError.FileNotFound, "not found"));
+    public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+    {
+        StatFileCallCount++;
+        // 저장 키의 원본 casing을 ActualName으로 반환 — 실제 어댑터의 서버 응답 casing 계약과 동일
+        var key = _files.Keys.FirstOrDefault(k => FileNameComparison.Same(k, path));
+        if (key is null)
+            throw new FileAccessException(FileAccessError.FileNotFound, "not found");
+        var size = _listingSize.TryGetValue(key, out var s) ? s : _files[key].Length;
+        return Task.FromResult(new FileStat(size, key[(key.LastIndexOf('/') + 1)..]));
+    }
 
     public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
         => Task.FromResult(_files.ContainsKey(path));
