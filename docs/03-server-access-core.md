@@ -67,7 +67,7 @@ FTP/FTPS 옵션 계약은 `FtpOptions.Security` = `Plain | ExplicitTls | Implici
 
 `OpenReadAsync`가 반환하는 스트림은 client와 permit을 소유하므로 다운로드 동안 동시성 한도를 유지한다. 비동기 dispose에서만 (1) 선언 길이만큼 전달했거나 inner EOF를 관측했고, (2) `FtpSocketStream.CloseAsync`가 FTP 완료 응답을 성공적으로 검증했으며, (3) 검증 후 client가 연결 상태인 세 조건을 모두 만족할 때 client를 idle queue로 반납한다. 부분 읽기, 완료 응답 실패, 연결 단절, 동기 dispose는 보수적으로 client를 폐기한다. permit은 client 반납 또는 폐기 뒤에 해제하며 dispose 오류는 밖으로 전파하지 않는다.
 
-운영 시 서버당 최대 `MaxConcurrentPerServer`개의 제어 연결이 idle 상태로 유지될 수 있다. 별도 keep-alive나 idle eviction timer는 두지 않는다.
+운영 시 서버당 최대 `MaxConcurrentPerServer`개의 제어 연결이 idle 상태로 유지될 수 있다. 별도 keep-alive나 idle eviction timer는 두지 않는다. 이 상한은 서버(Host)별이며, `MaxConcurrentGlobal`은 동시 진행 중인 checkout만 제한하고 서로 다른 Host에 걸친 idle 연결 총합은 별도로 제한하지 않는다 — 현재 서버 집합이 기준정보로 관리되는 소수 규모라는 전제에서 수용 가능하며, Host 수가 동적으로 늘어나는 시나리오가 생기면 재검토한다.
 
 연결 이후 FTP 명령 오류도 `ConnectAsync`와 동일한 `FileAccessException` 매핑으로 변환한다. 실제 FTPS 연동과 인증서 검증은 Task 21 수동 게이트에서 확인한다.
 
