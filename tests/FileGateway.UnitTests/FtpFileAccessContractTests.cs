@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Net.Sockets;
 using FileGateway.Core.Files;
@@ -65,6 +66,38 @@ public sealed class FtpFileAccessContractTests
         Assert.Equal(FileAccessError.IoFailure, ex.Error);
     }
 
+    [Fact]
+    public async Task Async_stream_dispose_disposes_inner_when_checkout_is_discarded()
+    {
+        var inner = new TrackingDisposeStream();
+        var stream = await CreateOwnedStreamAsync(inner);
+
+        await stream.DisposeAsync();
+
+        Assert.True(inner.DisposedAsync);
+    }
+
+    [Fact]
+    public async Task Empty_buffer_read_does_not_mark_inner_eof()
+    {
+        await using var stream = await CreateOwnedStreamAsync(new MemoryStream([1]));
+
+        Assert.Equal(0, stream.Read([], 0, 0));
+
+        Assert.False(GetOwnedStreamBoolean(stream, "_innerEof"));
+    }
+
+    [Fact]
+    public async Task Read_failure_invalidates_stream_for_pool_return()
+    {
+        await using var stream = await CreateOwnedStreamAsync(new DeliverThenThrowStream());
+        Assert.Equal(1, stream.Read(new byte[1], 0, 1));
+
+        Assert.Throws<FileAccessException>(() => stream.Read(new byte[1], 0, 1));
+
+        Assert.True(GetOwnedStreamBoolean(stream, "_readFailed"));
+    }
+
     private static bool InvokeIsFileNotFoundReply(FtpException exception)
     {
         var method = typeof(FtpFileAccess).GetMethod(
@@ -87,13 +120,26 @@ public sealed class FtpFileAccessContractTests
             ?? throw new InvalidOperationException("Classify returned no value."));
     }
 
+    private static bool GetOwnedStreamBoolean(Stream stream, string fieldName)
+    {
+        var field = stream.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException($"{fieldName} was not found.");
+        return (bool)(field.GetValue(stream)
+            ?? throw new InvalidOperationException($"{fieldName} returned no value."));
+    }
+
     private static async Task<Stream> CreateOwnedStreamAsync(Stream inner)
     {
         var options = new FtpOptions { MaxConcurrentGlobal = 1, MaxConcurrentPerServer = 1 };
-        var limiter = new FtpConcurrencyLimiter(options);
+        var pool = new FtpClientPool(options);
         var server = new FileServerConnection("S1", "127.0.0.1", "/");
-        var lease = await limiter.AcquireAsync(server, CancellationToken.None);
+        var lease = await pool.AcquireAsync(server, CancellationToken.None);
         var client = new AsyncFtpClient("127.0.0.1", "anonymous", "", 1);
+        var checkout = new FtpClientPool.Checkout(client, new FtpClientPool.ServerPool
+        {
+            Gate = new SemaphoreSlim(1, 1),
+            Idle = new ConcurrentQueue<AsyncFtpClient>(),
+        }, lease);
 
         try
         {
@@ -104,7 +150,7 @@ public sealed class FtpFileAccessContractTests
                     BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
                 .SingleOrDefault()
                 ?? throw new InvalidOperationException("OwnedFtpStream constructor was not found.");
-            return (Stream)(constructor.Invoke([inner, client, lease])
+            return (Stream)(constructor.Invoke([inner, pool, checkout, 1L])
                 ?? throw new InvalidOperationException("OwnedFtpStream was not created."));
         }
         catch
@@ -132,6 +178,44 @@ public sealed class FtpFileAccessContractTests
             => throw new IOException("simulated streaming read failure");
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken ct)
             => ValueTask.FromException<int>(new IOException("simulated streaming read failure"));
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class TrackingDisposeStream : MemoryStream
+    {
+        public bool DisposedAsync { get; private set; }
+
+        public override ValueTask DisposeAsync()
+        {
+            DisposedAsync = true;
+            return base.DisposeAsync();
+        }
+    }
+
+    private sealed class DeliverThenThrowStream : Stream
+    {
+        private bool _delivered;
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => 1;
+        public override long Position
+        {
+            get => _delivered ? 1 : 0;
+            set => throw new NotSupportedException();
+        }
+
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_delivered) throw new IOException("simulated failure after declared length");
+            buffer[offset] = 1;
+            _delivered = true;
+            return 1;
+        }
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();

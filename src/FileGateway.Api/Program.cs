@@ -59,7 +59,7 @@ if (!string.IsNullOrEmpty(keyDir))
         dp.ProtectKeysWithDpapi(); // 현재 프로세스 계정(App Pool identity) 범위로 복호화 제한 — IIS Application Pool "Load User Profile"=true 필수
 }
 builder.Services.AddSingleton<ITokenCodec, DataProtectionTokenCodec>();
-builder.Services.AddSingleton<FtpConcurrencyLimiter>();
+builder.Services.AddSingleton<FtpClientPool>();
 builder.Services.AddSingleton<FtpOptions>(sp => sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value.Ftp
     ?? throw new InvalidOperationException("Ftp options required"));
 builder.Services.AddSingleton<FtpFileAccess>();

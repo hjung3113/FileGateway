@@ -43,7 +43,7 @@ FileGateway.Infrastructure
 - 라우팅 조건은 이 composite에만 존재한다. 서버 추가/변경에 별도 설정이 필요 없고, 새 Provider 추상화나 factory 계약을 도입하지 않는다.
 - DI는 `LocalFileAccess`/`FtpFileAccess`를 구체형으로 등록하고 `IFileAccess`는 factory로 composite를 만들어 등록한다(선언 타입 기준 해석의 자기참조를 피하기 위함).
 
-`LocalFileAccess`는 `System.IO`로 직접 읽으며 별도 옵션/설정, 동시성 limiter가 없다(`FtpConcurrencyLimiter`는 FTP 연결 자원 보호용이라 로컬에는 적용하지 않는다).
+`LocalFileAccess`는 `System.IO`로 직접 읽으며 별도 옵션/설정, 동시성 pool이 없다(`FtpClientPool`은 FTP 연결 자원 보호용이라 로컬에는 적용하지 않는다).
 
 - **`RootPath` 해석**: localhost 서버의 `RootPath`는 기준정보(SP)가 내려주는 값을 **로컬 파일시스템 절대 경로로 그대로 사용**한다(예: `C:\FileGateway\files`). 변환 계층은 없다. 상대 경로가 들어오면 프로세스 CWD 기준으로 조용히 절대화하지 않고 `ProtocolError`로 fail-fast한다.
 - **`RootPath` 제약**: 드라이브 루트(`C:\`, `/`) 자체를 `RootPath`로 지정하지 않는다. 루트 검증이 끝 구분자를 정규화하는 과정에서 정상 하위 경로까지 거부되는 fail-closed 부작용이 있다. 운영 기준정보는 드라이브 루트 하위의 전용 디렉터리를 사용한다.
@@ -63,7 +63,11 @@ FluentFTP는 구현 세부사항으로 `FileGateway.Infrastructure` 안에 격�
 
 FTP/FTPS 옵션 계약은 `FtpOptions.Security` = `Plain | ExplicitTls | ImplicitTls`(기본 `Plain`)와 `FtpOptions.AcceptUntrustedCertificates`(기본 `false`)를 사용한다. 두 값은 `FtpConfig`의 `EncryptionMode`와 인증서 검증 정책에 반영한다.
 
-`FtpConcurrencyLimiter`의 `Task<FtpLease> AcquireAsync(FileServerConnection server, CancellationToken ct)`는 FileGateway 전체와 파일 서버별 permit을 함께 확보하고, `FtpLease : IAsyncDisposable`의 `DisposeAsync`로 해제한다. 단기 FTP 명령은 `Task<T> RunAsync<T>(FileServerConnection server, Func<CancellationToken, Task<T>> op, CancellationToken ct)`로 lease를 명령 완료까지 유지한다. `OpenReadAsync`가 반환하는 스트림은 FTP client와 lease를 소유하며 `DisposeAsync`에서 함께 해제하므로 다운로드가 진행되는 동안 동시성 permit을 유지한다.
+`FtpClientPool`은 FileGateway 전체와 파일 서버별 permit을 함께 확보하고, 서버 `Host`를 case-insensitive 키로 연결된 idle `AsyncFtpClient`를 재사용한다. 단기 FTP 명령은 `RunAsync`가 permit과 client를 checkout해 성공 시 idle queue로 반납하고, 실패 시 해당 client를 폐기한다. checkout한 재사용 client에서 예외 체인에 `SocketException`·`IOException`·`TimeoutException`이 있으면 새 client로 한 번만 재연결·재시도하며, 신규 client의 실패는 재시도하지 않는다. checkout 시 이미 `IsConnected == false`인 idle client도 폐기하고 새로 연결한다.
+
+`OpenReadAsync`가 반환하는 스트림은 client와 permit을 소유하므로 다운로드 동안 동시성 한도를 유지한다. 비동기 dispose에서만 (1) 선언 길이만큼 전달했거나 inner EOF를 관측했고, (2) `FtpSocketStream.CloseAsync`가 FTP 완료 응답을 성공적으로 검증했으며, (3) 검증 후 client가 연결 상태인 세 조건을 모두 만족할 때 client를 idle queue로 반납한다. 부분 읽기, 완료 응답 실패, 연결 단절, 동기 dispose는 보수적으로 client를 폐기한다. permit은 client 반납 또는 폐기 뒤에 해제하며 dispose 오류는 밖으로 전파하지 않는다.
+
+운영 시 서버당 최대 `MaxConcurrentPerServer`개의 제어 연결이 idle 상태로 유지될 수 있다. 별도 keep-alive나 idle eviction timer는 두지 않는다.
 
 연결 이후 FTP 명령 오류도 `ConnectAsync`와 동일한 `FileAccessException` 매핑으로 변환한다. 실제 FTPS 연동과 인증서 검증은 Task 21 수동 게이트에서 확인한다.
 
