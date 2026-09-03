@@ -5,9 +5,9 @@
 **⚠️ 세션 #12에서 이 문서가 오랫동안 stale이었다는 사실을 발견** — `origin/main`의 `HANDOFF.md`는 2026-08-28 시점 버전이었고, 세션 #2~#11이 쌓아온 갱신은 전부 이 브랜치(`docs/session-handoff-and-slice-orchestration`, PR #33)에만 있었다. 세션 #12에서 PR #33을 `origin/main`에 merge해 이 문제를 해소했다(아래 세션 #12 항목 참조). **재발 방지: 매 세션 시작 시 `git log --oneline HEAD..origin/main`으로 로컬이 최신인지 먼저 확인할 것.**
 
 
-## 2026-09-03 세션 상태 #13 — Issue #43 설계+구현, PR #44 오픈(merge 대기)
+## 2026-09-03 세션 상태 #13 — Issue #43 설계+구현+merge 완료
 
-**Issue #43(FTP 연결 재사용/풀링 부재)** — 이슈 원문에 이미 있던 제안 방향을 바탕으로 설계를 확정하고 구현까지 slice-orchestration으로 진행. 아직 사용자가 merge를 지시하지 않아 **PR #44는 오픈 상태로 대기 중.**
+**Issue #43(FTP 연결 재사용/풀링 부재)** — 이슈 원문에 이미 있던 제안 방향을 바탕으로 설계를 확정하고 구현까지 slice-orchestration으로 진행. **PR #44 merge 완료(`1ae7fef`), Issue #43 CLOSED.**
 
 - **설계(omp glm-5.3, thinking high, 2라운드)**: 1차 설계는 다운로드(`OpenReadAsync`) 연결을 재사용 대상에서 제외했으나(오염 위험), 사용자가 "포함"으로 결정 — 2차 개정에서 "정상 EOF 추정" 대신 **FluentFTP 54.2.0 소스를 직접 검증**해 `FtpDataStream.CloseAsync()`로 완료 응답(226)을 실제로 읽어 검증하는 3중 게이트(전량 소진+완료응답 검증+IsConnected) 방식으로 정면 설계. 확정 설계는 이슈 #43 코멘트로 등록: https://github.com/hjung3113/FileGateway/issues/43#issuecomment-5518146634
 - **문서 반영 시점 판단**: `docs/03`/`docs/07`은 "현재 구현 기준" 문서라 미구현 상태에서 미리 갱신하지 않고 구현 PR에 포함시킴(`docs/INDEX.md` 문서 우선순위 원칙 적용).
@@ -15,8 +15,13 @@
 - **CONDUCTOR 독립 검증**: 워커 sandbox는 이번에도 vstest TCP bind가 막혀 빌드만 확인 가능 — CONDUCTOR가 워크트리에서 직접 `dotnet build`(0 warning) + `dotnet test` 실행해 **457/457(Unit 292 + Integration 165) 통과** 확인.
 - **독립 리뷰(omp glm-5.3, thinking high, diff-scoped)**: P1 없음, merge 가능 판정. 신규 테스트 5건이 실제 loopback FTP 연결 수(`ConnectionCount`)로 재사용을 증명함을 재실행까지 해서 확인. **P2 1건**: 다운로드 open 단계의 recycled 재시도 경로(수동 lease 해제라 permit 누수 위험이 가장 큰 코드)에 회귀 테스트가 없음.
 - **P2 반영 시도 → 실패 → revert**: codex에게 회귀 테스트 추가 요청 → 1차 시도(`socket.Shutdown(SocketShutdown.Send)`로 half-open 흉내)는 CONDUCTOR 재검증에서 실패(이 macOS 환경에서 Shutdown(Send) 직후 FluentFTP `IsConnected`가 곧바로 false가 되어 의도한 half-open을 재현 못 함). 2차 시도(max effort, 서버 사이드 강제 종료 등 대안 조사 중) 진행 중 **codex 사용량 한도 도달**로 중단, 커밋도 안 된 상태. **CONDUCTOR가 직접 판단해 실패한 테스트 커밋(`42b3287`)을 `git reset --hard`로 되돌리고** 457/457 그린 상태로 push+PR. P2는 "시도했으나 이 test fixture 환경에서 안정적 재현 실패"로 PR 본문에 정직하게 기록 — 해당 프로덕션 로직 자체는 리뷰에서 이미 정확하다고 검증됨.
-- **PR #44 오픈, merge 안 함** — `gh pr view 44`로 확인 시 코멘트/리뷰/CI 없음(이 레포에 CI 미구성). **다음 세션 또는 사용자 확인 후 merge 진행.**
-- **프로세스 교훈(세션 #13)**: (1) `codex exec` headless를 `nohup ... &`로 백그라운드 실행하면 launcher 자체(백그라운드 fork)는 즉시 exit 0으로 "완료" 알림이 오지만 실제 codex 프로세스는 별도 PID로 계속 돈다 — `ps -p <pid>`로 실제 종료를 확인하는 `until ! ps -p <pid>; do sleep N; done` 폴링 패턴이 여기서도 유효(omp에도 동일 적용). (2) 워커가 스스로 "빌드/테스트 통과"라고 보고해도 sandbox가 테스트 실행을 막았을 뿐인 self-report일 수 있으므로, 이번처럼 CONDUCTOR 재검증에서 실제로 실패가 나올 수 있다 — 워커 보고를 절대 그대로 믿지 말 것(스킬 문서의 기존 원칙이 실제로 유효했던 사례).
+- **PR #44에 사용자가 직접 GitHub 리뷰 코멘트 등록** — "merge 차단 이슈 없음" 판정 + 잔여 리스크 2건 지적: ① recycled-retry 회귀 테스트 부재(기존에 이미 인지된 항목), ② idle 연결이 서버(Host)별로만 상한이 있고 여러 Host에 걸친 idle 총합은 `MaxConcurrentGlobal`로 제한되지 않음(신규 발견, 현재 서버 집합이 기준정보로 관리되는 소수 규모라 수용 가능하다고 판단).
+  - ②는 CONDUCTOR가 직접 `docs/03-server-access-core.md`에 한 줄 추가로 반영(커밋 `5526f9c`, 트리비얼한 문서 수정이라 위임 없이 직접 처리).
+  - ①은 codex에게 서버 사이드 강제 종료 방식(FubarDev `IFtpServer.GetConnections()`/`IFtpConnection`)으로 재시도를 지시했으나 **codex 사용량 한도(재시도 가능 1:54 PM)로 착수조차 못 함** — 총 3차 시도(플랫폼 소켓 이슈로 실패한 1차 포함) 끝에 P2(비차단)이므로 여기서 중단, PR 코멘트에 진행 경과를 기록하고 잔여 리스크로 남긴 채 merge 진행.
+  - build 0 warning, test 457/457 재확인 후 `gh pr merge 44 --squash --delete-branch`. Issue #43 자동 CLOSE 확인. 워크트리 정리 완료.
+- **다음 세션에서 여유 있으면 고려**: codex 사용량 회복 후, `OpenReadAsync`의 recycled-client 재시도 경로에 대한 회귀 테스트를 다시 시도해볼 수 있음(PR #44 코멘트에 시도 이력 남아 있음) — 급하지 않음, 필요성 재확인 후 진행.
+- **프로세스 교훈(세션 #13)**: (1) `codex exec` headless를 `nohup ... &`로 백그라운드 실행하면 launcher 자체(백그라운드 fork)는 즉시 exit 0으로 "완료" 알림이 오지만 실제 codex 프로세스는 별도 PID로 계속 돈다 — `ps -p <pid>`로 실제 종료를 확인하는 `until ! ps -p <pid>; do sleep N; done` 폴링 패턴이 여기서도 유효(omp에도 동일 적용). 이 대기 루프가 도중에 `killed`로 끊기는 경우가 있었는데, 프로세스 자체는 안 죽어있었다 — `ps -p`로 재확인 후 대기 루프만 재실행하면 됨. (2) 워커가 스스로 "빌드/테스트 통과"라고 보고해도 sandbox가 테스트 실행을 막았을 뿐인 self-report일 수 있으므로, 이번처럼 CONDUCTOR 재검증에서 실제로 실패가 나올 수 있다 — 워커 보고를 절대 그대로 믿지 말 것(스킬 문서의 기존 원칙이 실제로 유효했던 사례). (3) codex 사용량 한도에 걸리면 재시도 시각까지 그 세션(창구)로는 아무 작업도 못 한다 — 반복적으로 재시도하기보다 P2/비차단 항목이면 적당히 포기하고 잔여 리스크로 문서화하는 편이 낫다.
+- **다음 세션 할 일**: 남은 open issue는 #12(FTP localhost 조회 502 Bad Gateway, PASV 데이터채널 의심 — 코드 버그)와 #13(HTTPS 서버 인증서 확보 — 인증서 발급/CA 결정 같은 인프라 단계, 코딩 작업 아님). 세션 #12에서부터 계속 보류돼 있음 — **다음 세션은 어느 쪽을 먼저 할지부터 사용자에게 확인할 것.**
 
 ## 2026-09-02 세션 상태 #12 — Issue #19 완료(merge), 로컬/PR #33 stale 문제 해소
 
