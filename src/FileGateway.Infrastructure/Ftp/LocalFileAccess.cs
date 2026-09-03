@@ -53,21 +53,44 @@ public sealed class LocalFileAccess : IFileAccess
         { throw Classify(ex); }
     }
 
-    public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+    public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         try
         {
-            var info = new FileInfo(ResolvePhysicalPath(server, path));
+            var full = ResolvePhysicalPath(server, path);
+            var info = new FileInfo(full);
             // Attributes/Length 조회는 실제 메타데이터 접근 — 권한 거부는 IoFailure로, 없음은 FileNotFound로만 분류된다.
             if (info.Attributes.HasFlag(FileAttributes.Directory))
                 throw new FileAccessException(FileAccessError.FileNotFound, "file not found");
-            return Task.FromResult(info.Length);
+            // FileInfo.Name은 생성자에 넘긴 경로 문자열을 그대로 반영할 뿐 디스크의 실제 casing을
+            // 조회하지 않는다(.NET 자체 동작) — 부모 디렉터리를 열거해 실제 대소문자를 찾는다.
+            return Task.FromResult(new FileStat(info.Length, ResolveActualCasing(full)));
         }
         catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException)
         { throw new FileAccessException(FileAccessError.FileNotFound, "file not found", ex); }
         catch (Exception ex) when (ex is not FileAccessException and not OperationCanceledException)
         { throw Classify(ex); }
+    }
+
+    // 부모 디렉터리를 case-insensitive로 열거해 실제 on-disk 파일명을 찾는다. 열거 중 사라졌거나
+    // (경합) 못 찾으면 요청 경로의 이름을 그대로 반환한다(존재 자체는 위에서 이미 확인했다).
+    private static string ResolveActualCasing(string fullPath)
+    {
+        var dir = Path.GetDirectoryName(fullPath);
+        var requested = Path.GetFileName(fullPath);
+        if (string.IsNullOrEmpty(dir)) return requested;
+        try
+        {
+            return Directory.EnumerateFiles(dir)
+                .Select(Path.GetFileName)
+                .FirstOrDefault(n => string.Equals(n, requested, StringComparison.OrdinalIgnoreCase))
+                ?? requested;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return requested;
+        }
     }
 
     public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)

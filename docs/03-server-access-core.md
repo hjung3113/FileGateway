@@ -13,12 +13,12 @@ interface IFileAccess
 {
     Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string relativeDirectory, CancellationToken ct);
     Task<RemoteDirectoryNames> ListDirectoriesAsync(FileServerConnection server, string relativeDirectory, CancellationToken ct);
-    Task<long> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct);
+    Task<FileStat> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct);
     Task<bool> FileExistsAsync(FileServerConnection server, string relativePath, CancellationToken ct);
     Task<RemoteOpenRead> OpenReadAsync(FileServerConnection server, string relativePath, CancellationToken ct);
 ```
 
-`ListDirectoriesAsync`는 직계 자식 디렉터리 이름을 `RemoteDirectoryNames(Exists, Names)`로 반환한다. 목록 대상 디렉터리 부재는 `Exists=false`(예외 아님), 존재하지만 비어 있으면 `Exists=true, Names=[]`로 구분하고, 전송/인증/프로토콜 장애는 다른 메서드와 동일하게 예외로 전달한다. 반환 이름에는 `.`·`..`가 포함되지 않는다. `StatFileAsync`는 파일 부재 시 `FileAccessException(FileAccessError.FileNotFound)`를 던지고, `FileExistsAsync`는 파일 부재 시 `false`를 반환한다. 전송 오류는 두 메서드 모두 예외로 전달한다. 모든 메서드는 `CancellationToken`으로 요청 취소를 전달한다.
+`ListDirectoriesAsync`는 직계 자식 디렉터리 이름을 `RemoteDirectoryNames(Exists, Names)`로 반환한다. 목록 대상 디렉터리 부재는 `Exists=false`(예외 아님), 존재하지만 비어 있으면 `Exists=true, Names=[]`로 구분하고, 전송/인증/프로토콜 장애는 다른 메서드와 동일하게 예외로 전달한다. 반환 이름에는 `.`·`..`가 포함되지 않는다. `StatFileAsync`는 파일 부재 시 `FileAccessException(FileAccessError.FileNotFound)`를 던지고, 존재 시 `FileStat(Size, ActualName)`을 반환한다 — `ActualName`은 서버가 응답한 실제 파일명(원본 casing)이며, 요청 경로에 쓴 이름과 casing이 다를 수 있다(Windows/IIS FTP는 case-insensitive). `FileExistsAsync`는 파일 부재 시 `false`를 반환한다. 전송 오류는 두 메서드 모두 예외로 전달한다. 모든 메서드는 `CancellationToken`으로 요청 취소를 전달한다.
 
 파일 크기는 조회한 시점의 관측값이다. Continuous 로그나 Current Configuration처럼 변경 가능한 파일은 이후 크기가 달라질 수 있다.
 

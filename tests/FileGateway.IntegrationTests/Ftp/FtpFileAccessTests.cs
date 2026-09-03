@@ -251,8 +251,8 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
             var listing = await access.ListFilesAsync(Server(ftp.Port), "Pool", CancellationToken.None);
             Assert.True(listing.Exists);
             Assert.Contains(listing.Files, file => file.Name == "short.bin");
-            Assert.Equal(4, await access.StatFileAsync(
-                Server(ftp.Port), "Pool/short.bin", CancellationToken.None));
+            Assert.Equal(4, (await access.StatFileAsync(
+                Server(ftp.Port), "Pool/short.bin", CancellationToken.None)).Size);
             Assert.True(await access.FileExistsAsync(
                 Server(ftp.Port), "Pool/short.bin", CancellationToken.None));
         }

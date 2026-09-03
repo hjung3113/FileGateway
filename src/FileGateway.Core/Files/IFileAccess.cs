@@ -10,7 +10,8 @@ public interface IFileAccess
     Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string relativeDirectory, CancellationToken ct);
 
     /// <exception cref="FileAccessException">FileNotFound when the file is absent.</exception>
-    Task<long> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct);
+    /// <summary>ActualName은 서버가 응답한 실제 파일명(원본 casing) — 응답 모델은 이 이름을 그대로 보존한다.</summary>
+    Task<FileStat> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct);
 
     /// <summary>Returns false when the file is absent; throws on transport errors.</summary>
     Task<bool> FileExistsAsync(FileServerConnection server, string relativePath, CancellationToken ct);

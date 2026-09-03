@@ -12,7 +12,7 @@ public sealed class ThrowingFileAccess : IFileAccess
         FileServerConnection server, string relativeDirectory, CancellationToken ct)
         => throw new InvalidOperationException("IFileAccess must not be called for catalog queries.");
 
-    public Task<long> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct)
+    public Task<FileStat> StatFileAsync(FileServerConnection server, string relativePath, CancellationToken ct)
         => throw new InvalidOperationException("IFileAccess must not be called for catalog queries.");
 
     public Task<bool> FileExistsAsync(FileServerConnection server, string relativePath, CancellationToken ct)

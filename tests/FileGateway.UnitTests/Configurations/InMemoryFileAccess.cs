@@ -58,10 +58,13 @@ internal sealed class InMemoryFileAccess : IFileAccess
         return Task.FromResult(new RemoteDirectoryNames(true, [.. names]));
     }
 
-    public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
-        => Task.FromResult(_files.TryGetValue(RemotePath.Normalize(path), out var v)
-            ? (long)v.Length
-            : throw new FileAccessException(FileAccessError.FileNotFound, "not found"));
+    public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+    {
+        var key = _files.Keys.FirstOrDefault(k => FileNameComparison.Same(k, RemotePath.Normalize(path)));
+        return Task.FromResult(key is null
+            ? throw new FileAccessException(FileAccessError.FileNotFound, "not found")
+            : new FileStat(_files[key].Length, key[(key.LastIndexOf('/') + 1)..]));
+    }
 
     public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
         => Task.FromResult(_files.ContainsKey(RemotePath.Normalize(path)));

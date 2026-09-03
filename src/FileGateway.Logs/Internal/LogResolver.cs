@@ -7,7 +7,7 @@ namespace FileGateway.Logs.Internal;
 
 public sealed record ResolvedLogFile(ParsedMetadata Metadata, RemoteFileEntry Entry, string RelativePath);
 
-/// <summary>결정적 파일명 추정(FileNameTemplate)이 LIST 없이 시도했다가 확정하지 못한 슬롯. reason: "FileNotFound" | "MetadataMismatch".</summary>
+/// <summary>결정적 파일명 추정(FileNameTemplate)이 LIST 없이 시도했다가 확정하지 못한 슬롯. reason: "FileNotFound" | "MetadataMismatch" | "FilePatternMismatch".</summary>
 public sealed record DeterministicMiss(string RelativePath, DateTimeOffset Slot, string Reason);
 
 public sealed record ResolveResult(IReadOnlyList<ResolvedLogFile> Files, IReadOnlyList<DeterministicMiss> Misses);
@@ -28,6 +28,7 @@ public sealed class LogResolver(IFileAccess fileAccess)
     {
         var d = def.Definition;
         var rule = d.DiscoveryRule;
+        var glob = new GlobPattern(rule.FilePattern);
         var files = new List<ResolvedLogFile>();
         var misses = new List<DeterministicMiss>();
 
@@ -37,10 +38,18 @@ public sealed class LogResolver(IFileAccess fileAccess)
             var fileName = PathTemplate.Expand(rule.FileNameTemplate!, slot);
             var relativePath = dir + "/" + fileName;
 
-            long size;
+            // LIST 경로와 동일한 glob 필터 — fileNameTemplate 설정 오류로 filePattern과 불일치하는
+            // 이름은 후보에서 제외하며, 원격 확인(StatFileAsync 왕복)조차 하지 않는다.
+            if (!glob.Matches(fileName))
+            {
+                misses.Add(new DeterministicMiss(relativePath, slot, "FilePatternMismatch"));
+                continue;
+            }
+
+            FileStat stat;
             try
             {
-                size = await fileAccess.StatFileAsync(def.Server, relativePath, ct);
+                stat = await fileAccess.StatFileAsync(def.Server, relativePath, ct);
             }
             catch (FileAccessException ex) when (ex.Error == FileAccessError.FileNotFound)
             {
@@ -55,7 +64,14 @@ public sealed class LogResolver(IFileAccess fileAccess)
                 continue;
             }
 
-            files.Add(new ResolvedLogFile(meta, new RemoteFileEntry(fileName, size), relativePath));
+            // 슬롯은 시/일 경계로 내림되므로 range가 경계에 정렬되지 않으면(예: from=14:30) 경계 밖
+            // 슬롯도 열거된다 — LIST 경로와 동일한 [From, To) 필터를 적용한다. 범위 밖은 오류가 아닌
+            // 정상 필터링이므로 미스로 기록하지 않는다.
+            if (d.GenerationType != GenerationType.Continuous
+                && (meta.Timestamp < range.From || meta.Timestamp >= range.To))
+                continue;
+
+            files.Add(new ResolvedLogFile(meta, new RemoteFileEntry(stat.ActualName, stat.Size), relativePath));
         }
 
         // cardinality=Single이 validator에서 강제되므로 슬롯당 1개 이상 발생할 수 없다 — CheckCardinality 불필요.

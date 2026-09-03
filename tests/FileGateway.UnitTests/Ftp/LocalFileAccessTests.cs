@@ -98,7 +98,20 @@ public sealed class LocalFileAccessTests : IDisposable
 
         var size = await _access.StatFileAsync(Server(), "a.log", CancellationToken.None);
 
-        Assert.Equal(8, size);
+        Assert.Equal(8, size.Size);
+    }
+
+    [Fact]
+    public async Task StatFile_returns_actual_on_disk_casing_not_requested_casing()
+    {
+        // FileInfo.Name은 생성자 인자 문자열을 그대로 반영할 뿐 디스크의 실제 대소문자를 조회하지
+        // 않는다(.NET 자체 동작) — 요청과 다른 casing으로 만든 실제 파일을 다른 casing으로 조회해
+        // StatFileAsync가 실제 디스크 이름을 돌려주는지 검증한다.
+        File.WriteAllText(Path.Combine(_root, "RealCasing.log"), "x");
+
+        var stat = await _access.StatFileAsync(Server(), "realcasing.log", CancellationToken.None);
+
+        Assert.Equal("RealCasing.log", stat.ActualName);
     }
 
     [Fact] // L5 — AC-22-3
@@ -182,7 +195,7 @@ public sealed class LocalFileAccessTests : IDisposable
         var server = Server(_root + Path.DirectorySeparatorChar);
 
         var size = await _access.StatFileAsync(server, "a.log", CancellationToken.None);
-        Assert.Equal(1, size);
+        Assert.Equal(1, size.Size);
 
         var ex = Assert.Throws<FileAccessException>(() => InvokeResolvePhysicalPath(
             new FileServerConnection("S1", "localhost", _root + Path.DirectorySeparatorChar), "a/../../escape"));

@@ -130,14 +130,35 @@ public sealed class LogQueryService(
             ?? throw new FileGatewayException("LogDefinitionNotFound", $"no log definition for {equipmentId}/{logType}");
     }
 
+    // 한 요청이 DB에 기록할 미스 진단 로그의 상한. 넓은 범위(Hourly 31일 = 744슬롯)에서
+    // 무제한 insert가 몰리는 것을 막는다 — 초과분은 진단 편의를 위해 버린다.
+    private const int MaxMissLogsPerRequest = 20;
+
     private async Task<IReadOnlyList<ResolvedLogFile>> ResolveAsync(
         ResolvedLogDefinition def, EffectiveRange range, CancellationToken ct)
     {
         var result = await new LogResolver(fileAccess).ResolveAsync(def, range, ct);
-        foreach (var miss in result.Misses)
-            await failureLogger.LogAsync(def.Definition.EquipmentId, def.Definition.LogType,
-                def.Definition.ServerId, miss.Slot, miss.RelativePath, miss.Reason, ct);
+        // 미스 진단 로그는 부가 기능 — 미스마다 순차 await하면 요청 latency가 DB 왕복 횟수에
+        // 비례하므로 fire-and-forget으로 전환한다. 원 요청의 ct는 응답 완료와 함께 취소되므로
+        // CancellationToken.None을 쓴다.
+        foreach (var miss in result.Misses.Take(MaxMissLogsPerRequest))
+            _ = LogMissInBackgroundAsync(def, miss);
         return result.Files;
+    }
+
+    // fire-and-forget 태스크의 예외는 절대 상위로 전파되지 않는다(SpFileAccessFailureLogger가
+    // 자체 삼킴 + 여기서도 한 번 더 방어).
+    private async Task LogMissInBackgroundAsync(ResolvedLogDefinition def, DeterministicMiss miss)
+    {
+        try
+        {
+            await failureLogger.LogAsync(def.Definition.EquipmentId, def.Definition.LogType,
+                def.Definition.ServerId, miss.Slot, miss.RelativePath, miss.Reason, CancellationToken.None);
+        }
+        catch
+        {
+            // 진단 로그 실패는 원래 요청 응답에 영향을 주지 않는다.
+        }
     }
 
     private LogFileDescriptor ToDescriptor(ResolvedLogDefinition def, ResolvedLogFile f, LogListQuery q)

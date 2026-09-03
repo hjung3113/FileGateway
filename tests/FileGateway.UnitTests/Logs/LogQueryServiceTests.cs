@@ -30,6 +30,10 @@ public class LogQueryServiceTests
     private static RawLogDefinition TraceLog => new("EQ-001", "Trace", "SRV1", "Continuous",
         "Trace/current", "Trace_*.zip", "Multiple", "Template",
         "Trace/current/Trace_{subtype}.zip", "[]");
+    private static RawLogDefinition TemplatedLog => new("EQ-001", "TemplatedLog", "SRV1", "Hourly",
+        "Logs/all", "*.zip", "Single", "Template",
+        "Logs/all/{yyyy}{MM}{dd}{HH}_Event.zip", "[]",
+        "EQ001_{yyyy}{MM}{dd}{HH}.zip");
 
     private static ReferenceDataSnapshot Snapshot(params RawLogDefinition[] extraLogs)
         => ReferenceDataSnapshotBuilder.Build(new(
@@ -331,6 +335,22 @@ public class LogQueryServiceTests
         Assert.Equal("InvalidRequest", ex.Code);
     }
 
+    [Fact]
+    public async Task Deterministic_miss_logging_is_capped_per_request()
+    {
+        // 31시간 범위 = 31슬롯 전부 미스. 미스마다 순차 await하면 DB 왕복이 응답 latency에 직결되고
+        // 무제한 insert도 위험하다 — 요청당 상한까지만 기록되고 원 요청 응답은 정상 유지된다.
+        var failureLogger = new FakeFileAccessFailureLogger();
+        var svc = Service(new FakeFileAccess(), Snapshot(TemplatedLog), failureLogger: failureLogger);
+        var q = new LogListQuery("EQ-001", "TemplatedLog", From, From.AddHours(31), null, NoAttrs, null, null);
+
+        var page = await svc.ListAsync(q, CancellationToken.None);
+
+        Assert.Empty(page.Items); // 요청 자체는 정상 (빈 결과)
+        Assert.Equal(20, failureLogger.Entries.Count); // 31 미스 중 상한 20건만 기록
+        Assert.All(failureLogger.Entries, e => Assert.Equal("FileNotFound", e.FailureReason));
+    }
+
     private sealed class ExplodingFileAccess : IFileAccess
     {
         public Task<RemoteDirectoryListing> ListFilesAsync(FileServerConnection server, string dir, CancellationToken ct)
@@ -338,7 +358,7 @@ public class LogQueryServiceTests
         public Task<RemoteDirectoryNames> ListDirectoriesAsync(
             FileServerConnection server, string dir, CancellationToken ct)
             => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
-        public Task<long> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
+        public Task<FileStat> StatFileAsync(FileServerConnection server, string path, CancellationToken ct)
             => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
         public Task<bool> FileExistsAsync(FileServerConnection server, string path, CancellationToken ct)
             => throw new FileGatewayException("RemoteAccessFailed", "file access must not happen");
