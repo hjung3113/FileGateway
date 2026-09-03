@@ -7,10 +7,62 @@ namespace FileGateway.Logs.Internal;
 
 public sealed record ResolvedLogFile(ParsedMetadata Metadata, RemoteFileEntry Entry, string RelativePath);
 
+/// <summary>결정적 파일명 추정(FileNameTemplate)이 LIST 없이 시도했다가 확정하지 못한 슬롯. reason: "FileNotFound" | "MetadataMismatch".</summary>
+public sealed record DeterministicMiss(string RelativePath, DateTimeOffset Slot, string Reason);
+
+public sealed record ResolveResult(IReadOnlyList<ResolvedLogFile> Files, IReadOnlyList<DeterministicMiss> Misses);
+
 /// <summary>슬롯→디렉터리(중복 제거)→목록→glob→metadata→시간 필터→동일 디렉터리 파일명 중복→논리 중복→cardinality→정렬.</summary>
 public sealed class LogResolver(IFileAccess fileAccess)
 {
-    public async Task<IReadOnlyList<ResolvedLogFile>> ResolveAsync(
+    /// <summary>discoveryRule.FileNameTemplate이 설정돼 있으면 LIST 없이 슬롯별 결정적 확인(ResolveDeterministicAsync)으로,
+    /// 아니면 기존 LIST 기반(ResolveByListingAsync)으로 위임한다. 목록/다운로드가 모두 이 메서드를 공유하므로
+    /// 어느 쪽으로 호출되어도 동일 규칙이 적용된다.</summary>
+    public Task<ResolveResult> ResolveAsync(ResolvedLogDefinition def, EffectiveRange range, CancellationToken ct)
+        => string.IsNullOrEmpty(def.Definition.DiscoveryRule.FileNameTemplate)
+            ? ResolveByListingAsync(def, range, ct)
+            : ResolveDeterministicAsync(def, range, ct);
+
+    private async Task<ResolveResult> ResolveDeterministicAsync(
+        ResolvedLogDefinition def, EffectiveRange range, CancellationToken ct)
+    {
+        var d = def.Definition;
+        var rule = d.DiscoveryRule;
+        var files = new List<ResolvedLogFile>();
+        var misses = new List<DeterministicMiss>();
+
+        foreach (var slot in SlotExpansion.EnumerateSlots(d.GenerationType, range))
+        {
+            var dir = PathTemplate.Expand(rule.PathTemplate, slot);
+            var fileName = PathTemplate.Expand(rule.FileNameTemplate!, slot);
+            var relativePath = dir + "/" + fileName;
+
+            long size;
+            try
+            {
+                size = await fileAccess.StatFileAsync(def.Server, relativePath, ct);
+            }
+            catch (FileAccessException ex) when (ex.Error == FileAccessError.FileNotFound)
+            {
+                misses.Add(new DeterministicMiss(relativePath, slot, "FileNotFound"));
+                continue;
+            }
+
+            var meta = MetadataRuleParser.Parse(d.MetadataRule, d.GenerationType, relativePath);
+            if (meta is null || meta.Timestamp != slot)
+            {
+                misses.Add(new DeterministicMiss(relativePath, slot, "MetadataMismatch"));
+                continue;
+            }
+
+            files.Add(new ResolvedLogFile(meta, new RemoteFileEntry(fileName, size), relativePath));
+        }
+
+        // cardinality=Single이 validator에서 강제되므로 슬롯당 1개 이상 발생할 수 없다 — CheckCardinality 불필요.
+        return new ResolveResult(SortAndCheckIdentity(files), misses);
+    }
+
+    private async Task<ResolveResult> ResolveByListingAsync(
         ResolvedLogDefinition def, EffectiveRange range, CancellationToken ct)
     {
         var d = def.Definition;
@@ -61,9 +113,10 @@ public sealed class LogResolver(IFileAccess fileAccess)
 
         CheckCardinality(d, rule.Cardinality, files);
 
-        return d.GenerationType == GenerationType.Continuous
+        var sorted = d.GenerationType == GenerationType.Continuous
             ? files.OrderBy(f => f.Entry.Name, FileNameComparison.Comparer).ToList()
             : SortAndCheckIdentity(files);
+        return new ResolveResult(sorted, []);
     }
 
     // Hourly/Daily: 논리 identity는 (timestamp, fileName ci)이며 전역(전 디렉터리) 유일해야 한다.

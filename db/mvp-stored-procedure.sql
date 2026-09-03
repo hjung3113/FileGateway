@@ -5,7 +5,8 @@ BEGIN
     SELECT EquipmentId FROM dbo.FgEquipment;
     SELECT ServerId, Host, FileRootPath FROM dbo.FgServer;
     SELECT EquipmentId, LogType, ServerId, GenerationType, DirectoryTemplate, FileNamePattern,
-           SlotCardinality, MetadataParseMode, RelativePathMetadataPattern, MetadataGroupMappings
+           SlotCardinality, MetadataParseMode, RelativePathMetadataPattern, MetadataGroupMappings,
+           ISNULL(FileNameTemplate, '') AS FileNameTemplate
     FROM dbo.FgLogDefinition;
     SELECT EquipmentId, ConfigurationType, ServerId,
            CurrentDirectoryTemplate, CurrentFileNamePattern,

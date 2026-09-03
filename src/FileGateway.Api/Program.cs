@@ -9,6 +9,7 @@ using FileGateway.Configurations;
 using FileGateway.Configurations.Internal;
 using FileGateway.Core.Files;
 using FileGateway.Core.Tokens;
+using FileGateway.Infrastructure.Diagnostics;
 using FileGateway.Infrastructure.Ftp;
 using FileGateway.Infrastructure.ReferenceData;
 using FileGateway.Infrastructure.Tokens;
@@ -76,6 +77,10 @@ builder.Services.AddSingleton<IReferenceDataView>(sp => new ReferenceDataCache(
     sp.GetRequiredService<ILogger<ReferenceDataCache>>()));
 builder.Services.AddHostedService<ReferenceDataWarmupService>();
 builder.Services.AddSingleton(TimeProvider.System);
+// 진단 전용 부가 기능 — connection string이 없어도 앱 시작/요청 처리를 막지 않는다(로거 내부에서 스킵 처리).
+builder.Services.AddSingleton<IFileAccessFailureLogger>(sp => new SpFileAccessFailureLogger(
+    builder.Configuration.GetConnectionString("ReferenceData"),
+    sp.GetRequiredService<ILogger<SpFileAccessFailureLogger>>()));
 builder.Services.AddSingleton<ILogQueryService>(sp =>
 {
     var o = sp.GetRequiredService<IOptions<FileGatewayOptions>>().Value;
@@ -85,7 +90,8 @@ builder.Services.AddSingleton<ILogQueryService>(sp =>
         sp.GetRequiredService<ITokenCodec>(),
         sp.GetRequiredService<TimeProvider>(),
         o.Logs.MaxQueryRange, o.Paging.LimitDefault, o.Paging.LimitMax,
-        o.Tokens.FileIdTtl, o.Tokens.ContinuationTtl);
+        o.Tokens.FileIdTtl, o.Tokens.ContinuationTtl,
+        sp.GetRequiredService<IFileAccessFailureLogger>());
 });
 builder.Services.AddSingleton<IConfigurationQueryService>(sp =>
 {

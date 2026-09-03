@@ -18,7 +18,7 @@ public sealed class SpReferenceDataSource(string connectionString, string spName
     [
         "EquipmentId", "LogType", "ServerId", "GenerationType", "DirectoryTemplate",
         "FileNamePattern", "SlotCardinality", "MetadataParseMode", "RelativePathMetadataPattern",
-        "MetadataGroupMappings"
+        "MetadataGroupMappings", "FileNameTemplate"
     ];
     private static readonly string[] ConfigurationColumns =
     [
@@ -57,7 +57,8 @@ public sealed class SpReferenceDataSource(string connectionString, string spName
                 reader.GetString(logOrdinals["DirectoryTemplate"]), reader.GetString(logOrdinals["FileNamePattern"]),
                 reader.GetString(logOrdinals["SlotCardinality"]), reader.GetString(logOrdinals["MetadataParseMode"]),
                 reader.GetString(logOrdinals["RelativePathMetadataPattern"]),
-                reader.GetString(logOrdinals["MetadataGroupMappings"])));
+                reader.GetString(logOrdinals["MetadataGroupMappings"]),
+                reader.GetString(logOrdinals["FileNameTemplate"])));
         await RequireNextResultAsync(reader, "configurationDefinitions", ct);
 
         var configurationOrdinals = RequireColumns(reader, "configurationDefinitions", ConfigurationColumns);

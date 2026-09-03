@@ -7,7 +7,8 @@ public enum GenerationType { Hourly, Daily, Continuous }
 public enum Cardinality { Single, Multiple }
 public enum MetadataMode { Template, Regex }
 
-public sealed record LogDiscoveryRule(string PathTemplate, string FilePattern, Cardinality Cardinality);
+public sealed record LogDiscoveryRule(
+    string PathTemplate, string FilePattern, Cardinality Cardinality, string? FileNameTemplate = null);
 
 public sealed record MetadataMapping(string Group, string Target, string? Format);
 

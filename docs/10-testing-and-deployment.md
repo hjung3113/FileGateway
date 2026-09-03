@@ -194,6 +194,7 @@ MVP는 Windows Server/IIS에서 실제 운영 검증한다. Linux 배포는 이�
 - token 보호 key 재시작 내구성 및 rotation 시 기존 fileId TTL 유지
 - rootPath 경계/traversal 차단
 - 로그/Secret에 민감정보 비노출
+- `fileNameTemplate` 설정 시 LIST 없이 `StatFileAsync`로 확정되는지, 추정 실패가 `dbo.FgFileAccessFailureLog`에 기록되고도 원 요청 응답(빈 결과/`FileNotFound`)이 정상 유지되는지
 
 ## MVP 완료 기준
 

@@ -10,12 +10,14 @@
 
 1. `Equipments`: `EquipmentId` (`ServerId` 아님)
 2. `Servers`: `ServerId`, `Host`, `FileRootPath`
-3. `LogDefinitions`: `EquipmentId`, `LogType`, `ServerId`, `GenerationType`, `DirectoryTemplate`, `FileNamePattern`, `SlotCardinality`, `MetadataParseMode`, `RelativePathMetadataPattern`, `MetadataGroupMappings`
+3. `LogDefinitions`: `EquipmentId`, `LogType`, `ServerId`, `GenerationType`, `DirectoryTemplate`, `FileNamePattern`, `SlotCardinality`, `MetadataParseMode`, `RelativePathMetadataPattern`, `MetadataGroupMappings`, `FileNameTemplate`
 4. `ConfigurationDefinitions`: `EquipmentId`, `ConfigurationType`, `ServerId`, `CurrentDirectoryTemplate`, `CurrentFileNamePattern`, `CurrentFileNameMatchMode`, `HistoryDirectoryTemplate`, `HistoryFileNamePattern`, `HistoryFileNameMatchMode`, `HistoryCompletionMarkerPathTemplate`, `HistoryTimestampParseMode`, `HistoryFileNameTimestampPattern`, `HistoryTimestampMappings`
 
 `MetadataGroupMappings`와 `HistoryTimestampMappings`은 JSON 배열 `[{"group":"...","target":"...","format":"..."}]`이며 `format`은 선택이다. SP/스키마 스크립트는 `db/`에 테스트·개발용 계약 구현으로 제공하고 운영 DB 내부 구조는 이 계약만 지키면 자유롭다.
 
 `ConfigurationDefinitions` result set은 위 컬럼을 **위 순서와 무관하게** 항상 반환한다. 행이 0개여도 필수 컬럼 이름과 13개 컬럼 shape를 검증하며, 구 SP의 8컬럼 shape는 `ReferenceDataUnavailable`로 이어지는 fail-closed 오류다. 신규 Configuration 컬럼의 NULL/빈 값은 `Glob` 및 metadata rule 없음으로 해석한다.
+
+`LogDefinitions`의 `FileNameTemplate`은 결정적 파일명 추정(선택, `04a-log-provider.md` 참고) 필드다. NULL/빈 값(`ISNULL(...,'')`)은 기능 비활성(기존 LIST 기반 동작)을 의미한다. `RequireColumns`는 정확한 컬럼 개수 일치를 요구하므로(누락/추가 모두 거부), 이 컬럼 도입도 아래 "Schema/SP 및 애플리케이션 배포 순서"의 3단계 순서를 그대로 따른다 — 순서를 어기면 롤링 배포 중 "구버전 앱 + 신규 컬럼 포함 SP" 조합이 `ReferenceDataIncomplete`가 된다(단, last-known-good cache가 있으면 stale로 계속 서비스됨).
 
 ## Schema/SP 및 애플리케이션 배포 순서
 
@@ -52,6 +54,7 @@ Issue #21의 신규 Configuration 기준정보는 다음 3단계 순서를 지�
 - `MetadataParseMode`
 - `RelativePathMetadataPattern`
 - `MetadataGroupMappings`
+- `FileNameTemplate`(선택, 결정적 파일명 추정 — `04a-log-provider.md` 참고)
 
 하나의 FileGateway 배포 범위에서 `equipmentId + logType`은 정확히 하나의 로그 정의를 식별한다. 동일 조합의 중복 정의는 기준정보 오류다.
 
@@ -303,6 +306,7 @@ SP 결과 전체에 대해 cache 교체 전에 **result set 계약, 전역 식�
 - Configuration pathTemplate의 세그먼트 분류, 빈 세그먼트 제거 후 파싱, `regex:` pattern의 anchor/컴파일 가능성, marker template의 `regex:` 금지
 - 정규화 후 `rootPath` 밖으로 탈출 가능한 정의 여부
 - `filePattern`이 지원되는 glob 문법인지
+- `fileNameTemplate`(설정된 경우): `/` 미포함, 허용 토큰만 사용, `cardinality=Single`+`generationType∈{Hourly,Daily}`, 생성정책별 필수/금지 토큰, `MetadataRule.Regex`의 subtype/attribute 추출과 비병행
 - Configuration file match mode(`Literal | Glob | Regex`)와 Regex pattern의 anchor/컴파일 가능성
 - 무제한 recursive scan을 요구하는 정의가 아닌지
 - MetadataRule 입력 정규화와 지원 mode가 유효한지

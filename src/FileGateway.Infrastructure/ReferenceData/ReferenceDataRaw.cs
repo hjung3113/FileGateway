@@ -14,7 +14,8 @@ public sealed record RawLogDefinition(
     string SlotCardinality,
     string MetadataParseMode,
     string RelativePathMetadataPattern,
-    string MetadataGroupMappingsJson);
+    string MetadataGroupMappingsJson,
+    string FileNameTemplate = "");
 
 public sealed record RawConfigurationDefinition(
     string EquipmentId,

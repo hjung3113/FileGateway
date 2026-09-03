@@ -4,6 +4,7 @@ using FileGateway.Core.Files;
 using FileGateway.Core.Queries;
 using FileGateway.Core.Time;
 using FileGateway.Core.Tokens;
+using FileGateway.Infrastructure.Diagnostics;
 using FileGateway.Infrastructure.ReferenceData;
 using FileGateway.Logs.Definitions;
 using FileGateway.Logs.Internal;
@@ -23,7 +24,8 @@ public sealed class LogQueryService(
     int limitDefault,
     int limitMaximum,
     TimeSpan fileTtl,
-    TimeSpan pageTtl) : ILogQueryService
+    TimeSpan pageTtl,
+    IFileAccessFailureLogger failureLogger) : ILogQueryService
 {
     public async Task<PagedResult<LogFileDescriptor>> ListAsync(LogListQuery query, CancellationToken ct)
     {
@@ -128,9 +130,15 @@ public sealed class LogQueryService(
             ?? throw new FileGatewayException("LogDefinitionNotFound", $"no log definition for {equipmentId}/{logType}");
     }
 
-    private Task<IReadOnlyList<ResolvedLogFile>> ResolveAsync(
+    private async Task<IReadOnlyList<ResolvedLogFile>> ResolveAsync(
         ResolvedLogDefinition def, EffectiveRange range, CancellationToken ct)
-        => new LogResolver(fileAccess).ResolveAsync(def, range, ct);
+    {
+        var result = await new LogResolver(fileAccess).ResolveAsync(def, range, ct);
+        foreach (var miss in result.Misses)
+            await failureLogger.LogAsync(def.Definition.EquipmentId, def.Definition.LogType,
+                def.Definition.ServerId, miss.Slot, miss.RelativePath, miss.Reason, ct);
+        return result.Files;
+    }
 
     private LogFileDescriptor ToDescriptor(ResolvedLogDefinition def, ResolvedLogFile f, LogListQuery q)
     {

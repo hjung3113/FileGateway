@@ -17,6 +17,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         // 테스트 host cwd는 bin 출력 디렉터리이므로 csproj Content 복사본을 BaseDirectory에서 읽는다.
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "mvp-schema.sql")));
         await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "mvp-stored-procedure.sql")));
+        await ExecuteAsync(await File.ReadAllTextAsync(Path.Combine(AppContext.BaseDirectory, "db", "mvp-stored-procedure-diagnostics.sql")));
     }
 
     public async Task ExecuteAsync(string sql) // GO 없는 배치 실행 헬퍼

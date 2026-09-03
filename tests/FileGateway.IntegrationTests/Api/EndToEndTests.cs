@@ -92,7 +92,7 @@ public class EndToEndTests(DatabaseFixture db, FtpAdapterFixture ftp)
 
         await db.ExecuteAsync(@"INSERT dbo.FgLogDefinition VALUES('EQ-001','AlarmLog','SRV1','Daily',
             'Alarms/{yyyy}/{MM}/{dd}','Alarm_*.log','Multiple','Template',
-            'Alarms/{yyyy}/{MM}/{dd}/Alarm_{subtype}.log','[]');");
+            'Alarms/{yyyy}/{MM}/{dd}/Alarm_{subtype}.log','[]','');");
 
         // CacheTtl=1초: TTL 경과 후 첫 요청은 stale 반환 + background refresh(serve-stale, 확정 결정 14).
         // refresh 완료 후 요청부터 새 정의가 보인다 — 유계 폴링으로 반영을 기다린다(코드 변경 없이).
@@ -117,10 +117,10 @@ public class EndToEndTests(DatabaseFixture db, FtpAdapterFixture ftp)
         INSERT dbo.FgServer VALUES('SRV1','127.0.0.1','ftproot');
         INSERT dbo.FgLogDefinition VALUES('EQ-001','EventLog','SRV1','Hourly',
             'Logs/all','*.zip','Multiple','Template',
-            'Logs/all/{yyyy}{MM}{dd}{HH}_Event.zip','[]');
+            'Logs/all/{yyyy}{MM}{dd}{HH}_Event.zip','[]','');
         INSERT dbo.FgLogDefinition VALUES('EQ-001','TraceLog','SRV1','Continuous',
             'Trace/cur','Trace_*.log','Single','Template',
-            'Trace/cur/Trace_{subtype}.log','[]');
+            'Trace/cur/Trace_{subtype}.log','[]','');
         INSERT dbo.FgConfigurationDefinition
             (EquipmentId, ConfigurationType, ServerId, CurrentDirectoryTemplate, CurrentFileNamePattern,
              HistoryDirectoryTemplate, HistoryFileNamePattern, HistoryCompletionMarkerPathTemplate)

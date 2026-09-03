@@ -27,7 +27,41 @@ public static class LogDefinitionValidator
         catch (ArgumentException ex) { errors.Add($"filePattern invalid: {ex.Message}"); }
 
         ValidateMetadata(def, errors);
+        ValidateFileNameTemplate(def, errors);
         return errors;
+    }
+
+    // FileNameTemplate: LIST 없이 정방향으로 파일명을 계산하는 선택적 필드. 시간 외 정보로
+    // 파일명이 갈리면(subtype/attribute 정규식 추출) 정방향 추정이 불가능하므로 그 조합을 거부한다.
+    private static void ValidateFileNameTemplate(EquipmentLogDefinition def, List<string> errors)
+    {
+        var template = def.DiscoveryRule.FileNameTemplate;
+        if (string.IsNullOrEmpty(template)) return;
+
+        if (template.Contains('/'))
+            errors.Add("fileNameTemplate must not contain '/'");
+        foreach (var token in ExtractTokens(template))
+            if (!PathTokens.Contains(token))
+                errors.Add($"unknown fileNameTemplate token: {token}");
+
+        if (def.DiscoveryRule.Cardinality != Cardinality.Single)
+            errors.Add("fileNameTemplate requires cardinality=Single");
+        if (def.GenerationType == GenerationType.Continuous)
+            errors.Add("fileNameTemplate is not supported for Continuous");
+
+        var hasDate = HasToken(template, "{yyyy}") && HasToken(template, "{MM}") && HasToken(template, "{dd}");
+        var hasHour = HasToken(template, "{HH}");
+        if (def.GenerationType == GenerationType.Hourly && !(hasDate && hasHour))
+            errors.Add("Hourly fileNameTemplate must contain yyyy/MM/dd/HH tokens");
+        if (def.GenerationType == GenerationType.Daily && hasHour)
+            errors.Add("Daily fileNameTemplate must not contain {HH}");
+        if (def.GenerationType == GenerationType.Daily && !hasDate)
+            errors.Add("Daily fileNameTemplate must contain yyyy/MM/dd tokens");
+
+        var meta = def.MetadataRule;
+        if (meta.Mode == MetadataMode.Regex &&
+            meta.Mappings.Any(m => m.Target == "subtype" || m.Target.StartsWith("attribute.")))
+            errors.Add("fileNameTemplate is incompatible with subtype/attribute metadata extraction");
     }
 
     private static bool HasToken(string s, string t) => s.Contains(t, StringComparison.Ordinal);

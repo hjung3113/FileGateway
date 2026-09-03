@@ -75,7 +75,10 @@ public static class ReferenceDataSnapshotBuilder
             var prefix = $"log[{i}] {row.EquipmentId}/{row.LogType}: ";
             var errors = new List<string>();
             // 물리 경로/패턴 원문이 warning 로그에 노출되지 않도록 정의별 raw 값을 마스킹 대상으로 수집.
-            var sensitive = new[] { row.DirectoryTemplate, row.FileNamePattern, row.RelativePathMetadataPattern };
+            var sensitive = new[]
+            {
+                row.DirectoryTemplate, row.FileNamePattern, row.RelativePathMetadataPattern, row.FileNameTemplate,
+            };
             var key = (row.EquipmentId, row.LogType);
             if (duplicateKeys.Contains(key))
                 errors.Add(prefix + "duplicate equipmentId + logType definition");
@@ -107,7 +110,8 @@ public static class ReferenceDataSnapshotBuilder
 
             var definition = new EquipmentLogDefinition(
                 row.EquipmentId, row.LogType, row.ServerId, generationType,
-                new LogDiscoveryRule(row.DirectoryTemplate, row.FileNamePattern, cardinality),
+                new LogDiscoveryRule(row.DirectoryTemplate, row.FileNamePattern, cardinality,
+                    string.IsNullOrEmpty(row.FileNameTemplate) ? null : row.FileNameTemplate),
                 new LogMetadataRule(metadataMode, row.RelativePathMetadataPattern, mappings));
 
             errors.AddRange(LogDefinitionValidator.Validate(definition).Select(e => prefix + e));

@@ -20,7 +20,7 @@ public class SpReaderTests(DatabaseFixture db) : IClassFixture<DatabaseFixture>
                        'Hourly' AS GenerationType, 'Template' AS MetadataParseMode,
                        'Logs/{{yyyy}}/Event.zip' AS RelativePathMetadataPattern,
                        'Event_*.zip' AS FileNamePattern, 'EventLog' AS LogType,
-                       'SRV-REORDERED' AS ServerId;
+                       'SRV-REORDERED' AS ServerId, '' AS FileNameTemplate;
                 SELECT 'History' AS HistoryTimestampParseMode,
                        'PM/history/{{yyyy}}{{MM}}{{dd}}' AS HistoryDirectoryTemplate,
                        'SRV-REORDERED' AS ServerId,
@@ -138,7 +138,7 @@ public class SpReaderTests(DatabaseFixture db) : IClassFixture<DatabaseFixture>
             INSERT dbo.FgServer VALUES('SRV1','ftp1.internal','ftproot');
             INSERT dbo.FgLogDefinition VALUES('EQ-001','EventLog','SRV1','Hourly',
               'Logs/{yyyy}/{MM}/{dd}/{HH}','*.zip','Multiple','Template',
-              'Logs/{yyyy}/{MM}/{dd}/{HH}/Event_{subtype}.zip','[]');
+              'Logs/{yyyy}/{MM}/{dd}/{HH}/Event_{subtype}.zip','[]','');
             INSERT dbo.FgConfigurationDefinition
               (EquipmentId, ConfigurationType, ServerId, CurrentDirectoryTemplate, CurrentFileNamePattern,
                HistoryDirectoryTemplate, HistoryFileNamePattern, HistoryCompletionMarkerPathTemplate)
@@ -172,7 +172,8 @@ public class SpReaderTests(DatabaseFixture db) : IClassFixture<DatabaseFixture>
                 SELECT EquipmentId FROM dbo.FgEquipment;
                 SELECT ServerId, Host, FileRootPath FROM dbo.FgServer;
                 SELECT EquipmentId, LogType, ServerId, GenerationType, DirectoryTemplate, FileNamePattern,
-                       SlotCardinality, MetadataParseMode, RelativePathMetadataPattern, MetadataGroupMappings
+                       SlotCardinality, MetadataParseMode, RelativePathMetadataPattern, MetadataGroupMappings,
+                       '' AS FileNameTemplate
                 FROM dbo.FgLogDefinition;
             END");
 
@@ -231,7 +232,8 @@ public class SpReaderTests(DatabaseFixture db) : IClassFixture<DatabaseFixture>
                 SELECT TOP (0) EquipmentId FROM dbo.FgEquipment;
                 SELECT TOP (0) ServerId, Host, FileRootPath FROM dbo.FgServer;
                 SELECT TOP (0) EquipmentId, LogType, ServerId, GenerationType, DirectoryTemplate, FileNamePattern,
-                       SlotCardinality, MetadataParseMode, RelativePathMetadataPattern, MetadataGroupMappings
+                       SlotCardinality, MetadataParseMode, RelativePathMetadataPattern, MetadataGroupMappings,
+                       '' AS FileNameTemplate
                 FROM dbo.FgLogDefinition;
                 {configurationSelect}
             END");
