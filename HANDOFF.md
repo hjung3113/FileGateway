@@ -5,6 +5,19 @@
 **⚠️ 세션 #12에서 이 문서가 오랫동안 stale이었다는 사실을 발견** — `origin/main`의 `HANDOFF.md`는 2026-08-28 시점 버전이었고, 세션 #2~#11이 쌓아온 갱신은 전부 이 브랜치(`docs/session-handoff-and-slice-orchestration`, PR #33)에만 있었다. 세션 #12에서 PR #33을 `origin/main`에 merge해 이 문제를 해소했다(아래 세션 #12 항목 참조). **재발 방지: 매 세션 시작 시 `git log --oneline HEAD..origin/main`으로 로컬이 최신인지 먼저 확인할 것.**
 
 
+## 2026-09-03 세션 상태 #13 — Issue #43 설계+구현, PR #44 오픈(merge 대기)
+
+**Issue #43(FTP 연결 재사용/풀링 부재)** — 이슈 원문에 이미 있던 제안 방향을 바탕으로 설계를 확정하고 구현까지 slice-orchestration으로 진행. 아직 사용자가 merge를 지시하지 않아 **PR #44는 오픈 상태로 대기 중.**
+
+- **설계(omp glm-5.3, thinking high, 2라운드)**: 1차 설계는 다운로드(`OpenReadAsync`) 연결을 재사용 대상에서 제외했으나(오염 위험), 사용자가 "포함"으로 결정 — 2차 개정에서 "정상 EOF 추정" 대신 **FluentFTP 54.2.0 소스를 직접 검증**해 `FtpDataStream.CloseAsync()`로 완료 응답(226)을 실제로 읽어 검증하는 3중 게이트(전량 소진+완료응답 검증+IsConnected) 방식으로 정면 설계. 확정 설계는 이슈 #43 코멘트로 등록: https://github.com/hjung3113/FileGateway/issues/43#issuecomment-5518146634
+- **문서 반영 시점 판단**: `docs/03`/`docs/07`은 "현재 구현 기준" 문서라 미구현 상태에서 미리 갱신하지 않고 구현 PR에 포함시킴(`docs/INDEX.md` 문서 우선순위 원칙 적용).
+- **구현**: 워크트리 `hjung3113/issue-43-ftp-pool`(base `origin/main` `d19ff8d`), `codex exec` headless(gpt-5.6-sol, high effort)로 구현. `FtpConcurrencyLimiter` → `FtpClientPool`로 확장/rename(idle 큐 + checkout/return/discard), 단기 명령 4종은 `WrapAsync(() => pool.RunAsync(...))`로 중첩 반전(재시도 판정이 원본 예외를 보게), 다운로드는 `OwnedFtpStream`에 전달바이트/EOF 카운터를 추가해 3중 게이트 반납 구현. 커밋 `471e5ca`.
+- **CONDUCTOR 독립 검증**: 워커 sandbox는 이번에도 vstest TCP bind가 막혀 빌드만 확인 가능 — CONDUCTOR가 워크트리에서 직접 `dotnet build`(0 warning) + `dotnet test` 실행해 **457/457(Unit 292 + Integration 165) 통과** 확인.
+- **독립 리뷰(omp glm-5.3, thinking high, diff-scoped)**: P1 없음, merge 가능 판정. 신규 테스트 5건이 실제 loopback FTP 연결 수(`ConnectionCount`)로 재사용을 증명함을 재실행까지 해서 확인. **P2 1건**: 다운로드 open 단계의 recycled 재시도 경로(수동 lease 해제라 permit 누수 위험이 가장 큰 코드)에 회귀 테스트가 없음.
+- **P2 반영 시도 → 실패 → revert**: codex에게 회귀 테스트 추가 요청 → 1차 시도(`socket.Shutdown(SocketShutdown.Send)`로 half-open 흉내)는 CONDUCTOR 재검증에서 실패(이 macOS 환경에서 Shutdown(Send) 직후 FluentFTP `IsConnected`가 곧바로 false가 되어 의도한 half-open을 재현 못 함). 2차 시도(max effort, 서버 사이드 강제 종료 등 대안 조사 중) 진행 중 **codex 사용량 한도 도달**로 중단, 커밋도 안 된 상태. **CONDUCTOR가 직접 판단해 실패한 테스트 커밋(`42b3287`)을 `git reset --hard`로 되돌리고** 457/457 그린 상태로 push+PR. P2는 "시도했으나 이 test fixture 환경에서 안정적 재현 실패"로 PR 본문에 정직하게 기록 — 해당 프로덕션 로직 자체는 리뷰에서 이미 정확하다고 검증됨.
+- **PR #44 오픈, merge 안 함** — `gh pr view 44`로 확인 시 코멘트/리뷰/CI 없음(이 레포에 CI 미구성). **다음 세션 또는 사용자 확인 후 merge 진행.**
+- **프로세스 교훈(세션 #13)**: (1) `codex exec` headless를 `nohup ... &`로 백그라운드 실행하면 launcher 자체(백그라운드 fork)는 즉시 exit 0으로 "완료" 알림이 오지만 실제 codex 프로세스는 별도 PID로 계속 돈다 — `ps -p <pid>`로 실제 종료를 확인하는 `until ! ps -p <pid>; do sleep N; done` 폴링 패턴이 여기서도 유효(omp에도 동일 적용). (2) 워커가 스스로 "빌드/테스트 통과"라고 보고해도 sandbox가 테스트 실행을 막았을 뿐인 self-report일 수 있으므로, 이번처럼 CONDUCTOR 재검증에서 실제로 실패가 나올 수 있다 — 워커 보고를 절대 그대로 믿지 말 것(스킬 문서의 기존 원칙이 실제로 유효했던 사례).
+
 ## 2026-09-02 세션 상태 #12 — Issue #19 완료(merge), 로컬/PR #33 stale 문제 해소
 
 **작업 시작 시 체크아웃돼 있던 `docs/session-handoff-and-slice-orchestration`가 `origin/main`(`fc7714e`, PR #26~32/#37~40 전부 포함)보다 한참 뒤처진 상태(`daebc96` 기준)였다.** 4번(OpenAPI 파라미터 누락) 수정을 그 위에서 시작했다가 뒤늦게 발견 — `git diff HEAD..origin/main`으로 확인, 즉시 변경분을 패치로 저장하고 `origin/main` 기준 새 브랜치(`feat/issue-19-tester-ux`)로 옮겨 재작업했다. **이 문서(HANDOFF.md) 자체도 같은 이유로 origin/main에 반영이 안 되고 있었다(위 경고 참조) — 다음 세션은 항상 작업 시작 전에 `git log --oneline HEAD..origin/main`으로 로컬이 최신인지부터 확인할 것.**
