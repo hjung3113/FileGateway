@@ -11,10 +11,12 @@ public sealed class FtpAdapterFixture : IAsyncLifetime
 {
     public const string UserName = "fgtest", Password = "fgpass";
     private readonly ServiceCollection _services = new();
+    private readonly SharedInMemoryFileSystemFactory _fileSystemFactory = new();
     private ServiceProvider? _provider;
     private IFtpServerHost? _server;
 
     public int Port { get; private set; }
+    public int ConnectionCount => _fileSystemFactory.ConnectionCount;
 
     public async Task InitializeAsync()
     {
@@ -23,7 +25,7 @@ public sealed class FtpAdapterFixture : IAsyncLifetime
             .UseSingleRoot(o => o.RootPath = "/"));
         // 기본 UseInMemoryFileSystem 등록은 로그인(연결)마다 새 in-memory FS를 만들어 시드가 다른 연결에 안 보인다.
         // 모든 연결이 하나의 in-memory FS를 공유하도록 팩토리를 직접 등록한다.
-        _services.AddSingleton<IFileSystemClassFactory>(new SharedInMemoryFileSystemFactory());
+        _services.AddSingleton<IFileSystemClassFactory>(_fileSystemFactory);
         _services.AddSingleton<IMembershipProvider>(new DictionaryMembershipProvider(
             new Dictionary<string, string> { [UserName] = Password }));
         _services.Configure<FtpServerOptions>(o =>
@@ -45,9 +47,15 @@ public sealed class FtpAdapterFixture : IAsyncLifetime
     private sealed class SharedInMemoryFileSystemFactory : IFileSystemClassFactory
     {
         private readonly InMemoryFileSystem _fileSystem = new(StringComparer.OrdinalIgnoreCase);
+        private int _connectionCount;
+
+        public int ConnectionCount => Volatile.Read(ref _connectionCount);
 
         public Task<IUnixFileSystem> Create(IAccountInformation accountInformation)
-            => Task.FromResult<IUnixFileSystem>(_fileSystem);
+        {
+            Interlocked.Increment(ref _connectionCount);
+            return Task.FromResult<IUnixFileSystem>(_fileSystem);
+        }
     }
 
     /// <summary>DictionaryMembershipProvider/UseCustomMembership가 이 패키지 버전에 없어 직접 구현한 멤버십.</summary>

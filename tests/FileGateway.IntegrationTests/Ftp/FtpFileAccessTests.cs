@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using FileGateway.Core.Files;
 using FileGateway.Infrastructure.Ftp;
 using FluentFTP;
@@ -11,7 +12,7 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
     private static (FtpFileAccess Access, FtpOptions Opt) Create(FtpAdapterFixture f)
     {
         var opt = new FtpOptions { UserName = FtpAdapterFixture.UserName, Password = FtpAdapterFixture.Password };
-        return (new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt)), opt);
+        return (new FtpFileAccess(new FtpClientPool(opt)), opt);
     }
 
     private static async Task Seed(FtpAdapterFixture f, string path, byte[] content)
@@ -140,7 +141,7 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
     {
         var opt = new FtpOptions { UserName = "nobody", Password = "bad" };
         WithPort(ftp, opt);
-        var access = new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt));
+        var access = new FtpFileAccess(new FtpClientPool(opt));
         var ex = await Assert.ThrowsAsync<FileAccessException>(
             () => access.ListFilesAsync(Server(ftp.Port), "Logs", CancellationToken.None));
         Assert.Equal(FileAccessError.AuthenticationFailed, ex.Error);
@@ -150,7 +151,7 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
     public async Task Unreachable_host_maps_to_ConnectionFailed()
     {
         var opt = new FtpOptions { ConnectTimeoutSeconds = 2 };
-        var access = new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt));
+        var access = new FtpFileAccess(new FtpClientPool(opt));
         var ex = await Assert.ThrowsAsync<FileAccessException>(() => access.ListFilesAsync(
             new FileServerConnection("S1", "127.0.0.1", "ftproot"), "Logs", CancellationToken.None));
         // 127.0.0.1:21 거부 → ConnectionFailed. 옵션의 포트 오버라이드 없이 기본 21 사용.
@@ -185,7 +186,7 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
         var opt = new FtpOptions { UserName = FtpAdapterFixture.UserName, Password = FtpAdapterFixture.Password,
                                    MaxConcurrentPerServer = 1 };
         WithPort(ftp, opt);
-        var access = new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt));
+        var access = new FtpFileAccess(new FtpClientPool(opt));
 
         var first = await access.OpenReadAsync(Server(ftp.Port), "Logs/a.bin", CancellationToken.None);
         // 첫 스트림이 살아있는 동안 같은 서버의 두 번째 open은 permit 대기로 timeout/fail해야 한다
@@ -206,7 +207,7 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
         var opt = new FtpOptions { UserName = FtpAdapterFixture.UserName, Password = FtpAdapterFixture.Password,
                                    MaxConcurrentPerServer = 1 };
         WithPort(ftp, opt);
-        var access = new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt));
+        var access = new FtpFileAccess(new FtpClientPool(opt));
 
         var first = await access.OpenReadAsync(Server(ftp.Port), "Logs/a.bin", CancellationToken.None);
         // 선행 확인: permit 상한 1에서 첫 스트림이 살아있으면 두 번째 open은 대기하다 취소된다
@@ -227,7 +228,7 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
         var opt = new FtpOptions { UserName = FtpAdapterFixture.UserName, Password = FtpAdapterFixture.Password,
                                    MaxConcurrentPerServer = 1 };
         WithPort(ftp, opt);
-        var access = new FtpFileAccess(opt, new FtpConcurrencyLimiter(opt));
+        var access = new FtpFileAccess(new FtpClientPool(opt));
 
         var opened = await access.OpenReadAsync(Server(ftp.Port), "Logs/a.bin", CancellationToken.None);
         opened.Stream.Dispose();
@@ -236,5 +237,181 @@ public class FtpFileAccessTests(FtpAdapterFixture ftp) : IClassFixture<FtpAdapte
         using var reacquired = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // permit이 정상 상태인지 재획득으로 증명
         var second = await access.OpenReadAsync(Server(ftp.Port), "Logs/a.bin", reacquired.Token);
         await second.Stream.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Repeated_short_commands_reuse_pooled_connections()
+    {
+        await Seed(ftp, "ftproot/Pool/short.bin", "pool"u8.ToArray());
+        var baseline = ftp.ConnectionCount;
+        var (access, opt) = Create(ftp); WithPort(ftp, opt);
+
+        for (var i = 0; i < 10; i++)
+        {
+            var listing = await access.ListFilesAsync(Server(ftp.Port), "Pool", CancellationToken.None);
+            Assert.True(listing.Exists);
+            Assert.Contains(listing.Files, file => file.Name == "short.bin");
+            Assert.Equal(4, await access.StatFileAsync(
+                Server(ftp.Port), "Pool/short.bin", CancellationToken.None));
+            Assert.True(await access.FileExistsAsync(
+                Server(ftp.Port), "Pool/short.bin", CancellationToken.None));
+        }
+
+        Assert.Equal(1, ftp.ConnectionCount - baseline);
+    }
+
+    [Fact]
+    public async Task Parallel_short_commands_bounded_by_pool_size()
+    {
+        await Seed(ftp, "ftproot/Pool/parallel.bin", "pool"u8.ToArray());
+        var baseline = ftp.ConnectionCount;
+        var opt = new FtpOptions
+        {
+            UserName = FtpAdapterFixture.UserName,
+            Password = FtpAdapterFixture.Password,
+            MaxConcurrentPerServer = 2,
+        };
+        WithPort(ftp, opt);
+        var access = new FtpFileAccess(new FtpClientPool(opt));
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 10).Select(_ =>
+            access.ListFilesAsync(Server(ftp.Port), "Pool", CancellationToken.None)));
+
+        Assert.All(results, listing =>
+        {
+            Assert.True(listing.Exists);
+            Assert.Contains(listing.Files, file => file.Name == "parallel.bin");
+        });
+        Assert.InRange(ftp.ConnectionCount - baseline, 1, 2);
+    }
+
+    [Fact]
+    public async Task Transport_failure_on_recycled_client_retries_once()
+    {
+        await Seed(ftp, "ftproot/Pool/retry.bin", "pool"u8.ToArray());
+        var opt = new FtpOptions
+        {
+            UserName = FtpAdapterFixture.UserName,
+            Password = FtpAdapterFixture.Password,
+            MaxConcurrentPerServer = 1,
+        };
+        WithPort(ftp, opt);
+        await using var pool = new FtpClientPool(opt);
+        var access = new FtpFileAccess(pool);
+
+        var prime = await access.ListFilesAsync(Server(ftp.Port), "Pool", CancellationToken.None);
+        Assert.True(prime.Exists);
+        var afterPrime = ftp.ConnectionCount;
+        var attempts = 0;
+
+        var result = await pool.RunAsync(Server(ftp.Port), (_, _) =>
+        {
+            var attempt = Interlocked.Increment(ref attempts);
+            return attempt == 1
+                ? Task.FromException<int>(new SocketException((int)SocketError.ConnectionReset))
+                : Task.FromResult(42);
+        }, CancellationToken.None);
+
+        Assert.Equal(42, result);
+        Assert.Equal(2, attempts);
+        Assert.Equal(afterPrime + 1, ftp.ConnectionCount);
+
+        var afterRetry = ftp.ConnectionCount;
+        var listing = await access.ListFilesAsync(Server(ftp.Port), "Pool", CancellationToken.None);
+        Assert.True(listing.Exists);
+        Assert.Equal(afterRetry, ftp.ConnectionCount);
+    }
+
+    [Fact]
+    public async Task Downloads_reuse_pooled_connection_and_discard_on_partial_read()
+    {
+        const int fullDownloads = 3;
+        const int shortCommands = 5;
+        const int partialDownloads = 3;
+        var content = "0123456789"u8.ToArray();
+        await Seed(ftp, "ftproot/Pool/download.bin", content);
+
+        var fullBaseline = ftp.ConnectionCount;
+        var fullOptions = new FtpOptions
+        {
+            UserName = FtpAdapterFixture.UserName,
+            Password = FtpAdapterFixture.Password,
+            MaxConcurrentPerServer = 1,
+        };
+        WithPort(ftp, fullOptions);
+        await using (var fullPool = new FtpClientPool(fullOptions))
+        {
+            var access = new FtpFileAccess(fullPool);
+            for (var i = 0; i < fullDownloads; i++)
+            {
+                var opened = await access.OpenReadAsync(
+                    Server(ftp.Port), "Pool/download.bin", CancellationToken.None);
+                await using var stream = opened.Stream;
+                using var destination = new MemoryStream();
+                await stream.CopyToAsync(destination);
+                Assert.Equal(content, destination.ToArray());
+            }
+
+            for (var i = 0; i < shortCommands; i++)
+            {
+                var listing = await access.ListFilesAsync(
+                    Server(ftp.Port), "Pool", CancellationToken.None);
+                Assert.True(listing.Exists);
+            }
+
+            Assert.Equal(1, ftp.ConnectionCount - fullBaseline);
+        }
+
+        var partialBaseline = ftp.ConnectionCount;
+        var partialOptions = new FtpOptions
+        {
+            UserName = FtpAdapterFixture.UserName,
+            Password = FtpAdapterFixture.Password,
+            MaxConcurrentPerServer = 1,
+        };
+        WithPort(ftp, partialOptions);
+        await using var partialPool = new FtpClientPool(partialOptions);
+        var partialAccess = new FtpFileAccess(partialPool);
+
+        for (var i = 0; i < partialDownloads; i++)
+        {
+            var opened = await partialAccess.OpenReadAsync(
+                Server(ftp.Port), "Pool/download.bin", CancellationToken.None);
+            var buffer = new byte[content.Length / 2];
+            await opened.Stream.ReadExactlyAsync(buffer);
+            await opened.Stream.DisposeAsync();
+
+            var listing = await partialAccess.ListFilesAsync(
+                Server(ftp.Port), "Pool", CancellationToken.None);
+            Assert.True(listing.Exists);
+        }
+
+        Assert.Equal(partialDownloads + 1, ftp.ConnectionCount - partialBaseline);
+    }
+
+    [Fact]
+    public async Task Zero_length_download_returns_connection_to_pool()
+    {
+        await Seed(ftp, "ftproot/Pool/empty.bin", []);
+        var baseline = ftp.ConnectionCount;
+        var opt = new FtpOptions
+        {
+            UserName = FtpAdapterFixture.UserName,
+            Password = FtpAdapterFixture.Password,
+            MaxConcurrentPerServer = 1,
+        };
+        WithPort(ftp, opt);
+        await using var pool = new FtpClientPool(opt);
+        var access = new FtpFileAccess(pool);
+
+        var opened = await access.OpenReadAsync(
+            Server(ftp.Port), "Pool/empty.bin", CancellationToken.None);
+        Assert.Equal(0, opened.Length);
+        await opened.Stream.DisposeAsync();
+
+        var listing = await access.ListFilesAsync(Server(ftp.Port), "Pool", CancellationToken.None);
+        Assert.True(listing.Exists);
+        // FubarDev가 0-byte RETR 완료 응답을 즉시 제공하면 재사용(1), 아니면 안전 폐기 후 재연결(2).
+        Assert.InRange(ftp.ConnectionCount - baseline, 1, 2);
     }
 }

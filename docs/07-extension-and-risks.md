@@ -19,6 +19,8 @@ MVP는 Windows Server + IIS다. Linux 실제 배포/검증은 후속이다. MVP 
 
 현재 Site는 모든 파일 서버가 동일 credential과 기본 접근 방식을 사용한다. 다른 Site 확장 시 `credentialProfileId` 또는 Site별 연결 정책 필요 여부를 재평가한다.
 
+현재 `FtpClientPool`은 같은 `Host`끼리만 연결을 재사용하며 모든 파일 서버가 전역 `FtpOptions`의 동일 credential을 사용한다는 전제다. 서버별 credential을 도입하면 pool 키에도 credential 구분을 포함해야 한다.
+
 ### 다른 파일 프로토콜
 
 필요 시 SMB/SFTP Adapter를 `IFileAccess` 구현으로 추가한다. 현재는 구현하지 않는다.
