@@ -201,15 +201,21 @@ class FileGatewayClient:
         ) as resp:
             if not resp.ok:
                 raise FileGatewayError.from_response(resp)
-            content_type = resp.headers.get("Content-Type", "")
-            if zip_name is not None and content_type.startswith("application/zip"):
+            content_type = resp.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            if zip_name is not None and content_type == "application/zip":
                 dest_path = os.path.join(dest_dir, zip_name)  # zip 응답은 호출자가 정한 .zip 이름으로 저장한다
             expected = int(resp.headers.get("Content-Length", -1))  # zip은 Content-Length가 없어 -1
             written = 0
-            with open(dest_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=1024 * 64):
-                    f.write(chunk)
-                    written += len(chunk)
+            try:
+                with open(dest_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=1024 * 64):
+                        f.write(chunk)
+                        written += len(chunk)
+            except BaseException:
+                # 전송 예외(연결 중단 등)로 끊겨도 부분 파일을 남기지 않는다.
+                if os.path.exists(dest_path):
+                    os.remove(dest_path)
+                raise
             if expected >= 0 and written != expected:
                 # 다운로드 시작 후 원격 I/O 오류는 JSON 오류로 전환되지 않고 스트림이 끊긴다.
                 # 잘린 파일을 정상 파일로 오인하지 않도록 남기지 않는다.

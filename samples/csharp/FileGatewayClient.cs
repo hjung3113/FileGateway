@@ -209,11 +209,20 @@ public sealed class FileGatewayClient : IDisposable
 
         var expected = resp.Content.Headers.ContentLength; // zip은 Content-Length가 없어 null
         long written;
-        await using (var remoteStream = await resp.Content.ReadAsStreamAsync())
-        await using (var fileStream = System.IO.File.Create(destPath))
+        try
         {
-            await remoteStream.CopyToAsync(fileStream);
-            written = fileStream.Length;
+            await using (var remoteStream = await resp.Content.ReadAsStreamAsync())
+            await using (var fileStream = System.IO.File.Create(destPath))
+            {
+                await remoteStream.CopyToAsync(fileStream);
+                written = fileStream.Length;
+            }
+        }
+        catch
+        {
+            // 전송 예외(연결 중단 등)로 끊겨도 부분 파일을 남기지 않는다. 스트림은 try 블록을 벗어나며 이미 닫혔다.
+            System.IO.File.Delete(destPath);
+            throw;
         }
 
         // Content-Length는 서버가 보낸 "예정" 크기다. 스트림 시작 후 끊긴 다운로드를 놓치지 않으려면

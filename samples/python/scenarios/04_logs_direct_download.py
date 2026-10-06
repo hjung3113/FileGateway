@@ -32,7 +32,7 @@ def main() -> None:
 
     if result.content_type.startswith("application/zip"):
         print(f"multiple files matched — saved as zip {result.path} ({result.size} bytes)")
-        print("zip holds at most `limit` entries (default 100, max 1000) — narrow from/to if you need more")
+        print("zip holds at most `limit` entries — use a list continuationToken (or a larger limit) to get more")
     else:
         print(f"saved {result.path} ({result.size} bytes)")
 
