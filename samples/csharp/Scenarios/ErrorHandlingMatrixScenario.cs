@@ -21,7 +21,7 @@ public static class ErrorHandlingMatrixScenario
             "LogDefinitionNotFound" or "ConfigurationDefinitionNotFound" =>
                 "  -> 기준정보가 삭제됨, fileId 재발급 불가 — 목록부터 새로 조회",
             "FileNotFound" => "  -> 논리 파일이 실제로 없음(삭제/이동)",
-            "MultipleFilesMatched" => "  -> 조건에 2건 이상 일치, 목록 조회로 전환해 fileId 선택",
+            "MultipleFilesMatched" => "  -> Current Configuration 직접 다운로드에 2건 이상 일치, 목록 조회로 전환해 fileId 선택",
             "FileIdExpired" => "  -> fileId TTL(24h) 경과, 재조회 필요",
             "FileDefinitionConflict" =>
                 "  -> 기준정보/실제 파일 상태 불일치(운영자 확인 필요), 클라이언트가 재시도해도 해결 안 됨",

@@ -181,17 +181,17 @@ sequenceDiagram
     Note over GW,Cache: 다음 요청 또는 CacheTtl(기본 15분) 만료 시 refresh
     GW->>SP: FileGateway_GetReferenceData 호출
     SP-->>GW: 서버/설비/로그정의/구성정의 4개 result set
-    GW->>GW: 구조 validation(rootPath 경계, cardinality, metadata 규칙)
-    alt 검증 성공
-        GW->>Cache: 전체 atomic 교체
-    else 검증 실패(정의 1건이라도 위반)
+    GW->>GW: 구조 validation(전역 식별자 → 정의별 rootPath 경계, cardinality, metadata 규칙)
+    alt 전역 검증 성공(검증에 실패한 정의는 그 정의만 제외)
+        GW->>Cache: 유효 정의만 담은 새 snapshot으로 atomic 교체
+    else 전역 검증 실패
         GW->>Cache: 기존 last-known-good 유지(stale 응답 지속)
         GW->>GW: 오류 로그 기록(민감정보 비노출)
     end
 ```
 
 - refresh는 FTP 서버 실재 여부를 확인하지 않습니다 — 파일이 실제로 있는지는 목록/다운로드 시점에만 확인합니다.
-- 검증 실패는 **전체 refresh 거부**입니다. 잘못된 정의 1건이 나머지 정상 설비까지 막지 않도록, 등록 전 `rootPath` 경계·cardinality를 점검하세요(상세: [`06-reference-data.md`](docs/06-reference-data.md)).
+- 필수 result set/shape 누락, 설비/서버 전역 식별자 위반, DB/SP 조회 실패는 **전체 refresh 거부**입니다. 반면 잘못된 정의 1건은 그 정의만 새 snapshot에서 제외되어(`/equipments/{id}/file-types` 응답에서 빠지고, 그 종류로 조회·다운로드하면 `404 LogDefinitionNotFound`/`ConfigurationDefinitionNotFound`) 나머지 정상 정의는 반영됩니다. 정의가 조용히 사라지지 않도록 등록 전 `rootPath` 경계·cardinality를 점검하세요(상세: [`06-reference-data.md`](docs/06-reference-data.md)).
 - 최초 기동 시 usable 캐시가 없으면 `/health/ready`가 `503 ReferenceDataUnavailable`을 반환합니다 — DB 연결/SP 존재를 먼저 확인하세요.
 - 신규 `logType`/`configurationType`이 기존 Hourly/Daily/Continuous/Current/History 계약으로 표현 가능하면 코드 수정 없이 DB 등록만으로 노출됩니다. 표현 불가능한 새 계약이 필요하면 [`04a-log-provider.md`](docs/04a-log-provider.md)/[`04b-configuration-provider.md`](docs/04b-configuration-provider.md)부터 검토하세요.
 
@@ -225,7 +225,7 @@ flowchart LR
     A7 -- 아니오, 목록에서 선택 --> A9["목록의 fileId로<br/>/files/download?fileId=..."]
 ```
 
-- 파일 1건이 확실하면 조건 기반 직접 다운로드가 왕복을 줄여줍니다. 2건 이상 걸리면 `409 MultipleFilesMatched`이므로 목록 조회로 전환하세요.
+- 파일 1건이 확실하면 조건 기반 직접 다운로드가 왕복을 줄여줍니다. 2건 이상 걸리면 로그 직접 다운로드는 zip(최대 `limit`건)으로 내려오고, Current Configuration 직접 다운로드는 `409 MultipleFilesMatched`가 나므로 이때는 목록 조회로 전환하세요.
 - 목록에서 받은 `fileId`는 24시간 동안 재사용 가능한 opaque 토큰입니다. 물리 경로가 나중에 바뀌어도 같은 논리 파일이면 그대로 유효합니다.
 
 ### 목록 조회 → fileId 발급 → 다운로드 시퀀스
@@ -377,7 +377,10 @@ curl -s -OJ "https://gateway.example/api/v1/logs/download?equipmentId=EQ-001&log
   -H "X-Api-Key: $API_KEY"
 ```
 
-0건 → `404 FileNotFound`, 2건 이상 일치 → `409 MultipleFilesMatched`(이 경우 목록 조회로 `fileId`를 얻어 `/files/download?fileId=...` 사용).
+1건이면 단일 파일(`Content-Type: application/octet-stream`), 2건 이상이면 zip(`Content-Type: application/zip`)으로 내려오고(`limit`/`continuationToken` 적용 후 기준), 0건이면 `404 FileNotFound`입니다.
+
+- 응답 `Content-Type`으로 단일 파일과 zip을 구분하세요. zip은 `Content-Length` 없이 chunked로 스트리밍되고 파일명은 서버가 만든 비계약 값입니다.
+- zip에는 목록과 같은 정렬 순서로 최대 `limit`건(기본 100, 최대 1000)만 담기고 `continuationToken`을 돌려주지 않아 잘렸는지 알 수 없습니다. 더 받으려면 `limit`을 늘리거나, 같은 조건의 목록 응답에서 받은 `continuationToken`을 붙여 다음 페이지를 zip으로 받거나, 목록의 `fileId`로 `/files/download?fileId=...`를 사용하세요.
 
 ### 5. Current Configuration 조회/다운로드
 
@@ -412,7 +415,7 @@ curl -s -OJ "https://gateway.example/api/v1/files/download?fileId=$FILE_ID" \
   -H "X-Api-Key: $API_KEY"
 ```
 
-`fileId`는 목록/직접 다운로드 응답에서 얻은 24시간 TTL opaque 토큰입니다. `Content-Length`는 스트림 시작 직전 실제 크기로 설정되며, 응답 헤더는 `Content-Type: application/octet-stream`, `Content-Disposition: attachment`.
+`fileId`는 각 목록 응답 item에서 얻은 24시간 TTL opaque 토큰입니다(직접 다운로드 응답에는 `fileId`가 없습니다). `Content-Length`는 스트림 시작 직전 실제 크기로 설정되며, 응답 헤더는 `Content-Type: application/octet-stream`, `Content-Disposition: attachment`.
 
 ### 오류 응답
 
@@ -434,7 +437,7 @@ curl -s -OJ "https://gateway.example/api/v1/files/download?fileId=$FILE_ID" \
 | 404 | `EquipmentNotFound` | 존재하지 않는 `equipmentId` |
 | 404 | `LogDefinitionNotFound` / `ConfigurationDefinitionNotFound` | 기준정보 삭제로 재해석 불가 |
 | 404 | `FileNotFound` | 논리 파일이 실제로 없음 |
-| 409 | `MultipleFilesMatched` | 직접 다운로드 조건에 정상 파일 2건 이상 일치 |
+| 409 | `MultipleFilesMatched` | Current Configuration 직접 다운로드 조건에 파일 2건 이상 일치(로그 직접 다운로드는 zip으로 응답하므로 해당 없음) |
 | 410 | `FileIdExpired` | `fileId` TTL(24시간) 경과 |
 | 500 | `FileDefinitionConflict` | cardinality 위반/metadata 해석 실패 |
 | 500 | `InternalError` | 서버 내부 오류 |

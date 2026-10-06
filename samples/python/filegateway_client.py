@@ -51,6 +51,7 @@ class FileGatewayError(Exception):
 class DownloadResult:
     path: str
     size: int
+    content_type: str = ""  # 응답 Content-Type. 로그 직접 다운로드가 2건 이상이면 application/zip
 
 
 class FileGatewayClient:
@@ -122,13 +123,21 @@ class FileGatewayClient:
         *,
         from_: str | None = None,
         to: str | None = None,
+        limit: int | None = None,
+        continuation_token: str | None = None,
     ) -> DownloadResult:
         params: dict[str, Any] = {"equipmentId": equipment_id, "logType": log_type}
         if from_ is not None:
             params["from"] = from_
         if to is not None:
             params["to"] = to
-        return self._download("/api/v1/logs/download", params, dest_dir, "download.bin")
+        if limit is not None:  # 미지정이면 서버 기본(LimitDefault)이 적용된다
+            params["limit"] = limit
+        if continuation_token is not None:  # 목록 응답의 token — 해당 페이지의 매치가 다운로드 대상
+            params["continuationToken"] = continuation_token
+        # 단일 파일은 download.bin, zip 응답(Content-Type: application/zip)은 download.zip으로 저장한다.
+        # 서버가 만든 zip 파일명은 계약이 아니므로 쓰지 않는다.
+        return self._download("/api/v1/logs/download", params, dest_dir, "download.bin", zip_name="download.zip")
 
     # --- 공통 fileId 조회/다운로드 ---
 
@@ -182,7 +191,9 @@ class FileGatewayClient:
 
     # --- streaming download 공통 구현 ---
 
-    def _download(self, path: str, params: dict[str, Any], dest_dir: str, fallback_name: str) -> DownloadResult:
+    def _download(
+        self, path: str, params: dict[str, Any], dest_dir: str, fallback_name: str, zip_name: str | None = None
+    ) -> DownloadResult:
         # os.path.basename은 POSIX에서 '\'를 구분자로 보지 않는다. 서버 fileName에 경로요소가
         # 섞여 와도 로컬 경로를 벗어나지 않도록 두 구분자 모두 제거한 뒤 basename을 취한다.
         safe_name = os.path.basename(fallback_name.replace("\\", "/"))
@@ -196,15 +207,24 @@ class FileGatewayClient:
         ) as resp:
             if not resp.ok:
                 raise FileGatewayError.from_response(resp)
-            expected = int(resp.headers.get("Content-Length", -1))
+            content_type = resp.headers.get("Content-Type", "").split(";")[0].strip().lower()
+            if zip_name is not None and content_type == "application/zip":
+                dest_path = os.path.join(dest_dir, zip_name)  # zip 응답은 호출자가 정한 .zip 이름으로 저장한다
+            expected = int(resp.headers.get("Content-Length", -1))  # zip은 Content-Length가 없어 -1
             written = 0
-            with open(dest_path, "wb") as f:
-                for chunk in resp.iter_content(chunk_size=1024 * 64):
-                    f.write(chunk)
-                    written += len(chunk)
+            try:
+                with open(dest_path, "wb") as f:
+                    for chunk in resp.iter_content(chunk_size=1024 * 64):
+                        f.write(chunk)
+                        written += len(chunk)
+            except BaseException:
+                # 전송 예외(연결 중단 등)로 끊겨도 부분 파일을 남기지 않는다.
+                if os.path.exists(dest_path):
+                    os.remove(dest_path)
+                raise
             if expected >= 0 and written != expected:
                 # 다운로드 시작 후 원격 I/O 오류는 JSON 오류로 전환되지 않고 스트림이 끊긴다.
                 # 잘린 파일을 정상 파일로 오인하지 않도록 남기지 않는다.
                 os.remove(dest_path)
                 raise IOError(f"truncated download: expected {expected} bytes, got {written}")
-        return DownloadResult(path=dest_path, size=written)
+        return DownloadResult(path=dest_path, size=written, content_type=content_type)

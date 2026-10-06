@@ -30,7 +30,7 @@ def handle(err: FileGatewayError) -> None:
     elif err.code == "FileNotFound":
         print("  -> 논리 파일이 실제로 없음(삭제/이동)")
     elif err.code == "MultipleFilesMatched":
-        print("  -> 조건에 2건 이상 일치, 목록 조회로 전환해 fileId 선택")
+        print("  -> Current Configuration 직접 다운로드에 2건 이상 일치, 목록 조회로 전환해 fileId 선택")
     elif err.code == "FileIdExpired":
         print("  -> fileId TTL(24h) 경과, 재조회 필요")
     elif err.code == "FileDefinitionConflict":

@@ -29,6 +29,7 @@
 | 17 | DataProtection 키 재시작 내구성(IIS 재시작 후 기존 `fileId` 유효) + rotation 시 기존 `fileId` TTL 유지 | ☐ 통과 ☐ 차단 | |
 | 18 | rootPath 경계/traversal 차단(경계 위반 정의 주입 → 해당 정의 격리, 정상 정의 유지) | ☐ 통과 ☐ 차단 | |
 | 19 | 로그/Secret에 민감정보 비노출(API Key/FTP credential/물리 경로 — 감사로그·응용로그 샘플 검토) | ☐ 통과 ☐ 차단 | |
+| 20 | `fileNameTemplate` 설정 시 LIST 없이 `StatFileAsync`로 확정되는지, 추정 실패가 `dbo.FgFileAccessFailureLog`에 기록되고도 원 요청 응답(빈 결과/`FileNotFound`)이 정상 유지되는지 | ☐ 통과 ☐ 차단 | |
 
 ## Step 2. MVP 완료 기준 최종 확인
 
