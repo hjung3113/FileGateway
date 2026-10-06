@@ -6,6 +6,7 @@
 > 상태 규칙: `implemented` = 코드에서 확인함, `designed` = 설계 문서에만 있음, `planned` = 후속·백로그에만 있음, `n/a` = 원칙·정의·범위처럼 구현 여부가 의미 없는 사실.
 > 문서 간 충돌의 처리: `docs/INDEX.md`는 "역할별 문서가 현재 구현 기준"이라고 정한다(`docs/INDEX.md L47`). README·샘플·기존 소개 자료가 역할별 문서나 코드와 다르면 역할별 문서와 코드를 따랐고, 다른 지점은 Q 표에 남겼다.
 > 쓰는 말: 이 표의 문장은 아래 T 표의 용어를 쓴다. 원문이 같은 개념을 다른 이름으로 부른 곳도 T 표의 말로 바꿔 적었다.
+> 검토 반영(2026-10-06): 리뷰 지적을 원본 코드·문서로 다시 확인해 행을 고쳤고(F013, F014, F057, F069, F071, F092, F102, F119, F130, F133, F142, F143, F144, F151) 새 행(F152~F163)과 T 행(별도 시스템, MVP 제외, Resolver, token codec, stale, invalid, ARR, fileId 서명 키)을 더했다. 이슈 #12, #13의 열림 여부는 GitHub에서 확인했다(F156).
 
 ## F — 사실
 
@@ -30,8 +31,8 @@
 | id | 사실 | 값 | 단위 | 종류 | 상태 | 출처 | as-of | 독자 |
 |---|---|---|---|---|---|---|---|---|
 | F012 | 실제 서버 주소와 물리 경로를 외부 API 모델에 노출하지 않는다. 성공 응답, 오류 응답, 헤더 어디에도 담지 않는다 | — | — | code | implemented | FG@30d89a5:AGENTS.md L66; FG@30d89a5:docs/05-api-interface.md L8, L422; FG@30d89a5:src/FileGateway.Api/Endpoints/CatalogEndpoints.cs L30-37 | 2026-10-06 | user,dev |
-| F013 | 클라이언트 입력으로 파일 시스템·FTP 경로를 직접 만들지 않는다. 모든 접근은 서버의 루트 경로(rootPath) 아래로 정규화한 경로만 쓴다 | — | — | doc | implemented | FG@30d89a5:AGENTS.md L67; FG@30d89a5:docs/05-api-interface.md L12, L418-420; FG@30d89a5:docs/06-reference-data.md L215-224 | 2026-10-06 | user,dev |
-| F014 | 파일을 메모리에 통째로 올리지 않고 스트리밍한다. 응답은 스트림 시작 직전에 확인한 크기를 Content-Length로 쓴다 | — | — | code | implemented | FG@30d89a5:AGENTS.md L72; FG@30d89a5:src/FileGateway.Api/Downloading/DownloadResult.cs L11-19; FG@30d89a5:docs/05-api-interface.md L358 | 2026-10-06 | user,dev |
+| F013 | API 사용자 입력으로 파일 시스템·FTP 경로를 직접 만들지 않는다. 경로는 기준정보의 경로 템플릿으로만 만들고, 모든 접근은 서버의 루트 경로(rootPath) 아래로 정규화한 경로만 쓴다 | — | — | doc | implemented | FG@30d89a5:AGENTS.md L67; FG@30d89a5:docs/05-api-interface.md L12, L418-420; FG@30d89a5:docs/06-reference-data.md L215-224; FG@30d89a5:docs/04a-log-provider.md L60 | 2026-10-06 | user,dev |
+| F014 | 파일을 메모리에 통째로 올리지 않고 스트리밍한다. 단일 파일 응답은 스트림 시작 직전에 확인한 크기를 Content-Length로 쓴다. zip 응답에는 Content-Length가 없다(F153) | — | — | code | implemented | FG@30d89a5:AGENTS.md L72; FG@30d89a5:src/FileGateway.Api/Downloading/DownloadResult.cs L11-19; FG@30d89a5:docs/05-api-interface.md L358 | 2026-10-06 | user,dev |
 | F015 | 목록 조회와 직접 다운로드는 같은 Resolver 규칙으로 파일을 찾는다 | — | — | code | implemented | FG@30d89a5:AGENTS.md L73; FG@30d89a5:src/FileGateway.Api/Endpoints/LogEndpoints.cs L12, L32-37 | 2026-10-06 | user,dev |
 | F016 | 기준정보 없음, 파일 서버 접근 실패, 경로 없음, 대상 파일 없음을 같은 오류로 뭉개지 않는다 | — | — | code | implemented | FG@30d89a5:AGENTS.md L74; FG@30d89a5:docs/03-server-access-core.md L117-130; FG@30d89a5:src/FileGateway.Core/Errors/FileGatewayErrors.cs L17-30 | 2026-10-06 | user,dev |
 | F017 | API Key 원문, FTP credential, 물리 경로, token의 내부 payload는 감사 로그에 남기지 않는다 | — | — | code | implemented | FG@30d89a5:AGENTS.md L75; FG@30d89a5:docs/09-security-and-operations.md L114; FG@30d89a5:src/FileGateway.Api/Audit/AuditMiddleware.cs L6-7 | 2026-10-06 | dev |
@@ -94,7 +95,7 @@
 | F054 | 이력 조회는 from과 to를 모두 요구한다. Configurations:HistoryMaxQueryRange 기본값은 366일이고 넘으면 InvalidRequest다 | 366 | 일 | code | implemented | FG@30d89a5:src/FileGateway.Api/Options/FileGatewayOptions.cs L25; FG@30d89a5:src/FileGateway.Api/appsettings.json L12-14; FG@30d89a5:src/FileGateway.Api/Endpoints/ConfigurationEndpoints.cs L91-92 | 2026-10-06 | user,dev |
 | F055 | from·to의 UTC offset +09:00은 query string에서 %2B09:00으로 인코딩해야 한다. 그대로 +를 보내면 공백으로 읽혀 파싱에 실패한다 | — | — | doc | implemented | FG@30d89a5:README.md L307 | 2026-10-06 | user,dev |
 | F056 | 목록은 limit과 continuationToken으로 페이지를 넘긴다. limit 기본값은 100, 최댓값은 1000이고 최댓값을 넘으면 InvalidRequest다 | 100, 1000 | 건 | code | implemented | FG@30d89a5:src/FileGateway.Api/Options/FileGatewayOptions.cs L30-31; FG@30d89a5:src/FileGateway.Api/Endpoints/LogEndpoints.cs L85-92; FG@30d89a5:README.md L128 | 2026-10-06 | user,dev |
-| F057 | continuationToken은 서버에 이전 결과를 저장하지 않는 stateless 커서이고 유효기간은 30분이다. 토큰을 쓰는 동안 결과 집합을 바꾸는 조건을 바꾸면 InvalidRequest이고, limit은 바꿔도 된다 | 30 | 분 | code | implemented | FG@30d89a5:src/FileGateway.Api/Options/FileGatewayOptions.cs L37; FG@30d89a5:docs/05-api-interface.md L175-181 | 2026-10-06 | user,dev |
+| F057 | continuationToken은 서버에 이전 결과를 저장하지 않는 stateless 커서이고 유효기간은 30분이다. 토큰을 쓰는 동안 결과 집합을 바꾸는 조건을 바꾸거나 토큰이 만료·변조되면 400 InvalidRequest이고, limit은 바꿔도 된다. 조건을 바꾸려면 토큰 없이 첫 페이지부터 다시 조회한다 | 30 | 분 | code | implemented | FG@30d89a5:src/FileGateway.Api/Options/FileGatewayOptions.cs L37; FG@30d89a5:docs/05-api-interface.md L175-181, L284 | 2026-10-06 | user,dev |
 | F058 | 페이지 사이에 원격 파일이 늘거나 줄면 결과가 달라질 수 있다. 완전한 snapshot은 보장하지 않는다 | — | — | doc | implemented | FG@30d89a5:docs/05-api-interface.md L179; FG@30d89a5:docs/07-extension-and-risks.md L86-92 | 2026-10-06 | user,dev |
 | F059 | fileId 유효기간은 24시간이다 | 24 | 시간 | code | implemented | FG@30d89a5:src/FileGateway.Api/Options/FileGatewayOptions.cs L36; FG@30d89a5:src/FileGateway.Api/appsettings.json L20; FG@30d89a5:docs/05-api-interface.md L324 | 2026-10-06 | exec,user,dev |
 | F060 | fileId는 논리 파일(설비, 종류, 시각, 파일명)을 가리키고 물리 host·경로를 담지 않는다. 접근할 때마다 현재 기준정보로 물리 위치를 다시 계산하므로, 서버나 경로가 바뀌어도 같은 논리 파일이 있으면 기존 fileId가 유효하다 | — | — | doc | implemented | FG@30d89a5:docs/05-api-interface.md L322-327; FG@30d89a5:docs/00-glossary.md L71-73 | 2026-10-06 | user,dev |
@@ -111,9 +112,9 @@
 | F066 | 오류 code는 14종이다 | 14 | 종 | code | implemented | FG@30d89a5:src/FileGateway.Core/Errors/FileGatewayErrors.cs L17-30 | 2026-10-06 | exec,user,dev |
 | F067 | code와 HTTP 상태: InvalidRequest 400, InvalidFileId 400, InvalidApiKey 401, EquipmentNotFound 404, LogDefinitionNotFound 404, ConfigurationDefinitionNotFound 404, FileNotFound 404, MultipleFilesMatched 409, FileIdExpired 410, FileDefinitionConflict 500, InternalError 500, FileServerUnavailable 502, FileServerProtocolError 502, ReferenceDataUnavailable 503 | — | — | code | implemented | FG@30d89a5:src/FileGateway.Core/Errors/FileGatewayErrors.cs L17-30; FG@30d89a5:README.md L429-442 | 2026-10-06 | user,dev |
 | F068 | 오류 body는 type, title, status, code, traceId를 담는다. 분기는 code로 하고 원인 추적은 traceId로 서버 로그와 잇는다. 물리 경로, credential, DB 진단은 담지 않는다 | — | — | doc | implemented | FG@30d89a5:docs/05-api-interface.md L424-443; FG@30d89a5:README.md L417-444 | 2026-10-06 | user,dev |
-| F069 | 각 code의 뜻: InvalidRequest는 요청 파라미터·시간 범위·토큰 조건 오류, InvalidFileId는 fileId 형식·서명 오류, InvalidApiKey는 키 누락·불일치, EquipmentNotFound는 없는 equipmentId, *DefinitionNotFound는 기준정보 삭제로 재해석 불가, FileNotFound는 논리 파일이 실제로 없음, MultipleFilesMatched는 직접 다운로드 조건에 2건 이상, FileIdExpired는 24시간 경과, FileDefinitionConflict는 cardinality 위반·metadata 해석 실패, InternalError는 서버 내부 오류, FileServerUnavailable·FileServerProtocolError는 파일 서버 연결·프로토콜 오류, ReferenceDataUnavailable은 사용 가능한 기준정보 없음 | — | — | doc | implemented | FG@30d89a5:README.md L429-442 | 2026-10-06 | user,dev |
+| F069 | 각 code의 뜻(README 의미 표): InvalidRequest는 요청 파라미터·시간 범위·토큰 조건 오류, InvalidFileId는 fileId 형식·서명 오류, InvalidApiKey는 키 누락·불일치, EquipmentNotFound는 없는 equipmentId(실제로는 file-types 조회에서만 나온다, F152), *DefinitionNotFound는 기준정보 삭제로 재해석 불가, FileNotFound는 논리 파일이 실제로 없음, MultipleFilesMatched는 직접 다운로드 조건에 2건 이상, FileIdExpired는 24시간 경과, FileDefinitionConflict는 cardinality 위반·metadata 해석 실패, InternalError는 서버 내부 오류, FileServerUnavailable·FileServerProtocolError는 파일 서버 연결·프로토콜 오류, ReferenceDataUnavailable은 사용 가능한 기준정보 없음 | — | — | doc | implemented | FG@30d89a5:README.md L429-442 | 2026-10-06 | user,dev |
 | F070 | FileDefinitionConflict(500)는 사용자 조건이 아니라 기준정보나 파일 상태가 정의와 어긋난 경우다. 생성 슬롯당 파일이 Single인데 둘 이상, 대소문자만 다른 같은 파일명, metadata 해석 실패, 날짜 불일치가 해당한다 | 500 | 상태 코드 | doc | implemented | FG@30d89a5:docs/04a-log-provider.md L92, L157; FG@30d89a5:docs/04b-configuration-provider.md L169-172 | 2026-10-06 | dev |
-| F071 | IIS·ARR 단계의 502·503은 JSON이 아니라 HTML이나 빈 body일 수 있다. 클라이언트는 본문이 항상 JSON이라고 가정하면 안 된다 | — | — | doc | n/a | FG@30d89a5:README.md L546, L600 | 2026-10-06 | user,dev |
+| F071 | IIS·ARR 단계의 502·503은 JSON이 아니라 HTML이나 빈 body일 수 있다. 클라이언트는 본문이 항상 JSON이라고 가정하면 안 된다. ARR은 IIS의 요청 라우팅 모듈(Application Request Routing)이다 | — | — | doc | n/a | FG@30d89a5:README.md L546, L600 (ARR 풀이는 IIS 확장 모듈 Application Request Routing의 일반 정의이며 저장소에는 풀이가 없다) | 2026-10-06 | user,dev |
 
 ### 8. 시스템 구조와 파일 접근
 
@@ -144,7 +145,7 @@
 | F089 | 모든 정의는 Equipments에 있는 EquipmentId와 Servers에 있는 ServerId를 가리켜야 한다. 아니면 그 정의는 invalid다 | — | — | code | implemented | FG@30d89a5:src/FileGateway.Infrastructure/ReferenceData/ReferenceDataSnapshotBuilder.cs L119-127, L178-186 | 2026-10-06 | dev |
 | F090 | db/ 아래 SQL은 테스트·개발용 계약 구현이다. 운영 DB의 내부 구조는 이 계약만 지키면 자유롭고, SP는 FTP 비밀번호를 돌려주지 않는다 | — | — | doc | implemented | FG@30d89a5:docs/06-reference-data.md L16, L129; FG@30d89a5:docs/02-architecture.md L146 | 2026-10-06 | dev |
 | F091 | 기준정보 캐시는 프로세스 메모리에 두고 CacheTtl 기본값은 15분이다. TTL은 강제 폐기가 아니라 갱신을 다시 시도할 시점이다 | 15 | 분 | code | implemented | FG@30d89a5:src/FileGateway.Api/Options/FileGatewayOptions.cs L42; FG@30d89a5:docs/06-reference-data.md L258-263 | 2026-10-06 | dev |
-| F092 | TTL이 지난 뒤 첫 요청이 갱신을 시작하지만, 그 요청은 기다리지 않고 기존 기준정보로 즉시 응답한다. 갱신은 프로세스당 하나만(single-flight) 돈다 | — | — | code | implemented | FG@30d89a5:src/FileGateway.Infrastructure/ReferenceData/ReferenceDataCache.cs L27-41, L78-85; FG@30d89a5:docs/06-reference-data.md L269-273 | 2026-10-06 | dev |
+| F092 | TTL이 지난 뒤 첫 요청이 갱신을 시작하지만, 그 요청은 기다리지 않고 기존 기준정보로 즉시 응답한다. 갱신은 프로세스당 하나만(single-flight) 돈다. 최초 로딩은 예외다(F154) | — | — | code | implemented | FG@30d89a5:src/FileGateway.Infrastructure/ReferenceData/ReferenceDataCache.cs L27-41, L78-85; FG@30d89a5:docs/06-reference-data.md L269-273 | 2026-10-06 | dev |
 | F093 | 기동 때 실제 요청 전에 기준정보를 한 번 읽어 둔다. 읽기에 실패해도 프로세스는 시작하고, 정상본이 생길 때까지 /health/ready가 503으로 같은 경로를 재시도한다 | — | — | code | implemented | FG@30d89a5:docs/06-reference-data.md L261; FG@30d89a5:src/FileGateway.Api/Program.cs L78; FG@30d89a5:src/FileGateway.Api/ReferenceData/ReferenceDataWarmupService.cs | 2026-10-06 | dev |
 | F094 | 필수 result set·컬럼 shape가 틀리거나 설비·서버 식별자(equipmentId·serverId 중복, 빈 serverId)가 틀리면 전역 검증 실패로 새 데이터를 통째로 거부한다 | — | — | code | implemented | FG@30d89a5:src/FileGateway.Infrastructure/ReferenceData/ReferenceDataSnapshotBuilder.cs L30-52; FG@30d89a5:docs/06-reference-data.md L295 | 2026-10-06 | dev |
 | F095 | 전역 검증이 실패하고 마지막 정상본이 있으면 그것을 stale 상태로 계속 쓴다. 정상본이 없는 최초 로딩이면 503 ReferenceDataUnavailable이다 | 503 | 상태 코드 | code | implemented | FG@30d89a5:src/FileGateway.Infrastructure/ReferenceData/ReferenceDataCache.cs L151-159; FG@30d89a5:docs/06-reference-data.md L277-280 | 2026-10-06 | dev |
@@ -154,7 +155,7 @@
 | F099 | 모든 경로는 서버의 루트 경로(rootPath) 아래로 정규화되어야 한다. `..`이나 절대 경로로 벗어나는 정의는 접근에 쓰지 않고 기준정보 오류로 본다 | — | — | doc | implemented | FG@30d89a5:docs/06-reference-data.md L215-224; FG@30d89a5:docs/09-security-and-operations.md L42-47 | 2026-10-06 | dev |
 | F100 | 새 컬럼·모드는 세 단계로 배포한다: (1) 스키마와 신규 SP, (2) 새 result set을 읽는 앱을 전 인스턴스에, (3) 신규 값 활성화. 순서를 어기면 구 앱과 신규 SP 조합이 기준정보 불완전으로 끝난다 | 3 | 단계 | doc | implemented | FG@30d89a5:docs/06-reference-data.md L20, L22-30 | 2026-10-06 | dev |
 | F101 | 롤백할 때는 앱을 되돌리기 전에 신규 모드·metadata 값과 regex: 경로를 옛 값으로 비활성화한다 | — | — | doc | implemented | FG@30d89a5:docs/06-reference-data.md L30 | 2026-10-06 | dev |
-| F102 | 결정적 파일명 추정(fileNameTemplate)은 선택 설정이다. Single이고 Hourly·Daily인 로그 정의에만 쓸 수 있고, 목록 조회(LIST) 없이 StatFileAsync 한 번으로 파일을 확인한다 | 1 | 번 | code | implemented | FG@30d89a5:docs/04a-log-provider.md L64-74; FG@30d89a5:README.md L198-203; FG@30d89a5:src/FileGateway.Logs/Internal/LogResolver.cs L10-24, L38-63 | 2026-10-06 | dev |
+| F102 | 결정적 파일명 추정(fileNameTemplate)은 선택 설정이다. Single이고 Hourly·Daily인 로그 정의에만 쓸 수 있고, 생성 슬롯마다 목록 조회(LIST) 없이 파일 확인(StatFileAsync)을 한 번씩 한다 | 1 | 번(슬롯당) | code | implemented | FG@30d89a5:docs/04a-log-provider.md L64-74; FG@30d89a5:README.md L198-203; FG@30d89a5:src/FileGateway.Logs/Internal/LogResolver.cs L10-24, L36-52 | 2026-10-06 | dev |
 | F103 | 추정이 틀려도 클라이언트 응답은 빈 결과 또는 FileNotFound 그대로다. 계산된 경로는 API 제공자 전용 진단 테이블 dbo.FgFileAccessFailureLog에 기록하며 이 테이블은 API로 노출하지 않는다 | — | — | code | implemented | FG@30d89a5:README.md L202; FG@30d89a5:docs/09-security-and-operations.md L40, L206; FG@30d89a5:db/mvp-schema.sql L26-35 | 2026-10-06 | dev |
 | F104 | 설정 파일 정의는 current 규칙과 history 규칙으로 나뉜다. 파일명 일치 방식은 Literal, Glob, Regex 중 하나이고 비어 있으면 Glob이다 | — | — | doc | implemented | FG@30d89a5:docs/04b-configuration-provider.md L54-79; FG@30d89a5:docs/06-reference-data.md L109 | 2026-10-06 | dev |
 | F105 | 경로 템플릿은 리터럴과 {yyyy} {MM} {dd} {HH} 토큰을 쓰고, 설정 파일은 regex: 세그먼트도 쓸 수 있다. 날짜는 Asia/Seoul 기준으로 치환한다 | — | — | doc | implemented | FG@30d89a5:docs/04a-log-provider.md L60; FG@30d89a5:docs/04b-configuration-provider.md L70-75 | 2026-10-06 | dev |
@@ -181,7 +182,7 @@
 |---|---|---|---|---|---|---|---|---|
 | F117 | 비밀은 파일에 두지 않고 환경변수(또는 IIS·Secret 관리 도구)로만 넣는다: Authentication__ApiKeys__0__Key와 CallerId, ConnectionStrings__ReferenceData, FileGateway__Ftp__UserName과 Password, DataProtection__KeyDirectory. 공식: 비밀 4종 = API Key 쌍, 연결 문자열, FTP 계정 쌍, 키 디렉터리 | 4 | 종 | derived | implemented | FG@30d89a5:README.md L138-145 | 2026-10-06 | dev |
 | F118 | DataProtection:KeyDirectory가 Development 외 환경에서 비어 있으면 앱이 기동에 실패한다(InvalidOperationException) | — | — | code | implemented | FG@30d89a5:src/FileGateway.Api/Program.cs L111-119; FG@30d89a5:README.md L145 | 2026-10-06 | dev |
-| F119 | 키 디렉터리는 App Pool을 재시작해도 남는 경로여야 하고, 키를 잃으면 발급한 모든 fileId가 무효가 된다. Windows에서는 키가 App Pool 계정 범위의 DPAPI로 보호되므로 Load User Profile을 true로 둬야 한다 | — | — | code | implemented | FG@30d89a5:README.md L161; FG@30d89a5:src/FileGateway.Api/Program.cs L52-61 | 2026-10-06 | dev |
+| F119 | fileId 서명 키(DataProtection 키)를 저장하는 키 디렉터리는 App Pool을 재시작해도 남는 경로여야 하고, 키를 잃으면 발급한 모든 fileId가 무효가 된다. 이 키는 fileId와 continuationToken이 함께 쓰는 token codec이 쓴다(F075). Windows에서는 키가 App Pool 계정 범위의 DPAPI로 보호되므로 Load User Profile을 true로 둬야 한다 | — | — | code | implemented | FG@30d89a5:README.md L161; FG@30d89a5:src/FileGateway.Api/Program.cs L52-61 | 2026-10-06 | dev |
 | F120 | IIS에는 .NET Hosting Bundle(ASP.NET Core Module V2)을 설치하고 In-process로 호스팅한다 | — | — | code | implemented | FG@30d89a5:README.md L160; FG@30d89a5:src/FileGateway.Api/web.config L5-8 | 2026-10-06 | dev |
 | F121 | 감사 로그는 callerId, clientIp, 메서드, 경로, equipmentId, logType, configurationType, fileId, fileName, fileSize, 상태, errorCode, 소요 시간(ms)을 남기고 /health는 기록하지 않는다. 파이프라인 순서는 Audit, ErrorMapping, ApiKey, endpoints다 | — | — | code | implemented | FG@30d89a5:src/FileGateway.Api/Audit/AuditMiddleware.cs L23-48; FG@30d89a5:src/FileGateway.Api/Program.cs L121-123; FG@30d89a5:docs/09-security-and-operations.md L98 | 2026-10-06 | dev |
 | F122 | /health/live는 프로세스 생존만 보고, /health/ready는 기준정보를 확보했는지 본다. 마지막 정상본이 있으면 stale이어도 200 Degraded(stale true)이고, 정상본이 한 번도 없으면 503 Unhealthy다 | 200, 503 | 상태 코드 | code | implemented | FG@30d89a5:src/FileGateway.Api/Endpoints/HealthEndpoints.cs L11-40; FG@30d89a5:docs/09-security-and-operations.md L178-183; FG@30d89a5:README.md L81-85 | 2026-10-06 | dev |
@@ -192,7 +193,7 @@
 | F127 | 21번 포트만으로는 FTPS 여부를 알 수 없다. 배포 전에 IIS의 FTP SSL Settings와 인증서를 확인해야 하고, 일반 FTP면 내부망에서도 credential과 내용이 평문일 수 있다 | 21 | 포트 | doc | n/a | FG@30d89a5:docs/07-extension-and-risks.md L48-50 | 2026-10-06 | dev |
 | F128 | 21번은 제어 연결 포트이고, 목록·다운로드에는 Passive 데이터 포트 범위와 방화벽·NAT 정책이 필요할 수 있다 | 21 | 포트 | doc | n/a | FG@30d89a5:docs/07-extension-and-risks.md L52-54; FG@30d89a5:README.md L162 | 2026-10-06 | dev |
 | F129 | MVP에서는 API Key 하나가 전체 설비와 파일에 미친다. 유출 영향이 크므로 key 회전과 감사 로그를 필수 운영 항목으로 둔다 | — | — | doc | n/a | FG@30d89a5:docs/07-extension-and-risks.md L56-58 | 2026-10-06 | dev |
-| F130 | FTP 타임아웃·동시성 수치는 실제 환경을 측정한 뒤 확정한다. 기본값은 초기값이다 | — | — | doc | n/a | FG@30d89a5:docs/07-extension-and-risks.md L68-70; FG@30d89a5:docs/09-security-and-operations.md L141-142, L169 | 2026-10-06 | dev |
+| F130 | FTP 타임아웃·동시성 수치는 실제 환경을 측정한 뒤 확정한다. 기본값은 임시값(초기값)이다 | — | — | doc | n/a | FG@30d89a5:docs/07-extension-and-risks.md L68-70; FG@30d89a5:docs/09-security-and-operations.md L141-142, L169 | 2026-10-06 | dev |
 | F131 | 주요 파일은 대부분 100MB 이하이고, 파일 서버는 수십~수백 대, 동시 다운로드는 수십 건 수준을 설계 전제로 한다 | 100 | MB | doc | n/a | FG@30d89a5:docs/01-requirements.md L144-145; FG@30d89a5:docs/superpowers/specs/2026-08-22-filegateway-design.md L35-36 | 2026-10-06 | exec,dev |
 
 ### 12. 범위
@@ -200,7 +201,7 @@
 | id | 사실 | 값 | 단위 | 종류 | 상태 | 출처 | as-of | 독자 |
 |---|---|---|---|---|---|---|---|---|
 | F132 | MVP 제외 항목은 13개다: 설비 직접 접근·로그 수집·가공, 이력 생성·복사·보관, 현재 설정 파일과 Hourly·Daily 로그의 생산 방식 제어, 생산 중 파일의 원자적 교체·잠금·일관성 보장, FileGateway 자체 snapshot 복사·버전 고정, Linux 실제 배포·검증, SMB·SFTP 어댑터, Site별 다중 credential, Range·Resume 다운로드, 설정 파일 직접 다운로드의 여러 파일 자동 ZIP, API Key별 설비·로그 권한, Web UI·WPF 클라이언트 자체 구현, 고가용성·분산 캐시 | 13 | 개 | doc | n/a | FG@30d89a5:docs/01-requirements.md L147-161 | 2026-10-06 | exec,dev |
-| F133 | 확정된 MVP 밖 확장은 Linux 배포, 다른 Site·credential, 다른 파일 프로토콜(SMB·SFTP), 권한 세분화, Range·Resume, 다중 파일 다운로드, 다중 discovery rule이다. 실제 요구가 생길 때 판단하며 지금은 구현하지 않는다 | — | — | doc | planned | FG@30d89a5:docs/07-extension-and-risks.md L12-44; FG@30d89a5:AGENTS.md L18 | 2026-10-06 | exec,dev |
+| F133 | MVP 제외 항목 중 확장 후보로 확정된 것은 Linux 배포, 다른 Site·credential, 다른 파일 프로토콜(SMB·SFTP), 권한 세분화, Range·Resume, 다중 파일 다운로드, 다중 discovery rule이다. 실제 요구가 생길 때 판단하며 지금은 구현하지 않는다 | — | — | doc | planned | FG@30d89a5:docs/07-extension-and-risks.md L12-44; FG@30d89a5:AGENTS.md L18 | 2026-10-06 | exec,dev |
 | F134 | Range·Resume은 주요 파일이 대부분 100MB 이하라 MVP에서 제외한다. 설정 파일의 여러 파일 자동 ZIP은 필요할 때 별도 요구사항으로 설계한다 | 100 | MB | doc | planned | FG@30d89a5:docs/07-extension-and-risks.md L32-38 | 2026-10-06 | dev |
 
 ### 13. 구현 현황과 배포 확인
@@ -214,9 +215,9 @@
 | F139 | 배포 검증 체크리스트는 Step 1(배포 전 필수 확인) 19행과 Step 2(MVP 완료 기준) 10행으로, 항목마다 통과·차단과 원인을 기록한다. 전 항목이 통과해야 MVP 완료를 선언한다 | 19, 10 | 행 | doc | planned | FG@30d89a5:docs/DEPLOYMENT-CHECKLIST.md L6, L11-31, L35-46 | 2026-10-06 | exec,dev |
 | F140 | 20번째 항목(fileNameTemplate을 설정하면 LIST 없이 확정되는지, 추정 실패가 진단 테이블에 기록돼도 응답이 정상인지)은 배포 검증 체크리스트 Step 1에 없다. 공식: 20 - 19 = 1. 입력: F138, F139 | 1 | 항목 | derived | n/a | FG@30d89a5:docs/10-testing-and-deployment.md L197; FG@30d89a5:docs/DEPLOYMENT-CHECKLIST.md L13-31 | 2026-10-06 | dev |
 | F141 | 환경 제약으로 일부를 미룰 때는 "MVP 완료"가 아니라 "구현 완료, 배포 검증 보류"로 기록하고 미실행 항목, 사유, 재검증 예정일을 남긴다 | — | — | doc | n/a | FG@30d89a5:docs/DEPLOYMENT-CHECKLIST.md L6, L50-56 | 2026-10-06 | exec,dev |
-| F142 | 저장소의 배포 검증 체크리스트 사본에는 통과·차단을 표시한 항목이 하나도 없다(Step 1·2 모두 미표시) | 0 | 개 | measured | n/a | FG@30d89a5:docs/DEPLOYMENT-CHECKLIST.md L13-46 | 2026-10-06 | exec,dev |
-| F143 | HANDOFF는 자동화 구현(작업 0~20번)이 모두 끝났고 남은 일은 실제 환경에서 사람이 하는 배포 검증(작업 21번) 하나뿐이라고 적는다. 작성 시점은 세션 #13(2026-09-03)이다 | — | — | doc | planned | FG@30d89a5:HANDOFF.md L207-211, L249 | 2026-09-03 | exec,dev |
-| F144 | HANDOFF는 남은 open issue로 #12(FTP localhost 조회 502, PASV 데이터채널 의심, 코드 버그)와 #13(HTTPS 서버 인증서 확보, 인프라 단계)을 적는다. 작성 시점은 2026-09-03이다 | — | — | doc | planned | FG@30d89a5:HANDOFF.md L24, L48 | 2026-09-03 | exec,dev |
+| F142 | 저장소의 배포 검증 체크리스트 사본에는 통과·차단을 표시한 항목이 하나도 없다(Step 1·2 모두 미표시). 이 사본은 빈 양식이고 결과는 배포 PR 본문이나 릴리스 노트에 복사해 기록하므로(F160), 표시가 없다는 사실만으로 배포 검증을 시작하지 않았다고 말할 수 없다 | 0 | 개 | measured | n/a | FG@30d89a5:docs/DEPLOYMENT-CHECKLIST.md L13-46 | 2026-10-06 | exec,dev |
+| F143 | HANDOFF의 날짜 없는 "다음 작업" 절(작업 0~20번 자동화 구현이 끝난 시점, 같은 문서의 환경 절은 2026-08-23 확인)은 남은 일을 실제 환경의 수동 배포 검증(작업 21번) 하나로 적는다. 2026-09-03 항목(F144)이 이를 이어받아 열린 이슈 #12, #13을 적는다 | — | — | doc | planned | FG@30d89a5:HANDOFF.md L207-211, L249 | 2026-10-06 | exec,dev |
+| F144 | HANDOFF의 2026-09-03 항목(세션 #13)은 남은 open issue로 #12(FTP localhost 조회 502, PASV 데이터채널 의심, 코드 버그)와 #13(HTTPS 서버 인증서 확보, 인증서 발급·CA 결정 같은 인프라 단계)을 적는다. 2026-10-06 현재 상태는 F156이다 | — | — | doc | planned | FG@30d89a5:HANDOFF.md L24, L48 | 2026-09-03 | exec,dev |
 | F145 | 클라이언트 샘플은 Python(requests)과 C#(HttpClient) 두 언어로 8개 유스케이스를 담는다 | 8 | 개 | code | implemented | FG@30d89a5:samples/README.md L16-25; FG@30d89a5:samples/python/scenarios; FG@30d89a5:samples/csharp/Scenarios | 2026-10-06 | user,dev |
 
 ### 14. 보충
@@ -228,14 +229,31 @@
 | F148 | 현재 설정 파일 조회는 시간 필터를 쓰지 않는다 | — | — | doc | implemented | FG@30d89a5:docs/01-requirements.md L113; FG@30d89a5:docs/05-api-interface.md L200 | 2026-10-06 | user,dev |
 | F149 | 갱신이 실패하면 마지막 성공 시각이 그대로라서, 이후 요청이 single-flight로 갱신을 계속 다시 시도한다. 성공하면 기준정보를 교체하고 실패 기록을 지운다 | — | — | code | implemented | FG@30d89a5:src/FileGateway.Infrastructure/ReferenceData/ReferenceDataCache.cs L29-33, L117-122, L151-158 | 2026-10-06 | dev |
 | F150 | MVP 완료 기준은 10개다: Windows Server + IIS 기동, MSSQL 기준정보 조회·검증·캐시, 설비별 제공 파일 종류 조회, 실제 FTP/FTPS 대상 목록·metadata·download, 대표 로그 규칙, 현재 설정 파일과 이력 규칙, API Key/HTTPS, 감사 로그와 Health, 주요 오류 시나리오, 테스트·빌드 성공 | 10 | 개 | doc | planned | FG@30d89a5:docs/10-testing-and-deployment.md L203-214; FG@30d89a5:docs/DEPLOYMENT-CHECKLIST.md L35-46 | 2026-10-06 | exec,dev |
-| F151 | 배포 전 필수 확인 20개 항목: (1) HTTPS 인증서·바인딩, (2) IIS ASP.NET Core Hosting Bundle·권한, (3) 여러 X-Api-Key 인증·호출자 구분과 query string key 비허용, (4) API Key 신/구 overlap 회전, (5) MSSQL 연결, (6) 설비별 제공 파일 종류 API가 DB 기준정보와 일치하고 파일 서버 접근 없이 동작, (7) 기준정보 구조 검증·atomic 교체·stale fallback·single-flight 동작, (8) 기준정보 갱신이 파일 서버 실재 검사를 하지 않음, (9) 각 파일 서버 21번 제어 연결, (10) IIS FTP SSL 설정(FTP 또는 FTPS), (11) Passive 데이터 포트 범위·방화벽, (12) 실제 파일 목록·다운로드, (13) 여러 생성 슬롯이 같은 물리 폴더를 쓰는 로그 탐색, (14) 폴더 없음·파일 서버 장애·일부 FTP 실패의 구분, (15) FTP 전체·서버별 동시성 제한, (16) 설정 파일 이력 완료 marker 존재 조건과 스냅샷 fileId 재검증, (17) token 보호 key 재시작 내구성과 rotation 때 기존 fileId 유지, (18) rootPath 경계·traversal 차단, (19) 로그와 Secret에 민감정보 비노출, (20) fileNameTemplate 설정 시 LIST 없이 StatFileAsync로 확정되는지와 추정 실패가 진단 테이블에 기록돼도 응답이 정상인지 | 20 | 개 | doc | planned | FG@30d89a5:docs/10-testing-and-deployment.md L178-197 | 2026-10-06 | exec,dev |
+| F151 | 배포 전 필수 확인 20개 항목: (1) HTTPS 인증서·바인딩, (2) IIS ASP.NET Core Hosting Bundle·권한, (3) 여러 X-Api-Key 인증·호출자 구분과 query string key 비허용, (4) API Key 신/구 overlap 회전, (5) MSSQL 연결, (6) 설비별 제공 파일 종류 API가 DB 기준정보와 일치하고 파일 서버 접근 없이 동작, (7) 기준정보 구조 검증·atomic 교체·stale fallback·single-flight 동작, (8) 기준정보 갱신이 파일 서버 실재 검사를 하지 않음, (9) 각 파일 서버 21번 제어 연결, (10) IIS FTP SSL 설정(FTP 또는 FTPS), (11) Passive 데이터 포트 범위·방화벽, (12) 실제 파일 목록·다운로드, (13) 여러 생성 슬롯이 같은 물리 폴더를 쓰는 로그 탐색, (14) 폴더 없음·파일 서버 장애·일부 FTP 실패의 구분, (15) FTP 전체·서버별 동시성 제한, (16) 설정 파일 이력 완료 marker 존재 조건과 스냅샷 fileId 재검증, (17) token 보호 key 재시작 내구성과 rotation 때 기존 fileId TTL 유지, (18) rootPath 경계·traversal 차단, (19) 로그와 Secret에 민감정보 비노출, (20) fileNameTemplate 설정 시 LIST 없이 StatFileAsync로 확정되는지와 추정 실패가 진단 테이블에 기록돼도 응답이 정상인지 | 20 | 개 | doc | planned | FG@30d89a5:docs/10-testing-and-deployment.md L178-197 | 2026-10-06 | exec,dev |
+
+### 15. 검토 반영 (2026-10-06)
+
+| id | 사실 | 값 | 단위 | 종류 | 상태 | 출처 | as-of | 독자 |
+|---|---|---|---|---|---|---|---|---|
+| F152 | EquipmentNotFound(404)는 file-types 조회에서만 던진다. /logs와 /configurations/ 아래에서는 없는 설비, 미등록 종류, 삭제된 정의가 모두 LogDefinitionNotFound 또는 ConfigurationDefinitionNotFound다. FileNotFound는 논리 파일이 실제로 없을 때다 | 404 | 상태 코드 | code | implemented | FG@30d89a5:src/FileGateway.Api/Endpoints/CatalogEndpoints.cs L29; FG@30d89a5:src/FileGateway.Infrastructure/Logs/LogQueryService.cs L130; FG@30d89a5:src/FileGateway.Infrastructure/Configurations/ConfigurationQueryService.cs L136 | 2026-10-06 | user,dev |
+| F153 | 로그 직접 다운로드가 2건 이상이면 zip(application/zip)으로 응답하고 Content-Length를 쓰지 않는다. zip에는 limit(기본 100, 최대 1000)건까지만 담기고 응답에 다음 페이지 커서가 없다. 단일 파일은 open 시점 크기를 Content-Length로 쓴다 | 100, 1000 | 건 | code | implemented | FG@30d89a5:docs/05-api-interface.md L398-412; FG@30d89a5:src/FileGateway.Api/Downloading/ZipDownloadResult.cs L23; FG@30d89a5:src/FileGateway.Infrastructure/Logs/LogQueryService.cs L74-75; FG@30d89a5:src/FileGateway.Api/Endpoints/LogEndpoints.cs L45-48 | 2026-10-06 | user,dev |
+| F154 | 기준정보를 한 번도 읽지 못한 최초 로딩에서는 동시 요청이 하나의 공유 로딩 결과를 기다린다. TTL이 지난 뒤의 갱신에서만 요청이 기다리지 않고 기존 기준정보로 응답한다 | — | — | code | implemented | FG@30d89a5:src/FileGateway.Infrastructure/ReferenceData/ReferenceDataCache.cs L43-48; FG@30d89a5:docs/06-reference-data.md L269-273 | 2026-10-06 | dev |
+| F155 | DB/SP 조회 실패는 필수 result set·shape 누락, 전역 식별자 검증 실패와 같이 새 snapshot을 만들지 않는다. 이전 정상본이 있으면 계속 쓰고, 최초 로딩이면 ReferenceDataUnavailable이다 | — | — | doc | implemented | FG@30d89a5:docs/06-reference-data.md L277-280 | 2026-10-06 | dev |
+| F156 | 이슈 #12(FTP localhost 조회 502, PASV 의심)와 #13(HTTPS 서버 인증서 확보)은 2026-10-06 기준 GitHub에서 열려 있다 | 2 | 건 | measured | n/a | GitHub issue #12/#13 (open, 2026-10-06) | 2026-10-06 | exec,dev |
+| F157 | #13(HTTPS 서버 인증서 확보)은 배포 전 필수 확인 1번(HTTPS 인증서·바인딩)의 전제다. 공식: 필수 확인 1번 = HTTPS 인증서·바인딩 구성, #13 = 그 인증서의 발급·CA 결정. 입력: F144, F151 | 1 | 번 | derived | n/a | FG@30d89a5:HANDOFF.md L24; FG@30d89a5:docs/DEPLOYMENT-CHECKLIST.md L13 | 2026-10-06 | exec,dev |
+| F158 | SP가 돌려주는 result set 4개는 컬럼 이름과 개수가 계약(Equipments 1개, Servers 3개, LogDefinitions 11개, ConfigurationDefinitions 13개)과 정확히 같아야 한다. 컬럼이 모자라거나 더 있거나 이름이 다르면 읽기가 실패해 갱신이 전역 검증 실패와 같이 처리된다. 순서는 계약이 아니다 | 1, 3, 11, 13 | 개 | code | implemented | FG@30d89a5:src/FileGateway.Infrastructure/ReferenceData/SpReferenceDataSource.cs L15-29, L93-116; FG@30d89a5:docs/06-reference-data.md L295, L318 | 2026-10-06 | dev |
+| F159 | db/ 아래 SQL은 세 개다: 스키마(mvp-schema.sql), 기준정보 SP(mvp-stored-procedure.sql), 실패 진단 SP(mvp-stored-procedure-diagnostics.sql). 진단 SP FileGateway_LogFileAccessFailure는 dbo.FgFileAccessFailureLog에 한 줄을 기록한다 | 3 | 개 | code | implemented | FG@30d89a5:README.md L58; FG@30d89a5:db/mvp-stored-procedure-diagnostics.sql L2-10; FG@30d89a5:db/mvp-schema.sql L27 | 2026-10-06 | dev |
+| F160 | 배포 검증 체크리스트는 docs/DEPLOYMENT-CHECKLIST.md다. 검증 결과는 배포 PR 본문이나 릴리스 노트에 이 체크리스트를 복사해 기록한다 | — | — | doc | planned | FG@30d89a5:docs/DEPLOYMENT-CHECKLIST.md L7, L60 | 2026-10-06 | exec,dev |
+| F161 | API Key는 API 제공자가 서버 설정(Secret·환경변수)에 등록한다. README의 권장 호출 순서는 "API Key 발급받기"로 시작하며, 발급 절차와 운영 호출 주소는 문서에 없다. README와 샘플의 https://gateway.example은 예시 값이다 | — | — | doc | n/a | FG@30d89a5:README.md L142, L217; FG@30d89a5:samples/README.md L10 | 2026-10-06 | user,dev |
+| F162 | 호출 예(README 예시 값): curl -s "https://gateway.example/api/v1/logs?equipmentId=EQ-001&logType=EventLog&from=2026-08-20T00:00:00%2B09:00&to=2026-08-21T00:00:00%2B09:00&limit=50" -H "X-Api-Key: $API_KEY". 일치하는 파일이 없을 때의 오류 body는 {"type":"about:blank","title":"File not found","status":404,"code":"FileNotFound","traceId":"0HN..."}이며 Content-Type은 application/json이다 | 50, 404 | 건, 상태 코드 | doc | implemented | FG@30d89a5:README.md L345-346, L420-426, L602; FG@30d89a5:src/FileGateway.Api/Errors/ErrorMappingMiddleware.cs L55-64 | 2026-10-06 | user,dev |
+| F163 | endpoint별 query parameter: /logs와 /logs/download는 equipmentId, logType(필수)과 from, to, subtype, attr.<name>, limit, continuationToken. /configurations/current와 /current/download는 equipmentId, configurationType(필수). /configurations/history는 equipmentId, configurationType, from, to(필수)와 limit, continuationToken. /files와 /files/download는 fileId(필수). file-types는 경로의 equipmentId | — | — | code | implemented | FG@30d89a5:src/FileGateway.Api/Endpoints/LogEndpoints.cs L53-62, L68-92; FG@30d89a5:src/FileGateway.Api/Endpoints/ConfigurationEndpoints.cs L61-75; FG@30d89a5:src/FileGateway.Api/Endpoints/FileEndpoints.cs L36-39 | 2026-10-06 | user,dev |
 
 ## T — 용어
 
 | 용어 | 뜻 | 처음 나올 때 | 쓰지 않을 말 |
 |---|---|---|---|
 | FileGateway | 분산 파일 서버의 설비 로그와 설정 파일을 읽기 전용으로 내주는 게이트웨이 | FileGateway(읽기 전용 파일 제공 게이트웨이) | File Gateway, 파일 게이트웨이 |
-| API 사용자 | FileGateway를 호출하는 클라이언트 개발자와 그 프로그램(WPF 앱, Web Backend/BFF, 다른 서버) | API 사용자(클라이언트 개발자) | API 소비자, 소비자, Consumer |
+| API 사용자 | FileGateway를 호출하는 클라이언트 개발자와 그 프로그램(WPF 앱, Web Backend/BFF, 다른 서버) | API 사용자(클라이언트 개발자) | API 소비자, 소비자, Consumer, 호출하는 쪽, 호출 쪽, 클라이언트 |
 | API 제공자 | FileGateway를 배포하고 기준정보와 파일 서버를 등록·운영하는 사람 | API 제공자(운영자) | 운영자, 서버 관리자, 기준정보 담당자 |
 | 설비 | 로그와 설정 파일을 만들어 내는 생산 설비 한 대. equipmentId로 구분한다 | 설비 | 장비, 기기 |
 | equipmentId | 설비를 가리키는 안정적인 논리 식별자. 표시명과 다르고 배포 범위 안에서 유일하다 | 설비 식별자(equipmentId) | 설비 ID, Equipment ID, 설비명 |
@@ -256,7 +274,7 @@
 | 논리 조회 조건 | 설비 식별자, 로그 종류, 시간 범위처럼 물리 위치와 무관한 조회 조건 | 논리 조회 조건 | 논리 조건, 논리적 조회 조건 |
 | 탐색 규칙 | 기준정보가 정하는, 파일을 찾을 폴더와 파일명의 규칙 | 탐색 규칙(discovery rule) | 탐색규칙, 검색 규칙, 발견 규칙 |
 | 생성 슬롯 | Hourly는 한 시간, Daily는 하루로 나눈 논리 구간. 물리 폴더와 1대 1이 아니다 | 생성 슬롯 | 시간 슬롯, 논리 슬롯, 논리 생성 슬롯 |
-| fileId | 논리 파일 하나를 가리키는, 24시간 유효한 opaque 토큰. 물리 경로를 담지 않는다 | fileId(24시간 유효한 opaque 토큰) | 파일 ID, File ID, 파일 아이디 |
+| fileId | 논리 파일 하나를 가리키는, 24시간 유효한 토큰. 호출하는 쪽은 내용을 해석하지 않고 그대로 되돌려 보낸다(opaque). 물리 경로를 담지 않는다 | fileId(24시간 유효한 파일 식별 토큰) | 파일 ID, File ID, 파일 아이디, opaque 토큰, 불투명 토큰 |
 | continuationToken | 목록의 다음 페이지를 가리키는 stateless 커서 | continuationToken(다음 페이지 커서) | 페이지 토큰, Continuation Token, continuation token |
 | 직접 다운로드 | 목록 조회 없이 조건만으로 파일을 바로 받는 방식 | 조건 기반 직접 다운로드 | 조건부 다운로드, 조건부 직접 다운로드, 원스텝 |
 | API Key | 호출하는 쪽을 가려내는 인증 값. X-Api-Key 헤더로만 보낸다 | API Key | API 키, 인증 키 |
@@ -266,8 +284,16 @@
 | fileNameTemplate | 파일명이 시간을 담는 고정 포맷일 때, 목록 조회 없이 파일을 바로 확인하게 하는 선택 설정 | 결정적 파일명 추정(fileNameTemplate) | 파일명 템플릿, 파일명 예측 |
 | 반개구간 | [from, to) 형태로 from은 포함하고 to는 제외하는 시간 범위 | 반개구간 [from, to) | 반열린 구간, half-open |
 | 배포 전 필수 확인 | 배포 전에 확인할 20개 항목(docs/10 기준). 항목 정본이다 | 배포 전 필수 확인 | 배포 전 점검, 사전 점검 |
-| 배포 검증 체크리스트 | 배포 전 필수 확인과 MVP 완료 기준의 결과를 항목별로 통과·차단으로 적는 기록 문서 | 배포 검증 체크리스트 | 수동 배포 검증, Task 21, MVP 완료 게이트 |
+| 배포 검증 체크리스트 | 배포 전 필수 확인과 MVP 완료 기준의 결과를 항목별로 통과·차단으로 적는 기록 문서 | 배포 검증 체크리스트 | 수동 배포 검증, Task 21, MVP 완료 게이트, 배포 확인 |
 | MVP 완료 기준 | 배포 검증 체크리스트의 두 번째 단계 10개 항목. 전부 통과해야 MVP 완료다 | MVP 완료 기준 | MVP 완료 조건, 완료 게이트 |
+| 별도 시스템 | FileGateway 밖에서 설비 파일을 만들어 파일 서버에 저장하는 시스템. 설비 직접 접속, 로그 수집·가공, 설정 파일 이력 생성을 맡는다 | 별도 시스템(파일을 만들어 저장하는 시스템) | 설비 쪽 시스템, 생산 쪽, 이력 생산자 |
+| MVP 제외 | 이번 MVP에서 만들지 않는 항목 13개. 별도 시스템의 책임과 후속 확장 후보를 모두 포함하고, 실제 요구가 생길 때 판단한다 | MVP 제외 | MVP 밖 확장, 후속 확장, 후속 단계 |
+| Resolver | 목록 조회와 직접 다운로드가 함께 쓰는, 파일을 찾는 규칙을 담은 코드 | Resolver(파일을 찾는 규칙을 담은 코드) | 리졸버 |
+| token codec | fileId와 continuationToken을 만들고 검증하는 부분. 계약은 Core가 둔다 | token codec(토큰을 만들고 검증하는 부분) | 토큰 코덱 |
+| stale | 기준정보 갱신에 실패해 마지막 정상본을 계속 쓰는 상태 | stale(갱신에 실패해 옛 값을 쓰는 상태) | — |
+| invalid | 검증에 실패해 쓸 수 없는 정의. 그 정의만 새 기준정보에서 빠진다 | invalid(쓸 수 없는 정의) | 무효 정의 |
+| ARR | IIS에 붙는 요청 라우팅 모듈(Application Request Routing). 이 단계의 502·503은 JSON이 아닐 수 있다 | ARR(IIS의 요청 라우팅 모듈) | — |
+| fileId 서명 키 | fileId와 continuationToken을 서명·보호하는 ASP.NET DataProtection 키(같은 token codec을 쓴다). DataProtection__KeyDirectory가 가리키는 디렉터리에 저장한다 | fileId 서명 키(DataProtection 키) | 키 디렉터리, 토큰 보호 키, token 보호 key |
 
 ## Q — 열린 질문
 
@@ -276,8 +302,8 @@
 | Q01 | README의 "API 제공자 가이드"와 기존 소개 자료는 "정의가 1건이라도 검증에 실패하면 refresh 전체를 거부하고 last-known-good을 유지한다"고 적는다. 06 문서(L267, L278, L281, L295)와 코드(ReferenceDataSnapshotBuilder.cs L21-22, L54-57)는 개별 정의만 빼고 나머지로 교체한다. 이 계획은 06 문서와 코드를 따랐다. README를 고쳐야 하는가 | s11 | FileGateway 문서 담당 | open |
 | Q02 | README L380·L228과 기존 소개 자료, 클라이언트 샘플(samples/README L21, python 04번)은 /logs/download가 2건 이상 일치하면 409 MultipleFilesMatched를 돌려준다고 적는다. docs/05 L398-409와 코드(LogEndpoints.cs L38-48)는 zip 스트림이고 409는 현재 설정 파일 직접 다운로드에서만 나온다. 이 계획은 docs/05와 코드를 따랐다. README와 샘플을 고쳐야 하는가 | s5, s8 | FileGateway 문서 담당 | open |
 | Q03 | 배포 검증 체크리스트 Step 1은 19행이고 docs/10의 배포 전 필수 확인은 20개다(fileNameTemplate 항목이 체크리스트에 없다). 체크리스트가 근거 문서로 docs/10을 가리키므로(DEPLOYMENT-CHECKLIST L5) 이 계획은 20개를 따랐다. 체크리스트에 20번째 행을 추가할 것인가 | s15 | FileGateway 문서 담당 | open |
-| Q04 | HANDOFF(2026-09-03 기준)가 남은 open issue로 적은 #12(FTP localhost 조회 502)와 #13(HTTPS 서버 인증서 확보)이 2026-10-06 현재도 열려 있는가. #12는 localhost 로컬 접근(2026-08-30)으로 사라졌는가. 이 계획의 현황 섹션은 두 이슈를 싣지 않았다 | s14 | 저장소 소유자 | open |
-| Q05 | 실제 Windows Server·IIS 환경에서 사람이 하는 배포 검증을 시작했는가. 저장소의 체크리스트 사본은 모두 비어 있고(F142) HANDOFF는 2026-09-03 시점에 미착수라고 적는다. 시작했다면 통과·차단 항목 수를 owner 사실로 받아야 현황 섹션의 진척을 쓸 수 있다 | s14, s15 | 저장소 소유자 | open |
+| Q04 | HANDOFF(2026-09-03 기준)가 남은 open issue로 적은 #12(FTP localhost 조회 502)와 #13(HTTPS 서버 인증서 확보)이 2026-10-06 현재도 열려 있는가. 답: 둘 다 열려 있다(F156, GitHub 확인). 현황 섹션이 두 이슈를 싣는다. #12가 localhost 로컬 접근(2026-08-30)과 어떤 관계인지는 이슈 소유자만 안다 | s14 | 저장소 소유자 | resolved 2026-10-06 |
+| Q05 | 실제 Windows Server·IIS 환경에서 사람이 하는 배포 검증을 시작했는가. 저장소의 체크리스트 사본은 빈 양식이고 결과는 배포 PR 본문이나 릴리스 노트에 기록하므로(F160), 사본이 비어 있다는 사실(F142)만으로는 알 수 없다. 시작했다면 통과·차단 항목 수를 owner 사실로 받아야 현황 섹션에 진척을 쓸 수 있다 | s14, s15 | 저장소 소유자 | open |
 | Q06 | 기준 커밋 30d89a5(결정적 파일명 추정 #45 포함)에서 dotnet build·test를 돌린 결과가 문서에 없다. README는 "전 통과"만 쓰고, HANDOFF의 457/457은 #43 병합 시점(2026-09-03)의 값이다. 현황 섹션에 테스트 통과 수를 실을 것인가, 싣는다면 누가 다시 돌리는가 | s14 | 저장소 소유자 | open |
 | Q07 | 도입 배경(현재 클라이언트가 파일 서버에 직접 접속하며 겪는 문제)을 적은 문서가 없다. 기존 소개 자료의 "문제점" 네 가지(경로 지식 분산, FTP 계정 다중 보유 등)는 근거 문서가 없어 계획에 넣지 않았다(has-as-is: false). 배경 섹션을 넣으려면 owner 진술이 필요하다 | s1 | 저장소 소유자 | open |
 | Q08 | 실제 규모(운영 설비 수, 파일 서버 수, 호출하는 시스템 수, 하루 호출량)가 문서에 없다. "파일 서버 수십~수백 대, 동시 다운로드 수십 건"은 설계 전제(F131)다. 규모 숫자를 owner 사실로 받을 수 있는가 | s1, s14 | 저장소 소유자 | open |
@@ -295,4 +321,4 @@
 | C02 | API 사용자는 설비 식별자와 논리 조회 조건만으로 호출하고, 파일 서버 주소와 물리 경로는 응답 어디에도 나오지 않는다 | F002, F012, F013, F060 | 응답 필드는 코드로 확인했으나 모든 오류 경로를 실행해 본 것은 아니다 |
 | C03 | 기존 계약 안의 새 로그 종류와 설정 파일 종류는 기준정보 등록만으로 노출된다 | F019, F033, F096 | 계약으로 표현할 수 없는 새 종류는 코드 변경이 필요하다 |
 | C04 | 기준정보 갱신이 실패해도 마지막 정상본으로 계속 서비스하며, 정의 한 건의 위반은 그 정의만 제외한다 | F092, F094, F095, F096, F122 | 정상본의 유효 기간 상한이 없다(F126) |
-| C05 | MVP 구현은 끝났고, 실제 환경의 배포 전 필수 확인 20개 항목이 남았다 | F135, F136, F138, F142, F143 | 확인이 시작됐는지는 알 수 없다(Q05). 상태 근거인 HANDOFF는 2026-09-03 시점이다 |
+| C05 | MVP 구현은 끝났고, 실제 환경의 배포 전 필수 확인 20개와 MVP 완료 기준 10개가 남았다. 열린 이슈 #12, #13도 남아 있다 | F135, F136, F138, F139, F150, F144, F156 | 배포 검증이 시작됐는지는 알 수 없다(Q05). 이슈 상태는 2026-10-06 GitHub 확인이다 |
