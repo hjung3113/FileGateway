@@ -42,7 +42,8 @@ public sealed class FileGatewayException : Exception
     }
 }
 
-public sealed record DownloadResult(string Path, long Size);
+/// ContentType은 응답 Content-Type이다. 로그 직접 다운로드가 2건 이상이면 application/zip.
+public sealed record DownloadResult(string Path, long Size, string ContentType = "");
 
 public sealed class FileGatewayClient : IDisposable
 {
@@ -131,7 +132,9 @@ public sealed class FileGatewayClient : IDisposable
         var query = $"equipmentId={Uri.EscapeDataString(equipmentId)}&logType={Uri.EscapeDataString(logType)}";
         if (from is not null) query += $"&from={Uri.EscapeDataString(from)}";
         if (to is not null) query += $"&to={Uri.EscapeDataString(to)}";
-        return DownloadAsync($"/api/v1/logs/download?{query}", destDir, "download.bin");
+        // 단일 파일은 download.bin, zip 응답(Content-Type: application/zip)은 download.zip으로 저장한다.
+        // 서버가 만든 zip 파일명은 계약이 아니므로 쓰지 않는다.
+        return DownloadAsync($"/api/v1/logs/download?{query}", destDir, "download.bin", "download.zip");
     }
 
     // --- 공통 fileId 조회/다운로드 ---
@@ -188,7 +191,8 @@ public sealed class FileGatewayClient : IDisposable
         return await resp.Content.ReadFromJsonAsync<JsonElement>();
     }
 
-    private async Task<DownloadResult> DownloadAsync(string relativeUrl, string destDir, string fallbackName)
+    private async Task<DownloadResult> DownloadAsync(
+        string relativeUrl, string destDir, string fallbackName, string? zipName = null)
     {
         // Unix에서 Path.GetFileName은 '\'를 구분자로 보지 않는다. 서버 fileName에 경로요소가
         // 섞여 와도 로컬 경로를 벗어나지 않도록 두 구분자 모두 제거한 뒤 파일명만 취한다.
@@ -199,7 +203,11 @@ public sealed class FileGatewayClient : IDisposable
         if (!resp.IsSuccessStatusCode)
             throw await FileGatewayException.FromResponseAsync(resp);
 
-        var expected = resp.Content.Headers.ContentLength;
+        var contentType = resp.Content.Headers.ContentType?.MediaType ?? "";
+        if (zipName is not null && string.Equals(contentType, "application/zip", StringComparison.OrdinalIgnoreCase))
+            destPath = System.IO.Path.Combine(destDir, zipName); // zip 응답은 호출자가 정한 .zip 이름으로 저장한다
+
+        var expected = resp.Content.Headers.ContentLength; // zip은 Content-Length가 없어 null
         long written;
         await using (var remoteStream = await resp.Content.ReadAsStreamAsync())
         await using (var fileStream = System.IO.File.Create(destPath))
@@ -216,7 +224,7 @@ public sealed class FileGatewayClient : IDisposable
             throw new IOException($"truncated download: expected {n} bytes, got {written}");
         }
 
-        return new DownloadResult(destPath, written);
+        return new DownloadResult(destPath, written, contentType);
     }
 
     public void Dispose() => _http.Dispose();

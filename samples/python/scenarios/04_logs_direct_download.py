@@ -1,6 +1,8 @@
-"""유즈케이스: 조건에 파일이 정확히 1건일 때 목록 조회 없이 바로 다운로드.
+"""유즈케이스: 조건에 맞는 로그를 목록 조회 없이 바로 다운로드.
 
-2건 이상 일치하면 409 MultipleFilesMatched — 이때는 목록 조회로 전환해
+1건이면 단일 파일, 2건 이상이면 zip(Content-Type: application/zip)으로 내려오므로
+응답 Content-Type으로 구분한다. zip은 Content-Length가 없고, 최대 `limit`건(기본 100,
+최대 1000)만 담기며 다음 페이지 token이 없다. 파일을 하나씩 받으려면 목록 조회로
 fileId를 확정한 뒤 공통 다운로드(05_files_download_by_id.py)를 사용한다.
 """
 
@@ -23,21 +25,15 @@ def main() -> None:
             from_="2026-08-20T09:00:00+09:00",
             to="2026-08-20T10:00:00+09:00",
         )
-        print(f"saved {result.path} ({result.size} bytes)")
-        return
     except FileGatewayError as err:
-        if err.code == "MultipleFilesMatched":
-            print("multiple files matched — falling back to list + explicit fileId")
-        elif err.code == "FileNotFound":
+        if err.code == "FileNotFound":
             raise SystemExit("no file matched given condition") from err
-        else:
-            raise
+        raise
 
-    page = client.list_logs_page(
-        "EQ-001", "EventLog", from_="2026-08-20T09:00:00+09:00", to="2026-08-20T10:00:00+09:00"
-    )
-    for item in page["items"]:
-        result = client.download_by_file_id(item["fileId"], item["fileName"], dest_dir=".")
+    if result.content_type.startswith("application/zip"):
+        print(f"multiple files matched — saved as zip {result.path} ({result.size} bytes)")
+        print("zip holds at most `limit` entries (default 100, max 1000) — narrow from/to if you need more")
+    else:
         print(f"saved {result.path} ({result.size} bytes)")
 
 

@@ -18,7 +18,7 @@ export FILEGATEWAY_API_KEY=...
 | 1 | 전체 설비 목록 → 첫 설비 제공 파일 종류 조회 | `scenarios/01_file_types.py` | `Scenarios/FileTypesScenario.cs` |
 | 2 | 로그 목록 + continuationToken 전체 페이지 순회 | `scenarios/02_logs_list_pagination.py` | `Scenarios/LogsListPaginationScenario.cs` |
 | 3 | subtype/attribute로 로그 필터 | `scenarios/03_logs_filter_subtype_attributes.py` | `Scenarios/LogsFilterScenario.cs` |
-| 4 | 로그 조건 기반 직접 다운로드 (+ 409 fallback) | `scenarios/04_logs_direct_download.py` | `Scenarios/LogsDirectDownloadScenario.cs` |
+| 4 | 로그 조건 기반 직접 다운로드 (1건 단일 파일, 2건 이상 zip) | `scenarios/04_logs_direct_download.py` | `Scenarios/LogsDirectDownloadScenario.cs` |
 | 5 | fileId로 metadata 조회 후 streaming 다운로드 | `scenarios/05_files_download_by_id.py` | `Scenarios/FilesDownloadByIdScenario.cs` |
 | 6 | Current Configuration 조회/다운로드 (다중 파일) | `scenarios/06_configurations_current.py` | `Scenarios/ConfigurationsCurrentScenario.cs` |
 | 7 | Configuration History 조회 | `scenarios/07_configurations_history.py` | `Scenarios/ConfigurationsHistoryScenario.cs` |
