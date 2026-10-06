@@ -13,11 +13,12 @@ public static class LogsDirectDownloadScenario
         {
             var result = await client.DownloadLogByConditionAsync(
                 "EQ-001", "EventLog", ".",
-                from: "2026-08-20T09:00:00+09:00", to: "2026-08-20T10:00:00+09:00");
+                from: "2026-08-20T09:00:00+09:00", to: "2026-08-20T10:00:00+09:00",
+                limit: 1000); // zip 상한(최대 1000). 생략하면 기본 100. 다음 페이지는 continuationToken: <목록 응답의 token>
             if (string.Equals(result.ContentType, "application/zip", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine($"multiple files matched — saved as zip {result.Path} ({result.Size} bytes)");
-                Console.WriteLine("zip holds at most `limit` entries — use a list continuationToken (or a larger limit) to get more");
+                Console.WriteLine("zip holds at most `limit` entries — pass continuationToken from a list response (or a larger limit) to get more");
             }
             else
             {

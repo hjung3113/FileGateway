@@ -127,11 +127,19 @@ public sealed class FileGatewayClient : IDisposable
     // --- 로그 조건 기반 직접 다운로드 ---
 
     public Task<DownloadResult> DownloadLogByConditionAsync(
-        string equipmentId, string logType, string destDir, string? from = null, string? to = null)
+        string equipmentId,
+        string logType,
+        string destDir,
+        string? from = null,
+        string? to = null,
+        int? limit = null,
+        string? continuationToken = null)
     {
         var query = $"equipmentId={Uri.EscapeDataString(equipmentId)}&logType={Uri.EscapeDataString(logType)}";
         if (from is not null) query += $"&from={Uri.EscapeDataString(from)}";
         if (to is not null) query += $"&to={Uri.EscapeDataString(to)}";
+        if (limit is not null) query += $"&limit={limit}"; // 미지정이면 서버 기본(LimitDefault)이 적용된다
+        if (continuationToken is not null) query += $"&continuationToken={Uri.EscapeDataString(continuationToken)}"; // 목록 응답의 token — 해당 페이지의 매치가 다운로드 대상
         // 단일 파일은 download.bin, zip 응답(Content-Type: application/zip)은 download.zip으로 저장한다.
         // 서버가 만든 zip 파일명은 계약이 아니므로 쓰지 않는다.
         return DownloadAsync($"/api/v1/logs/download?{query}", destDir, "download.bin", "download.zip");

@@ -123,12 +123,18 @@ class FileGatewayClient:
         *,
         from_: str | None = None,
         to: str | None = None,
+        limit: int | None = None,
+        continuation_token: str | None = None,
     ) -> DownloadResult:
         params: dict[str, Any] = {"equipmentId": equipment_id, "logType": log_type}
         if from_ is not None:
             params["from"] = from_
         if to is not None:
             params["to"] = to
+        if limit is not None:  # 미지정이면 서버 기본(LimitDefault)이 적용된다
+            params["limit"] = limit
+        if continuation_token is not None:  # 목록 응답의 token — 해당 페이지의 매치가 다운로드 대상
+            params["continuationToken"] = continuation_token
         # 단일 파일은 download.bin, zip 응답(Content-Type: application/zip)은 download.zip으로 저장한다.
         # 서버가 만든 zip 파일명은 계약이 아니므로 쓰지 않는다.
         return self._download("/api/v1/logs/download", params, dest_dir, "download.bin", zip_name="download.zip")

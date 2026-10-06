@@ -24,6 +24,7 @@ def main() -> None:
             dest_dir=".",
             from_="2026-08-20T09:00:00+09:00",
             to="2026-08-20T10:00:00+09:00",
+            limit=1000,  # zip 상한(최대 1000). 생략하면 기본 100. 다음 페이지는 continuation_token=<목록 응답의 token>
         )
     except FileGatewayError as err:
         if err.code == "FileNotFound":
@@ -32,7 +33,7 @@ def main() -> None:
 
     if result.content_type.startswith("application/zip"):
         print(f"multiple files matched — saved as zip {result.path} ({result.size} bytes)")
-        print("zip holds at most `limit` entries — use a list continuationToken (or a larger limit) to get more")
+        print("zip holds at most `limit` entries — pass continuation_token from a list response (or a larger limit) to get more")
     else:
         print(f"saved {result.path} ({result.size} bytes)")
 
